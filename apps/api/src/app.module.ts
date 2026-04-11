@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AgentsModule } from "./modules/agents/agents.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ApprovalsModule } from "./modules/approvals/approvals.module";
 import { ActorModule } from "./modules/actor/actor.module";
 import { AuditModule } from "./modules/audit/audit.module";
@@ -19,6 +20,7 @@ import { ServicesModule } from "./modules/services/services.module";
   imports: [
     HealthModule,
     ActorModule,
+    AnalyticsModule,
     PlatformModule,
     IdentityModule,
     OrganizationsModule,

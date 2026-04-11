@@ -6,6 +6,27 @@ import {
   type SpendRequestStatus
 } from "@atlas/types";
 export {
+  atlasAnalyticsFiltersSchema,
+  createAtlasCsv,
+  formatAtlasPercentLabel,
+  formatAtlasTimelineLabel,
+  matchesAtlasAnalyticsTextFilter,
+  parseAtlasAnalyticsFilters,
+  type AtlasActivityAnalyticsRecord,
+  type AtlasAnalyticsBreakdownRecord,
+  type AtlasAnalyticsFilters,
+  type AtlasAnalyticsRiskLevel,
+  type AtlasAnalyticsTimelinePoint,
+  type AtlasBuyerAnalyticsRecord,
+  type AtlasBuyerRequestAnalyticsRecord,
+  type AtlasCsvColumn,
+  type AtlasOrganizationHealthRecord,
+  type AtlasPlatformAnalyticsRecord,
+  type AtlasPlatformTransactionRecord,
+  type AtlasSellerRevenueAnalyticsRecord,
+  type AtlasSellerRequestAnalyticsRecord
+} from "./analytics-reporting";
+export {
   atlasBuyerAgentCreateSchema,
   atlasBuyerAgentUpdateSchema,
   atlasBuyerApprovalDecisionSchema,
@@ -166,6 +187,7 @@ export type AtlasApiDomainKey =
   | "services"
   | "payments"
   | "receipts"
+  | "analytics"
   | "operator-controls";
 
 export type AtlasApiDomainDefinition = {
@@ -535,6 +557,16 @@ export const atlasApiDomainDefinitions: Record<AtlasApiDomainKey, AtlasApiDomain
     ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
     category: "shared",
     nextPhase: "Phase 4",
+    readiness: "skeleton"
+  },
+  analytics: {
+    key: "analytics",
+    title: "Analytics",
+    description: "Reporting, export, and cross-entity filtering boundary for buyer, seller, and operator decision support.",
+    routePrefix: "/analytics",
+    ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
+    category: "shared",
+    nextPhase: "Phase 6",
     readiness: "skeleton"
   },
   "operator-controls": {

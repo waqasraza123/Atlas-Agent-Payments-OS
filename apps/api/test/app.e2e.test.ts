@@ -6,7 +6,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { ActorResolutionService } from "../src/modules/actor/actor.service";
-import { AtlasBuyerWorkflowError, AtlasPaymentsWorkflowError } from "@atlas/database";
+import { AtlasAnalyticsReportingError, AtlasBuyerWorkflowError, AtlasPaymentsWorkflowError } from "@atlas/database";
 
 const databaseMock = vi.hoisted(() => ({
   listBuyerAgents: vi.fn(async () => []),
@@ -657,7 +657,148 @@ const databaseMock = vi.hoisted(() => ({
       requestTitle: "Created Request",
       occurredAt: new Date().toISOString()
     }
-  ])
+  ]),
+  getBuyerAnalytics: vi.fn(async () => ({
+    totalSpendMinor: 12400,
+    requestCount: 4,
+    completedRequestCount: 2,
+    pendingApprovalCount: 1,
+    autoApprovedCount: 1,
+    manualApprovedCount: 2,
+    exceptionRate: 0.25,
+    budgetUtilizationRate: 0.31,
+    averageApprovalTurnaroundHours: 2.5,
+    spendTimeline: [
+      {
+        label: "Apr 11",
+        count: 2,
+        amountMinor: 12400
+      }
+    ],
+    topAgents: [],
+    topSellers: [],
+    topServices: [],
+    statusMix: []
+  })),
+  listBuyerRequestAnalytics: vi.fn(async () => [
+    {
+      id: "request-created",
+      title: "Created Request",
+      purpose: "Submit a paid request for a production buyer workflow test.",
+      agentName: "Procurement Agent",
+      sellerOrganizationName: "Atlas Demo Seller",
+      amountMinor: 2400,
+      currency: "USD",
+      serviceCategory: "api-access",
+      serviceKey: "global-dataset-access",
+      requestStatus: "COMPLETED",
+      approvalStatus: "APPROVED",
+      paymentStatus: "CAPTURED",
+      receiptStatus: "AVAILABLE",
+      paymentRail: "INTERNAL_SIMULATED",
+      evaluationOutcome: "allow_requires_approval",
+      reconciliationState: "RECEIPT_AVAILABLE",
+      createdAt: new Date().toISOString()
+    }
+  ]),
+  listBuyerActivityAnalytics: vi.fn(async () => [
+    {
+      id: "audit-buyer-1",
+      eventType: "request_created",
+      targetType: "request",
+      targetId: "request-created",
+      actorType: "HUMAN",
+      actorLabel: "BUYER Tester",
+      requestTitle: "Created Request",
+      occurredAt: new Date().toISOString()
+    }
+  ]),
+  exportBuyerRequestCsv: vi.fn(async () => "Request ID,Title\nrequest-created,Created Request"),
+  getSellerRevenueAnalytics: vi.fn(async () => ({
+    totalRevenueMinor: 18900,
+    requestCount: 5,
+    completedRequestCount: 3,
+    pendingFulfillmentCount: 1,
+    repeatBuyerCount: 1,
+    revenueTimeline: [
+      {
+        label: "Apr 11",
+        count: 3,
+        amountMinor: 18900
+      }
+    ],
+    topServices: [],
+    topBuyers: [],
+    statusMix: []
+  })),
+  listSellerRequestAnalytics: vi.fn(async () => [
+    {
+      id: "seller-request-1",
+      title: "Premium dataset unlock",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      amountMinor: 8900,
+      currency: "USD",
+      serviceCategory: "digital-service",
+      serviceKey: "global-dataset-access",
+      matchedServiceName: "Global Dataset Access",
+      requestStatus: "COMPLETED",
+      paymentStatus: "CAPTURED",
+      receiptStatus: "AVAILABLE",
+      fulfillmentStatus: "DELIVERED",
+      reconciliationState: "RECEIPT_AVAILABLE",
+      createdAt: new Date().toISOString()
+    }
+  ]),
+  exportSellerRequestCsv: vi.fn(async () => "Request ID,Title\nseller-request-1,Premium dataset unlock"),
+  getPlatformAnalytics: vi.fn(async () => ({
+    activeOrganizationCount: 3,
+    activeAgentCount: 4,
+    totalRequestCount: 7,
+    totalApprovalCount: 3,
+    successfulPaymentCount: 2,
+    openExceptionCount: 1,
+    averageRequestCompletionHours: 4.2,
+    requestTimeline: [
+      {
+        label: "Apr 11",
+        count: 7,
+        amountMinor: 25200
+      }
+    ],
+    railMix: [],
+    categoryMix: []
+  })),
+  listPlatformTransactions: vi.fn(async () => [
+    {
+      id: "request-created",
+      requestTitle: "Created Request",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationName: "Atlas Demo Seller",
+      amountMinor: 2400,
+      currency: "USD",
+      requestStatus: "COMPLETED",
+      paymentStatus: "CAPTURED",
+      receiptStatus: "AVAILABLE",
+      paymentRail: "INTERNAL_SIMULATED",
+      providerStatus: "captured",
+      reconciliationState: "RECEIPT_AVAILABLE",
+      attemptCount: 1,
+      createdAt: new Date().toISOString()
+    }
+  ]),
+  listPlatformOrganizations: vi.fn(async () => [
+    {
+      organizationId: "org-buyer",
+      organizationName: "Atlas Demo Buyer",
+      organizationKind: "BUYER",
+      requestCount: 4,
+      paymentCount: 2,
+      receiptAvailableCount: 1,
+      openCaseCount: 1,
+      lastActivityAt: new Date().toISOString()
+    }
+  ]),
+  exportPlatformTransactionCsv: vi.fn(async () => "Request ID,Request Title\nrequest-created,Created Request")
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -695,7 +836,18 @@ vi.mock("@atlas/database", async () => {
     getOperatorCase: databaseMock.getOperatorCase,
     listOperatorNotifications: databaseMock.listOperatorNotifications,
     performOperatorCaseAction: databaseMock.performOperatorCaseAction,
-    listOperatorAuditEvents: databaseMock.listOperatorAuditEvents
+    listOperatorAuditEvents: databaseMock.listOperatorAuditEvents,
+    getBuyerAnalytics: databaseMock.getBuyerAnalytics,
+    listBuyerRequestAnalytics: databaseMock.listBuyerRequestAnalytics,
+    listBuyerActivityAnalytics: databaseMock.listBuyerActivityAnalytics,
+    exportBuyerRequestCsv: databaseMock.exportBuyerRequestCsv,
+    getSellerRevenueAnalytics: databaseMock.getSellerRevenueAnalytics,
+    listSellerRequestAnalytics: databaseMock.listSellerRequestAnalytics,
+    exportSellerRequestCsv: databaseMock.exportSellerRequestCsv,
+    getPlatformAnalytics: databaseMock.getPlatformAnalytics,
+    listPlatformTransactions: databaseMock.listPlatformTransactions,
+    listPlatformOrganizations: databaseMock.listPlatformOrganizations,
+    exportPlatformTransactionCsv: databaseMock.exportPlatformTransactionCsv
   };
 });
 
@@ -875,6 +1027,161 @@ describe("atlas api e2e", () => {
       key: "payments",
       workspace: "SELLER"
     });
+  });
+
+  it("serves buyer analytics and exports through guarded analytics routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+
+    const overviewResponse = await request(app.getHttpServer())
+      .get("/analytics/buyer/overview")
+      .set("x-atlas-local-session", "local-token");
+    const requestsResponse = await request(app.getHttpServer())
+      .get("/analytics/buyer/requests")
+      .set("x-atlas-local-session", "local-token");
+    const activityResponse = await request(app.getHttpServer())
+      .get("/analytics/buyer/activity")
+      .set("x-atlas-local-session", "local-token");
+    const exportResponse = await request(app.getHttpServer())
+      .get("/analytics/buyer/requests.csv")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(overviewResponse.status).toBe(200);
+    expect(overviewResponse.body.item).toMatchObject({
+      totalSpendMinor: 12400,
+      requestCount: 4
+    });
+
+    expect(requestsResponse.status).toBe(200);
+    expect(requestsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "request-created",
+        reconciliationState: "RECEIPT_AVAILABLE"
+      })
+    ]);
+
+    expect(activityResponse.status).toBe(200);
+    expect(activityResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "audit-buyer-1",
+        eventType: "request_created"
+      })
+    ]);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.text).toContain("Request ID,Title");
+    expect(exportResponse.headers["content-type"]).toContain("text/csv");
+  });
+
+  it("serves seller and platform analytics through guarded analytics routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const sellerOverviewResponse = await request(app.getHttpServer())
+      .get("/analytics/seller/overview")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(sellerOverviewResponse.status).toBe(200);
+    expect(sellerOverviewResponse.body.item).toMatchObject({
+      totalRevenueMinor: 18900,
+      requestCount: 5
+    });
+
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const platformOverviewResponse = await request(app.getHttpServer())
+      .get("/analytics/platform/overview")
+      .set("x-atlas-local-session", "local-token");
+    const platformTransactionsResponse = await request(app.getHttpServer())
+      .get("/analytics/platform/transactions")
+      .set("x-atlas-local-session", "local-token");
+    const organizationsResponse = await request(app.getHttpServer())
+      .get("/analytics/platform/organizations")
+      .set("x-atlas-local-session", "local-token");
+    const exportResponse = await request(app.getHttpServer())
+      .get("/analytics/platform/transactions.csv")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(platformOverviewResponse.status).toBe(200);
+    expect(platformOverviewResponse.body.item).toMatchObject({
+      activeOrganizationCount: 3,
+      totalRequestCount: 7
+    });
+
+    expect(platformTransactionsResponse.status).toBe(200);
+    expect(platformTransactionsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "request-created",
+        paymentStatus: "CAPTURED"
+      })
+    ]);
+
+    expect(organizationsResponse.status).toBe(200);
+    expect(organizationsResponse.body.items).toEqual([
+      expect.objectContaining({
+        organizationId: "org-buyer",
+        organizationKind: "BUYER"
+      })
+    ]);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.text).toContain("Request ID,Request Title");
+  });
+
+  it("returns bad request when analytics filters are invalid", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.listBuyerRequestAnalytics.mockRejectedValueOnce(
+      new AtlasAnalyticsReportingError("Minimum amount cannot exceed the maximum amount.", "bad_request")
+    );
+
+    const response = await request(app.getHttpServer())
+      .get("/analytics/buyer/requests?minAmountMinor=5000&maxAmountMinor=1000")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Minimum amount cannot exceed the maximum amount.");
   });
 
   it("lists buyer-visible payments and executes buyer payment attempts", async () => {

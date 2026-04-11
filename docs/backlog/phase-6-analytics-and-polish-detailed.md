@@ -101,3 +101,8 @@ Later tracks may add:
 ## Acceptance Criteria
 
 - Atlas feels like an enterprise-grade product with meaningful reporting and polished data-heavy UX
+
+## Repo Status
+
+- Phase 6 is now complete in repo scope through shared analytics contracts, guarded reporting APIs, CSV export routes, filtered buyer and seller ledgers, platform transaction reporting, and organization health views.
+- The next active execution slice is Phase 7 programmable settlement.

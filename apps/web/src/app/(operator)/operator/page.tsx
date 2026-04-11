@@ -1,3 +1,4 @@
+import { getPlatformAnalytics } from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import {
@@ -6,6 +7,7 @@ import {
   createOperatorNotificationItems,
   loadOperatorOverviewData
 } from "@/lib/server/operator-data";
+import { formatHoursLabel } from "@/lib/formatters";
 
 export default async function OperatorPage() {
   const resolution = await resolveWorkspaceActor("OPERATOR");
@@ -14,7 +16,7 @@ export default async function OperatorPage() {
     return null;
   }
 
-  const overview = await loadOperatorOverviewData(resolution.actor);
+  const [overview, analytics] = await Promise.all([loadOperatorOverviewData(resolution.actor), getPlatformAnalytics()]);
   const recentCaseItems = createOperatorCaseListItems(overview.recentCases);
   const recentNotificationItems = createOperatorNotificationItems(overview.recentNotifications);
   const recentAuditItems = createOperatorAuditItems(overview.recentAuditEvents);
@@ -33,6 +35,13 @@ export default async function OperatorPage() {
         <MetricCard label="Unread alerts" value={String(overview.unreadNotificationCount)} detail="Operator attention items that remain unread in the current notification queue." />
         <MetricCard label="Delayed" value={String(overview.delayedCaseCount)} detail="Settlement, seller confirmation, and receipt delay posture across active lifecycle records." />
         <MetricCard label="Failed" value={String(overview.failedCaseCount)} detail="Requests where payment or receipt evidence already failed and needs direct triage." />
+      </section>
+      <section className="grid gap-4 xl:grid-cols-5">
+        <MetricCard label="Organizations" value={String(analytics.activeOrganizationCount)} detail="Organizations with active platform presence." />
+        <MetricCard label="Active agents" value={String(analytics.activeAgentCount)} detail="Agents with real request volume in the platform ledger." />
+        <MetricCard label="Requests" value={String(analytics.totalRequestCount)} detail="Cross-platform request volume visible to operator review." />
+        <MetricCard label="Successful payments" value={String(analytics.successfulPaymentCount)} detail="Payments that have reached captured state across the platform." />
+        <MetricCard label="Completion time" value={formatHoursLabel(analytics.averageRequestCompletionHours)} detail="Average request duration until a terminal lifecycle state is reached." />
       </section>
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <RecordListPanel
@@ -83,6 +92,38 @@ export default async function OperatorPage() {
           items={recentAuditItems}
           emptyTitle="No recent audit events"
           emptyDescription="Audit activity appears here as Atlas records request, payment, receipt, and operator actions."
+        />
+      </section>
+      <section className="grid gap-6 xl:grid-cols-2">
+        <RecordListPanel
+          eyebrow="Rail mix"
+          title="Payment rail distribution"
+          description="Operators can now see which rails are carrying the most platform payment volume before programmable settlement expands."
+          items={analytics.railMix.map((item) => ({
+            id: item.key,
+            title: item.label,
+            description: `${item.count} payments`,
+            detail: `${Math.round(item.share * 100)}% of platform payment volume`,
+            statusLabel: `${item.count} payments`,
+            statusTone: item.share >= 0.4 ? "warning" : "success"
+          }))}
+          emptyTitle="No rail analytics yet"
+          emptyDescription="Rail mix appears once payments have been executed."
+        />
+        <RecordListPanel
+          eyebrow="Category mix"
+          title="Service category demand"
+          description="Shows where request demand is concentrating across the platform by service category."
+          items={analytics.categoryMix.map((item) => ({
+            id: item.key,
+            title: item.label,
+            description: `${item.count} requests`,
+            detail: `${Math.round(item.share * 100)}% of platform request volume`,
+            statusLabel: `${item.count} requests`,
+            statusTone: item.share >= 0.4 ? "warning" : "success"
+          }))}
+          emptyTitle="No category analytics yet"
+          emptyDescription="Category mix appears once requests are active across the platform."
         />
       </section>
     </div>

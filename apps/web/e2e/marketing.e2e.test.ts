@@ -168,6 +168,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the buyer activity route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/activity`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Buyer audit activity") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the buyer receipts route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/buyer/receipts`);
     const html = await response.text();
@@ -178,6 +190,14 @@ describe("marketing e2e", () => {
         html.includes("Choose a buyer session to continue") ||
         html.includes("Buyer context could not be resolved")
     ).toBe(true);
+  });
+
+  it("serves the buyer request csv export route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/requests/export.csv`);
+    const text = await response.text();
+
+    expect([200, 403]).toContain(response.status);
+    expect(response.status === 200 ? response.headers.get("content-type")?.includes("text/csv") : text.includes("Buyer context could not be resolved")).toBe(true);
   });
 
   it("serves the buyer request detail route with payment execution posture", async () => {
@@ -244,6 +264,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the seller customers route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/customers`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Buyer demand analytics") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller payments route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller/payments`);
     const html = await response.text();
@@ -254,6 +286,14 @@ describe("marketing e2e", () => {
         html.includes("Choose a seller session to continue") ||
         html.includes("Seller context could not be resolved")
     ).toBe(true);
+  });
+
+  it("serves the seller request csv export route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/requests/export.csv`);
+    const text = await response.text();
+
+    expect([200, 403]).toContain(response.status);
+    expect(response.status === 200 ? response.headers.get("content-type")?.includes("text/csv") : text.includes("Seller context could not be resolved")).toBe(true);
   });
 
   it("serves the seller service detail route without crashing", async () => {
@@ -307,6 +347,38 @@ describe("marketing e2e", () => {
         html.includes("Operator context could not be resolved") ||
         html.includes("Operator workspace")
     ).toBe(true);
+  });
+
+  it("serves the operator transactions route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/transactions`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Cross-entity transaction ledger") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the operator organizations route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/organizations`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Platform organization health") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the operator transaction csv export route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/transactions/export.csv`);
+    const text = await response.text();
+
+    expect([200, 403]).toContain(response.status);
+    expect(response.status === 200 ? response.headers.get("content-type")?.includes("text/csv") : text.includes("Operator context could not be resolved")).toBe(true);
   });
 
   it("serves the operator receipts route without crashing", async () => {

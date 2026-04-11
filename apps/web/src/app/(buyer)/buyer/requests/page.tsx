@@ -1,7 +1,10 @@
-import { listBuyerAgents, listBuyerPolicies, listBuyerRequests, prisma } from "@atlas/database";
+import { listBuyerAgents, listBuyerPolicies, listBuyerRequestAnalytics, prisma } from "@atlas/database";
 import { PageHeader, RecordListPanel } from "@atlas/ui";
+import { FilterPanel } from "@/components/filter-panel";
+import { ExportLinkGroup } from "@/components/export-link-group";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
+import { formatCurrencyMinor } from "@/lib/formatters";
 import { createBuyerRequestAction } from "../actions";
 import { WorkflowFeedbackPanel } from "@/components/workflow-feedback-panel";
 import { WorkflowFormField } from "@/components/workflow-form-field";
@@ -18,13 +21,6 @@ function readSingleSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function formatCurrencyMinor(amountMinor: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency
-  }).format(amountMinor / 100);
-}
-
 export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsPageProps) {
   const resolution = await resolveWorkspaceActor("BUYER");
 
@@ -32,11 +28,12 @@ export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsP
     return null;
   }
 
-  const [params, agents, policies, requests, sellers] = await Promise.all([
-    searchParams,
+  const params = await searchParams;
+
+  const [agents, policies, requests, sellers] = await Promise.all([
     listBuyerAgents(resolution.actor.organization.id),
     listBuyerPolicies(resolution.actor.organization.id),
-    listBuyerRequests(resolution.actor.organization.id),
+    listBuyerRequestAnalytics(resolution.actor.organization.id, params),
     prisma.organization.findMany({
       where: {
         kind: "SELLER"
@@ -50,6 +47,28 @@ export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsP
   const feedbackTitle = readSingleSearchParam(params.feedbackTitle);
   const feedbackDescription = readSingleSearchParam(params.feedbackDescription);
   const feedbackTone = readSingleSearchParam(params.feedbackTone);
+  const query = readSingleSearchParam(params.query) ?? "";
+  const requestStatus = readSingleSearchParam(params.requestStatus) ?? "";
+  const paymentStatus = readSingleSearchParam(params.paymentStatus) ?? "";
+  const serviceCategory = readSingleSearchParam(params.serviceCategory) ?? "";
+  const riskLevel = readSingleSearchParam(params.riskLevel) ?? "";
+  const exportSearch = new URLSearchParams();
+
+  if (query) {
+    exportSearch.set("query", query);
+  }
+  if (requestStatus) {
+    exportSearch.set("requestStatus", requestStatus);
+  }
+  if (paymentStatus) {
+    exportSearch.set("paymentStatus", paymentStatus);
+  }
+  if (serviceCategory) {
+    exportSearch.set("serviceCategory", serviceCategory);
+  }
+  if (riskLevel) {
+    exportSearch.set("riskLevel", riskLevel);
+  }
 
   return (
     <div className="space-y-6">
@@ -65,6 +84,16 @@ export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsP
           tone={feedbackTone === "error" || feedbackTone === "warning" ? feedbackTone : "default"}
         />
       ) : null}
+      <div className="flex justify-end">
+        <ExportLinkGroup
+          links={[
+            {
+              label: "Export filtered buyer requests",
+              href: `/buyer/requests/export.csv${exportSearch.size > 0 ? `?${exportSearch.toString()}` : ""}`
+            }
+          ]}
+        />
+      </div>
       <WorkflowFormPanel
         eyebrow="Create request"
         title="Submit a spend request"
@@ -139,21 +168,58 @@ export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsP
           </WorkflowFormField>
         </div>
       </WorkflowFormPanel>
+      <FilterPanel
+        eyebrow="Filters"
+        title="Refine the buyer request ledger"
+        description="Search by title, purpose, agent, seller, or service context, then tighten the ledger by lifecycle status and risk posture."
+        submitLabel="Apply filters"
+      >
+        <input className={inputClassName} type="search" name="query" defaultValue={query} placeholder="Search requests, sellers, or agents" />
+        <select className={inputClassName} name="requestStatus" defaultValue={requestStatus}>
+          <option value="">All request statuses</option>
+          <option value="SUBMITTED">Submitted</option>
+          <option value="APPROVED">Approved</option>
+          <option value="EXECUTING">Executing</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="FAILED">Failed</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="CANCELED">Canceled</option>
+        </select>
+        <select className={inputClassName} name="paymentStatus" defaultValue={paymentStatus}>
+          <option value="">All payment statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="AUTHORIZED">Authorized</option>
+          <option value="CAPTURED">Captured</option>
+          <option value="FAILED">Failed</option>
+          <option value="VOIDED">Voided</option>
+        </select>
+        <input className={inputClassName} type="text" name="serviceCategory" defaultValue={serviceCategory} placeholder="Filter service category" />
+        <select className={inputClassName} name="riskLevel" defaultValue={riskLevel}>
+          <option value="">All risk postures</option>
+          <option value="attention">Needs attention</option>
+          <option value="healthy">Receipt available</option>
+        </select>
+      </FilterPanel>
       <RecordListPanel
         eyebrow="Current requests"
         title="Buyer request ledger"
-        description="Requests now persist policy-evaluation outcomes, approval posture, and seller alignment in real schema-backed records."
+        description="Requests now support search, filtering, export, and richer reconciliation posture instead of only static list visibility."
         items={requests.map((request) => ({
           id: request.id,
           title: request.title,
           description: `${formatCurrencyMinor(request.amountMinor, request.currency)} · ${request.serviceCategory} · ${request.purpose}`,
-          detail: `${request.agentName} · ${request.sellerOrganizationName ?? "No seller"} · ${request.evaluationOutcome ?? "No evaluation"}`,
+          detail: `${request.agentName} · ${request.sellerOrganizationName ?? "No seller"} · ${request.reconciliationState}`,
           href: getAtlasWorkspaceDetailHref("BUYER", "requests", request.id) ?? undefined,
-          statusLabel: request.approvalStatus ? `${request.status} / ${request.approvalStatus}` : request.status,
-          statusTone: request.status === "APPROVED" || request.status === "COMPLETED" ? "success" : request.status === "REJECTED" || request.status === "FAILED" ? "critical" : "warning"
+          statusLabel: request.approvalStatus ? `${request.requestStatus} / ${request.approvalStatus}` : request.requestStatus,
+          statusTone:
+            request.requestStatus === "APPROVED" || request.requestStatus === "COMPLETED"
+              ? "success"
+              : request.requestStatus === "REJECTED" || request.requestStatus === "FAILED"
+                ? "critical"
+                : "warning"
         }))}
-        emptyTitle="No buyer requests yet"
-        emptyDescription="Submit the first request to exercise the buyer-side control loop."
+        emptyTitle="No buyer requests match the current filters"
+        emptyDescription="Broaden the filters or create a new spend request to expand the buyer ledger."
       />
     </div>
   );

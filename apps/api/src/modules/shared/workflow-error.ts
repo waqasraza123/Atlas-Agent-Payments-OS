@@ -1,4 +1,5 @@
 import {
+  AtlasAnalyticsReportingError,
   AtlasBuyerWorkflowError,
   AtlasOperatorWorkflowError,
   AtlasPaymentsWorkflowError,
@@ -13,6 +14,14 @@ import {
 
 export function rethrowBuyerWorkflowError(error: unknown): never {
   if (!(error instanceof AtlasBuyerWorkflowError)) {
+    throw error;
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
+export function rethrowAnalyticsReportingError(error: unknown): never {
+  if (!(error instanceof AtlasAnalyticsReportingError)) {
     throw error;
   }
 
@@ -44,7 +53,12 @@ export function rethrowOperatorWorkflowError(error: unknown): never {
 }
 
 function rethrowAtlasWorkflowError(
-  error: AtlasBuyerWorkflowError | AtlasSellerWorkflowError | AtlasPaymentsWorkflowError | AtlasOperatorWorkflowError
+  error:
+    | AtlasAnalyticsReportingError
+    | AtlasBuyerWorkflowError
+    | AtlasSellerWorkflowError
+    | AtlasPaymentsWorkflowError
+    | AtlasOperatorWorkflowError
 ): never {
   if (error.code === "bad_request") {
     throw new BadRequestException(error.message);
