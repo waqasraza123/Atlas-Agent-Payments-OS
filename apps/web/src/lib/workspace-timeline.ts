@@ -1,4 +1,9 @@
-import { formatAtlasPolicyEvaluationOutcomeLabel, type AtlasPolicyEvaluationResult } from "@atlas/domain";
+import {
+  formatAtlasPolicyEvaluationOutcomeLabel,
+  formatAtlasSellerFulfillmentStatusLabel,
+  type AtlasPolicyEvaluationResult,
+  type AtlasSellerFulfillmentStatus
+} from "@atlas/domain";
 import type { TimelinePanelItem } from "@atlas/ui";
 
 export type LifecycleRequestRecord = {
@@ -28,6 +33,12 @@ export type LifecycleApprovalRecord = {
   decisionReason: string | null;
   approverLabel: string | null;
   updatedAt: Date | string;
+};
+
+export type LifecycleFulfillmentRecord = {
+  fulfillmentStatus: AtlasSellerFulfillmentStatus;
+  note: string;
+  recordedAt: Date | string;
 };
 
 export type LifecyclePaymentRecord = {
@@ -61,6 +72,7 @@ export type LifecycleSource = {
   request: LifecycleRequestRecord;
   evaluation?: LifecycleEvaluationRecord | null;
   approval?: LifecycleApprovalRecord | null;
+  fulfillment?: LifecycleFulfillmentRecord | null;
   payment?: LifecyclePaymentRecord | null;
   receipt?: LifecycleReceiptRecord | null;
   auditEvents: LifecycleAuditRecord[];
@@ -157,6 +169,19 @@ export function buildAtlasLifecycleTimeline(source: LifecycleSource): TimelinePa
       statusLabel: formatTokenLabel(source.approval.status),
       tone: resolveTone(source.approval.status),
       timestamp: new Date(source.approval.updatedAt).getTime()
+    });
+  }
+
+  if (source.fulfillment) {
+    entries.push({
+      id: `${source.request.id}:fulfillment`,
+      label: "Fulfillment",
+      title: formatAtlasSellerFulfillmentStatusLabel(source.fulfillment.fulfillmentStatus),
+      description: source.fulfillment.note,
+      detail: formatTimestamp(source.fulfillment.recordedAt),
+      statusLabel: formatAtlasSellerFulfillmentStatusLabel(source.fulfillment.fulfillmentStatus),
+      tone: source.fulfillment.fulfillmentStatus === "DELIVERED" ? "success" : "critical",
+      timestamp: new Date(source.fulfillment.recordedAt).getTime()
     });
   }
 

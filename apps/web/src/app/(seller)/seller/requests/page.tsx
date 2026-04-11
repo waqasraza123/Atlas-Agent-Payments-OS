@@ -41,7 +41,11 @@ export default async function SellerRequestsPage() {
             id: request.id,
             title: request.title,
             description: `${request.buyerOrganizationName} · ${formatCurrencyMinor(request.amountMinor, request.currency)} · ${request.serviceCategory}`,
-            detail: request.matchedServiceName ?? request.serviceKey ?? "No matched service",
+            detail:
+              request.fulfillment?.note ??
+              request.matchedServiceName ??
+              request.serviceKey ??
+              "No matched service",
             href: getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? undefined,
             statusLabel: request.status,
             statusTone:

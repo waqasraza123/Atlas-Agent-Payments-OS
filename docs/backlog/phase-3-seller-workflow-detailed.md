@@ -12,6 +12,16 @@ Atlas is not credible as an Agent Payments OS until the seller side of the lifec
 
 - Phase 2 buyer flow is stable
 
+## Current Repo Status
+
+- Phase 3 is now complete in repo scope.
+- Seller organization profile and team visibility are implemented.
+- Seller services now support create, update, status, visibility, and fixed-price baseline management.
+- Buyer requests can target seller service keys and appear in seller-side inbound request monitoring.
+- Seller request detail now supports fulfillment outcome recording with durable notes and audit events.
+- Seller overview now exposes top services, top buyers, and request outcome mix summaries.
+- Phase 4 payments and receipts is now the next active implementation phase.
+
 ## Exit Criteria
 
 - sellers can create services

@@ -3,6 +3,7 @@ import {
   servicePricingModels,
   serviceStatuses,
   serviceVisibilityModes,
+  spendRequestStatuses,
   type ServicePricingModel,
   type ServiceStatus,
   type ServiceVisibilityMode,
@@ -46,8 +47,17 @@ export const atlasSellerServiceUpdateSchema = z.object({
   currency: z.string().trim().length(3).transform((value) => value.toUpperCase()).optional()
 });
 
+export const atlasSellerFulfillmentStatuses = ["DELIVERED", "FAILED"] as const;
+export type AtlasSellerFulfillmentStatus = (typeof atlasSellerFulfillmentStatuses)[number];
+
+export const atlasSellerRequestFulfillmentSchema = z.object({
+  fulfillmentStatus: z.enum(atlasSellerFulfillmentStatuses),
+  note: z.string().trim().min(8).max(400)
+});
+
 export type AtlasSellerServiceCreateInput = z.infer<typeof atlasSellerServiceCreateSchema>;
 export type AtlasSellerServiceUpdateInput = z.infer<typeof atlasSellerServiceUpdateSchema>;
+export type AtlasSellerRequestFulfillmentInput = z.infer<typeof atlasSellerRequestFulfillmentSchema>;
 
 export type AtlasSellerServiceRecord = {
   id: string;
@@ -62,6 +72,12 @@ export type AtlasSellerServiceRecord = {
   priceMinor: number;
   currency: string;
   linkedRequestCount: number;
+};
+
+export type AtlasSellerRequestFulfillmentRecord = {
+  fulfillmentStatus: AtlasSellerFulfillmentStatus;
+  note: string;
+  recordedAt: string;
 };
 
 export type AtlasSellerProfileRecord = {
@@ -96,6 +112,34 @@ export type AtlasSellerRequestRecord = {
   matchedServiceName: string | null;
   status: SpendRequestStatus;
   createdAt: string;
+  updatedAt: string;
+  fulfillment: AtlasSellerRequestFulfillmentRecord | null;
+};
+
+export type AtlasSellerAnalyticsServiceRecord = {
+  serviceId: string;
+  serviceKey: string;
+  serviceName: string;
+  requestCount: number;
+  completedRequestCount: number;
+  failedRequestCount: number;
+};
+
+export type AtlasSellerAnalyticsBuyerRecord = {
+  buyerOrganizationId: string;
+  buyerOrganizationName: string;
+  requestCount: number;
+  completedRequestCount: number;
+  failedRequestCount: number;
+};
+
+export type AtlasSellerAnalyticsRecord = {
+  pendingFulfillmentCount: number;
+  completedRequestCount: number;
+  failedRequestCount: number;
+  unmatchedRequestCount: number;
+  topServices: AtlasSellerAnalyticsServiceRecord[];
+  topBuyers: AtlasSellerAnalyticsBuyerRecord[];
 };
 
 export function formatAtlasServiceStatusLabel(status: ServiceStatus) {
@@ -108,4 +152,24 @@ export function formatAtlasServiceVisibilityLabel(visibility: ServiceVisibilityM
 
 export function formatAtlasServicePricingModelLabel(pricingModel: ServicePricingModel) {
   return pricingModel.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\w/g, (character) => character.toUpperCase());
+}
+
+export function formatAtlasSellerFulfillmentStatusLabel(status: AtlasSellerFulfillmentStatus) {
+  return status === "DELIVERED" ? "Delivered" : "Failed";
+}
+
+export function isAtlasSellerRequestFulfillmentAllowed(requestStatus: SpendRequestStatus) {
+  return ["APPROVED", "EXECUTING"].includes(requestStatus);
+}
+
+export function isAtlasSellerPendingFulfillmentStatus(requestStatus: SpendRequestStatus) {
+  return ["SUBMITTED", "APPROVED", "EXECUTING"].includes(requestStatus);
+}
+
+export function isAtlasSellerTerminalRequestStatus(requestStatus: SpendRequestStatus) {
+  return ["COMPLETED", "FAILED", "REJECTED", "CANCELED"].includes(requestStatus);
+}
+
+export function isAtlasSpendRequestStatus(value: string): value is SpendRequestStatus {
+  return spendRequestStatuses.includes(value as SpendRequestStatus);
 }

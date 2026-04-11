@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAtlasLifecycleTimeline } from "./workspace-timeline";
 
 describe("buildAtlasLifecycleTimeline", () => {
-  it("includes request, approval, payment, receipt, and audit events in chronological order", () => {
+  it("includes request, approval, fulfillment, payment, receipt, and audit events in chronological order", () => {
     const timeline = buildAtlasLifecycleTimeline({
       request: {
         id: "request-1",
@@ -29,6 +29,11 @@ describe("buildAtlasLifecycleTimeline", () => {
         decisionReason: "Within threshold",
         approverLabel: "Buyer Owner",
         updatedAt: "2026-04-11T08:05:00.000Z"
+      },
+      fulfillment: {
+        fulfillmentStatus: "DELIVERED",
+        note: "Seller delivery recorded with a durable note.",
+        recordedAt: "2026-04-11T08:05:30.000Z"
       },
       payment: {
         id: "payment-1",
@@ -58,9 +63,18 @@ describe("buildAtlasLifecycleTimeline", () => {
       ]
     });
 
-    expect(timeline).toHaveLength(6);
-    expect(timeline.map((entry) => entry.label)).toEqual(["Request", "Policy", "Approval", "Payment", "Receipt", "Audit"]);
+    expect(timeline).toHaveLength(7);
+    expect(timeline.map((entry) => entry.label)).toEqual([
+      "Request",
+      "Policy",
+      "Approval",
+      "Fulfillment",
+      "Payment",
+      "Receipt",
+      "Audit"
+    ]);
     expect(timeline[1]?.statusLabel).toBe("Allow Requires Approval");
+    expect(timeline[3]?.statusLabel).toBe("Delivered");
     expect(timeline.at(-1)?.title).toBe("Receipt Finalized");
   });
 

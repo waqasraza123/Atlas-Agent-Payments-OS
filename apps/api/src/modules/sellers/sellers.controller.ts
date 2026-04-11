@@ -1,6 +1,6 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
-import { CurrentActor, RequireWorkspaces, RequireWorkspace } from "../actor/actor.decorators";
+import { Body, Controller, Get, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import { CurrentActor, RequireRoles, RequireWorkspaces, RequireWorkspace } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { SellersService } from "./sellers.service";
 
@@ -29,9 +29,26 @@ export class SellersController {
     return this.sellersService.team(actor);
   }
 
+  @Get("analytics")
+  @RequireWorkspace("SELLER")
+  analytics(@CurrentActor() actor: AtlasActorContext) {
+    return this.sellersService.analytics(actor);
+  }
+
   @Get("requests")
   @RequireWorkspace("SELLER")
   requests(@CurrentActor() actor: AtlasActorContext) {
     return this.sellersService.requests(actor);
+  }
+
+  @Post("requests/:requestId/fulfillment")
+  @RequireWorkspace("SELLER")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  recordRequestFulfillment(
+    @CurrentActor() actor: AtlasActorContext,
+    @Param("requestId") requestId: string,
+    @Body() body: unknown
+  ) {
+    return this.sellersService.recordRequestFulfillment(actor, requestId, body);
   }
 }

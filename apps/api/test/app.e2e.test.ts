@@ -129,9 +129,36 @@ const databaseMock = vi.hoisted(() => ({
       matchedServiceId: "service-1",
       matchedServiceName: "Global Dataset Access",
       status: "SUBMITTED",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fulfillment: null
     }
   ]),
+  getSellerAnalytics: vi.fn(async () => ({
+    pendingFulfillmentCount: 2,
+    completedRequestCount: 3,
+    failedRequestCount: 1,
+    unmatchedRequestCount: 1,
+    topServices: [
+      {
+        serviceId: "service-1",
+        serviceKey: "global-dataset-access",
+        serviceName: "Global Dataset Access",
+        requestCount: 2,
+        completedRequestCount: 1,
+        failedRequestCount: 0
+      }
+    ],
+    topBuyers: [
+      {
+        buyerOrganizationId: "buyer-1",
+        buyerOrganizationName: "Atlas Demo Buyer",
+        requestCount: 3,
+        completedRequestCount: 1,
+        failedRequestCount: 1
+      }
+    ]
+  })),
   listSellerServices: vi.fn(async () => [
     {
       id: "service-1",
@@ -189,6 +216,27 @@ const databaseMock = vi.hoisted(() => ({
     priceMinor: 2400,
     currency: "USD",
     linkedRequestCount: 3
+  })),
+  recordSellerRequestFulfillment: vi.fn(async () => ({
+    id: "seller-request-1",
+    buyerOrganizationId: "buyer-1",
+    buyerOrganizationName: "Atlas Demo Buyer",
+    title: "Premium dataset unlock",
+    purpose: "Unlock a premium dataset.",
+    amountMinor: 8900,
+    currency: "USD",
+    serviceCategory: "digital-service",
+    serviceKey: "global-dataset-access",
+    matchedServiceId: "service-1",
+    matchedServiceName: "Global Dataset Access",
+    status: "COMPLETED",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    fulfillment: {
+      fulfillmentStatus: "DELIVERED",
+      note: "The seller delivered the dataset unlock and recorded the outcome.",
+      recordedAt: new Date().toISOString()
+    }
   }))
 }));
 
@@ -211,10 +259,12 @@ vi.mock("@atlas/database", async () => {
     getSellerProfile: databaseMock.getSellerProfile,
     listSellerTeamMembers: databaseMock.listSellerTeamMembers,
     listSellerRequests: databaseMock.listSellerRequests,
+    getSellerAnalytics: databaseMock.getSellerAnalytics,
     listSellerServices: databaseMock.listSellerServices,
     getSellerService: databaseMock.getSellerService,
     createSellerService: databaseMock.createSellerService,
-    updateSellerService: databaseMock.updateSellerService
+    updateSellerService: databaseMock.updateSellerService,
+    recordSellerRequestFulfillment: databaseMock.recordSellerRequestFulfillment
   };
 });
 
@@ -638,6 +688,50 @@ describe("atlas api e2e", () => {
         matchedServiceName: "Global Dataset Access"
       })
     ]);
+  });
+
+  it("serves seller analytics and fulfillment actions through protected seller routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const analyticsResponse = await request(app.getHttpServer())
+      .get("/sellers/analytics")
+      .set("x-atlas-local-session", "local-token");
+    const fulfillmentResponse = await request(app.getHttpServer())
+      .post("/sellers/requests/seller-request-1/fulfillment")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        fulfillmentStatus: "DELIVERED",
+        note: "The seller delivered the dataset unlock and recorded the outcome."
+      });
+
+    expect(analyticsResponse.status).toBe(200);
+    expect(analyticsResponse.body.item).toMatchObject({
+      pendingFulfillmentCount: 2,
+      topServices: [
+        expect.objectContaining({
+          serviceKey: "global-dataset-access"
+        })
+      ]
+    });
+    expect(fulfillmentResponse.status).toBe(201);
+    expect(fulfillmentResponse.body.item).toMatchObject({
+      id: "seller-request-1",
+      status: "COMPLETED",
+      fulfillment: expect.objectContaining({
+        fulfillmentStatus: "DELIVERED"
+      })
+    });
   });
 
   it("enforces operator role boundaries on actor routes", async () => {

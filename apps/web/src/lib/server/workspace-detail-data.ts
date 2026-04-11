@@ -2,6 +2,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
   formatAtlasPolicyEvaluationOutcomeLabel,
+  formatAtlasSellerFulfillmentStatusLabel,
   formatAtlasServicePricingModelLabel,
   formatAtlasServiceStatusLabel,
   formatAtlasServiceVisibilityLabel,
@@ -126,6 +127,37 @@ function formatOptionalValue(value: string | null | undefined, fallback: string)
   return value && value.trim().length > 0 ? value : fallback;
 }
 
+function extractSellerFulfillment(metadata: Record<string, unknown> | null) {
+  const value =
+    metadata?.sellerFulfillment && typeof metadata.sellerFulfillment === "object" && !Array.isArray(metadata.sellerFulfillment)
+      ? (metadata.sellerFulfillment as Record<string, unknown>)
+      : null;
+
+  if (!value) {
+    return null;
+  }
+
+  const fulfillmentStatus = value.fulfillmentStatus;
+  const note = value.note;
+  const recordedAt = value.recordedAt;
+
+  if (
+    (fulfillmentStatus === "DELIVERED" || fulfillmentStatus === "FAILED") &&
+    typeof note === "string" &&
+    note.trim().length > 0 &&
+    typeof recordedAt === "string" &&
+    recordedAt.trim().length > 0
+  ) {
+    return {
+      fulfillmentStatus,
+      note,
+      recordedAt
+    } as const;
+  }
+
+  return null;
+}
+
 function createRelatedItem(
   id: string,
   title: string,
@@ -204,8 +236,12 @@ async function loadRequestDetailModel(
   }
 
   const payload = typeof request.requestPayload === "object" && request.requestPayload !== null ? request.requestPayload : null;
-  const metadata = typeof request.metadata === "object" && request.metadata !== null ? request.metadata : null;
+  const metadata =
+    request.metadata && typeof request.metadata === "object" && !Array.isArray(request.metadata)
+      ? (request.metadata as Record<string, unknown>)
+      : null;
   const evaluationResult = parseAtlasPolicyEvaluationResult(request.evaluationResult);
+  const sellerFulfillment = extractSellerFulfillment(metadata);
   const policyEvaluatedEvent = request.auditEvents.find((event) => event.eventType === "policy_evaluated");
   const matchedSellerService =
     request.sellerOrganizationId && request.serviceKey
@@ -250,6 +286,13 @@ async function loadRequestDetailModel(
           decisionReason: request.approval.decisionReason,
           approverLabel: request.approval.approver?.name ?? request.approval.approver?.email ?? null,
           updatedAt: request.approval.updatedAt
+        }
+      : null,
+    fulfillment: sellerFulfillment
+      ? {
+          fulfillmentStatus: sellerFulfillment.fulfillmentStatus,
+          note: sellerFulfillment.note,
+          recordedAt: sellerFulfillment.recordedAt
         }
       : null,
     payment: request.payment
@@ -317,6 +360,11 @@ async function loadRequestDetailModel(
         label: "Approval posture",
         value: request.approval ? formatTokenLabel(request.approval.status) : "Not created",
         detail: request.approval?.decisionReason ?? "Approval remains a distinct lifecycle from the request and payment records."
+      },
+      {
+        label: "Seller fulfillment",
+        value: sellerFulfillment ? formatAtlasSellerFulfillmentStatusLabel(sellerFulfillment.fulfillmentStatus) : "Not recorded",
+        detail: sellerFulfillment?.note ?? "Seller-side delivery posture has not been recorded yet."
       }
     ],
     facts: [
@@ -402,6 +450,11 @@ async function loadRequestDetailModel(
                 "Decision reason not captured yet"
               )}`
             : "The request has not generated a distinct approval record yet."
+        },
+        {
+          label: actor.workspace === "SELLER" ? "Seller delivery note" : "Seller fulfillment",
+          value: sellerFulfillment ? formatAtlasSellerFulfillmentStatusLabel(sellerFulfillment.fulfillmentStatus) : "Not recorded",
+          detail: sellerFulfillment?.note ?? "Seller delivery evidence will appear here once the seller records an outcome."
         }
       ],
       emptyTitle: "No evaluation context available",
@@ -435,6 +488,13 @@ async function loadRequestDetailModel(
           label: "Decision reason",
           value: request.approval?.decisionReason ?? (evaluationResult ? summarizeAtlasPolicyEvaluation(evaluationResult) : "Awaiting decision context"),
           detail: request.approval?.approver?.email ?? request.approval?.approver?.name ?? "No approver captured yet"
+        },
+        {
+          label: "Fulfillment note",
+          value: sellerFulfillment?.note ?? "Not recorded",
+          detail: sellerFulfillment
+            ? `${formatAtlasSellerFulfillmentStatusLabel(sellerFulfillment.fulfillmentStatus)} · ${formatDateTime(new Date(sellerFulfillment.recordedAt))}`
+            : "Seller fulfillment arrives after approval and before richer receipt handling."
         }
       ],
       emptyTitle: "No execution evidence available",

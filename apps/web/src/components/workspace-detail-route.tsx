@@ -1,6 +1,7 @@
 import { getAtlasWorkspaceSurfaceByKey, type AtlasWorkspaceSurfaceKey } from "@atlas/domain";
 import { StatePanel } from "@atlas/ui";
 import type { OrganizationKind } from "@atlas/types";
+import type { ReactNode } from "react";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { loadWorkspaceDetailModel } from "@/lib/server/workspace-detail-data";
 import type { WorkflowFeedback } from "@/lib/workflow-feedback";
@@ -11,9 +12,16 @@ type WorkspaceDetailRouteProps = Readonly<{
   surfaceKey: AtlasWorkspaceSurfaceKey;
   recordId: string;
   feedback?: WorkflowFeedback | null;
+  children?: ReactNode;
 }>;
 
-export async function WorkspaceDetailRoute({ workspace, surfaceKey, recordId, feedback = null }: WorkspaceDetailRouteProps) {
+export async function WorkspaceDetailRoute({
+  workspace,
+  surfaceKey,
+  recordId,
+  feedback = null,
+  children
+}: WorkspaceDetailRouteProps) {
   const resolution = await resolveWorkspaceActor(workspace);
 
   if (resolution.status !== "ready") {
@@ -40,7 +48,11 @@ export async function WorkspaceDetailRoute({ workspace, surfaceKey, recordId, fe
       );
     }
 
-    return <WorkspaceDetailPage model={model} feedback={feedback} />;
+    return (
+      <WorkspaceDetailPage model={model} feedback={feedback}>
+        {children}
+      </WorkspaceDetailPage>
+    );
   } catch (error) {
     return (
       <StatePanel

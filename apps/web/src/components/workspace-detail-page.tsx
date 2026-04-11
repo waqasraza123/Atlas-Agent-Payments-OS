@@ -1,15 +1,17 @@
 import type { WorkspaceDetailModel } from "@/lib/server/workspace-detail-data";
 import { DetailGrid, MetricCard, PageHeader, RecordListPanel, StatusChip, TimelinePanel } from "@atlas/ui";
 import type { WorkflowFeedback } from "@/lib/workflow-feedback";
+import type { ReactNode } from "react";
 import { DemoScenarioPanel } from "./demo-scenario-panel";
 import { WorkflowFeedbackPanel } from "./workflow-feedback-panel";
 
 type WorkspaceDetailPageProps = Readonly<{
   model: WorkspaceDetailModel;
   feedback?: WorkflowFeedback | null;
+  children?: ReactNode;
 }>;
 
-export function WorkspaceDetailPage({ model, feedback = null }: WorkspaceDetailPageProps) {
+export function WorkspaceDetailPage({ model, feedback = null, children }: WorkspaceDetailPageProps) {
   return (
     <div className="space-y-6">
       {feedback ? (
@@ -52,6 +54,7 @@ export function WorkspaceDetailPage({ model, feedback = null }: WorkspaceDetailP
           emptyDescription={model.analysis.emptyDescription}
         />
       ) : null}
+      {children}
       <TimelinePanel
         eyebrow={model.timeline.eyebrow}
         title={model.timeline.title}

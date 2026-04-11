@@ -1,4 +1,10 @@
-import { getSellerProfile, listSellerRequests, listSellerServices, listSellerTeamMembers } from "@atlas/database";
+import {
+  getSellerAnalytics,
+  getSellerProfile,
+  listSellerRequests,
+  listSellerServices,
+  listSellerTeamMembers
+} from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
@@ -17,8 +23,9 @@ export default async function SellerPage() {
     return null;
   }
 
-  const [profile, teamMembers, services, requests] = await Promise.all([
+  const [profile, analytics, teamMembers, services, requests] = await Promise.all([
     getSellerProfile(resolution.actor.organization.id),
+    getSellerAnalytics(resolution.actor.organization.id),
     listSellerTeamMembers(resolution.actor.organization.id),
     listSellerServices(resolution.actor.organization.id),
     listSellerRequests(resolution.actor.organization.id)
@@ -52,6 +59,26 @@ export default async function SellerPage() {
           value={String(profile.activeBuyerCount)}
           detail="Distinct buyer organizations already interacting with this seller organization."
         />
+        <MetricCard
+          label="Pending fulfillment"
+          value={String(analytics.pendingFulfillmentCount)}
+          detail="Approved or executing requests still waiting on an explicit seller-side outcome."
+        />
+        <MetricCard
+          label="Completed"
+          value={String(analytics.completedRequestCount)}
+          detail="Requests with a recorded seller delivery outcome and terminal success state."
+        />
+        <MetricCard
+          label="Failed or canceled"
+          value={String(analytics.failedRequestCount)}
+          detail="Terminal requests that did not end in successful seller fulfillment."
+        />
+        <MetricCard
+          label="Catalog gaps"
+          value={String(analytics.unmatchedRequestCount)}
+          detail="Inbound requests that still do not map cleanly to a seller service key."
+        />
       </section>
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <RecordListPanel
@@ -62,7 +89,11 @@ export default async function SellerPage() {
             id: request.id,
             title: request.title,
             description: `${request.buyerOrganizationName} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
-            detail: request.matchedServiceName ?? request.serviceKey ?? request.serviceCategory,
+            detail:
+              request.fulfillment?.note ??
+              request.matchedServiceName ??
+              request.serviceKey ??
+              request.serviceCategory,
             href: getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? undefined,
             statusLabel: request.status,
             statusTone:
@@ -134,6 +165,39 @@ export default async function SellerPage() {
           }))}
           emptyTitle="No seller services available"
           emptyDescription="Create the first seller service to establish a real catalog baseline."
+        />
+      </section>
+      <section className="grid gap-6 xl:grid-cols-2">
+        <RecordListPanel
+          eyebrow="Top services"
+          title="Seller performance mix"
+          description="Seller-side analytics now summarize which services are absorbing the most request volume and how that volume is finishing."
+          items={analytics.topServices.map((service) => ({
+            id: service.serviceId,
+            title: service.serviceName,
+            description: `${service.requestCount} requests · ${service.completedRequestCount} completed`,
+            detail: `${service.serviceKey} · ${service.failedRequestCount} failed or canceled`,
+            href: getAtlasWorkspaceDetailHref("SELLER", "services", service.serviceId) ?? undefined,
+            statusLabel: `${service.requestCount} requests`,
+            statusTone: service.failedRequestCount > 0 ? "warning" : "success"
+          }))}
+          emptyTitle="No service analytics yet"
+          emptyDescription="Service mix appears once seller requests and catalog matching are active."
+        />
+        <RecordListPanel
+          eyebrow="Top buyers"
+          title="Buyer organization mix"
+          description="Seller-side demand stays legible because buyer organizations remain explicit across request monitoring and analytics."
+          items={analytics.topBuyers.map((buyer) => ({
+            id: buyer.buyerOrganizationId,
+            title: buyer.buyerOrganizationName,
+            description: `${buyer.requestCount} requests · ${buyer.completedRequestCount} completed`,
+            detail: `${buyer.failedRequestCount} failed or canceled`,
+            statusLabel: `${buyer.requestCount} requests`,
+            statusTone: buyer.failedRequestCount > 0 ? "warning" : "success"
+          }))}
+          emptyTitle="No buyer analytics yet"
+          emptyDescription="Buyer mix will appear as inbound seller requests accumulate."
         />
       </section>
     </div>

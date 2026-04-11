@@ -654,7 +654,12 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     },
     metadata: {
       scenarioKey: "completed-success",
-      scenarioLabel: "Happy-path paid action"
+      scenarioLabel: "Happy-path paid action",
+      sellerFulfillment: {
+        fulfillmentStatus: "DELIVERED",
+        note: "Seller delivered the API access and finalized the happy-path workflow.",
+        recordedAt: "2026-04-11T08:11:00.000Z"
+      }
     }
   },
   {
@@ -688,7 +693,12 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     },
     metadata: {
       scenarioKey: "payment-failed",
-      scenarioLabel: "Approved request with payment failure"
+      scenarioLabel: "Approved request with payment failure",
+      sellerFulfillment: {
+        fulfillmentStatus: "FAILED",
+        note: "Seller rejected fulfillment after the downstream execution path failed.",
+        recordedAt: "2026-04-11T08:13:00.000Z"
+      }
     }
   },
   {
@@ -1032,6 +1042,22 @@ export const atlasSeedAuditEvents: AtlasSeedAuditEventDefinition[] = [
     occurredAt: "2026-04-11T08:10:00.000Z"
   },
   {
+    id: "phase-0-audit-seller-delivery-confirmed",
+    organizationSlug: "atlas-demo-seller",
+    userEmail: "seller@atlas.local",
+    agentId: null,
+    requestId: "phase-0-request-completed",
+    actorType: "HUMAN",
+    eventType: "seller_delivery_confirmed",
+    targetType: "SpendRequest",
+    targetId: "phase-0-request-completed",
+    payload: {
+      scenarioKey: "completed-success",
+      serviceKey: "seller-demo-api"
+    },
+    occurredAt: "2026-04-11T08:11:00.000Z"
+  },
+  {
     id: "phase-0-audit-request-completed",
     organizationSlug: "atlas-demo-buyer",
     userEmail: "owner@atlas.local",
@@ -1045,6 +1071,22 @@ export const atlasSeedAuditEvents: AtlasSeedAuditEventDefinition[] = [
       scenarioKey: "completed-success"
     },
     occurredAt: "2026-04-11T08:12:00.000Z"
+  },
+  {
+    id: "phase-0-audit-seller-delivery-failed",
+    organizationSlug: "atlas-demo-seller",
+    userEmail: "seller@atlas.local",
+    agentId: null,
+    requestId: "phase-0-request-failed",
+    actorType: "HUMAN",
+    eventType: "seller_delivery_failed",
+    targetType: "SpendRequest",
+    targetId: "phase-0-request-failed",
+    payload: {
+      scenarioKey: "payment-failed",
+      serviceKey: "seller-report-generator"
+    },
+    occurredAt: "2026-04-11T08:13:00.000Z"
   },
   {
     id: "phase-0-audit-request-failed",

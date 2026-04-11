@@ -22,7 +22,10 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - `apps/web`, `apps/api`, `apps/worker`, and the shared packages now form a real Phase 0 application baseline.
 - Prisma schema, initial migration, and a scenario-driven seed path already exist.
 - Phase 0 implementation is now complete in repo scope.
-- The next active implementation slice is Phase 1 premium demo foundation.
+- Phase 1 premium demo foundation is complete in repo scope.
+- Phase 2 core buyer workflow is complete in repo scope.
+- Phase 3 seller workflow is complete in repo scope through seller catalog management, seller fulfillment recording, and seller analytics summaries.
+- The next active implementation slice is Phase 4 payments and receipts.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks

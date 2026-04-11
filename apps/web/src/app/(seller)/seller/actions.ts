@@ -3,6 +3,7 @@
 import {
   AtlasSellerWorkflowError,
   createSellerService,
+  recordSellerRequestFulfillment,
   updateSellerService
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
@@ -106,5 +107,27 @@ export async function updateSellerServiceAction(serviceId: string, formData: For
     );
   } catch (error) {
     redirectWithFeedback("/seller/services", "Service update failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function recordSellerRequestFulfillmentAction(requestId: string, formData: FormData) {
+  const actor = await requireSellerActor();
+
+  try {
+    const request = await recordSellerRequestFulfillment(actor, requestId, {
+      fulfillmentStatus: toTextValue(formData.get("fulfillmentStatus")),
+      note: toTextValue(formData.get("note"))
+    });
+
+    revalidatePath("/seller");
+    revalidatePath("/seller/requests");
+    redirectWithFeedback(
+      getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? "/seller/requests",
+      request.fulfillment?.fulfillmentStatus === "FAILED" ? "Delivery failure recorded" : "Delivery confirmed",
+      request.fulfillment?.note ?? "The seller outcome was recorded successfully.",
+      request.fulfillment?.fulfillmentStatus === "FAILED" ? "error" : "default"
+    );
+  } catch (error) {
+    redirectWithFeedback("/seller/requests", "Fulfillment update failed", normalizeActionError(error), "error");
   }
 }

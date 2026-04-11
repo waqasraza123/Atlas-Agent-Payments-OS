@@ -217,6 +217,20 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the seller request detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/requests/phase-0-request-completed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Fulfillment outcome") ||
+        html.includes("Request detail") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the operator workspace route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/operator`);
     const html = await response.text();

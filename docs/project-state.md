@@ -23,6 +23,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Durable planning now covers both the focused v1 execution track and the longer-term platform blueprint through `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, the blueprint docs under `docs/architecture`, and the detailed phase docs under `docs/backlog`
 - Phase 1 seeded demo storytelling is now reinforced by replayable scenario cards and request-linked lifecycle detail routes
 - Standalone web production build now passes through `pnpm --filter @atlas/web build`
+- Phase 3 seller workflow baseline and fulfillment path now exist through seller service records, seller request outcome recording, and seller-side analytics summaries
 
 ## Non-Negotiable Rules
 
@@ -44,7 +45,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow completed in repo scope
-- Phase 3: seller workflow
+- Phase 3: seller workflow completed in repo scope
 - Phase 4: payments and receipts
 - Phase 5: operator controls and exceptions
 - Phase 6: analytics and enterprise polish
@@ -79,6 +80,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Shared buyer workflow contracts now live in `@atlas/domain` and Prisma-backed buyer workflow services now live in `@atlas/database`
 - Buyer-facing pages now support schema-backed create and update flows instead of overview-only seeded surfaces
 - Phase 2.6 buyer request detail and workflow stabilization now render persisted policy outcomes, approval reasons, idempotency posture, and create-to-detail continuity directly from request state
+- Phase 3 seller workflow now supports seller profile and team visibility, service catalog management, service detail routing, inbound request monitoring, seller fulfillment recording, and seller-side analytics summaries
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -94,7 +96,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
 - Phase 1 implementation slices 1.1 through 1.6 are now in place in repo scope
 - Phase 2 is now complete in repo scope through Phase 2.6
-- The current active execution slice is Phase 3 seller workflow, starting with seller profile, services, pricing, and inbound request visibility
+- Phase 3 is now complete in repo scope through seller catalog management, inbound request monitoring, seller fulfillment recording, and seller analytics summaries
+- The current active execution slice is Phase 4 payments and receipts, starting with payment rail abstraction, internal simulated settlement, and receipt truth modeling
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -105,7 +108,6 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 - Real auth provider and organization session flows beyond the local-first baseline
 - Richer policy version history beyond the current integer version increment and stored rule snapshots
-- Seller service management workflows
 - Stripe integration and payment reconciliation
 - Receipt artifact generation beyond seeded records
 - Operator exception center and analytics
@@ -122,7 +124,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
-- The buyer control loop is now operational across create, evaluate, approve, and inspect, but seller-side lifecycle participation remains the next major gap
+- The buyer and seller lifecycle is now two-sided through seller fulfillment recording, but payment execution and durable receipt truth remain the next major product gap
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before the Phase 2 buyer control loop is fully stabilized

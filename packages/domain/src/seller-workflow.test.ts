@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  atlasSellerRequestFulfillmentSchema,
   atlasSellerServiceCreateSchema,
   atlasSellerServiceUpdateSchema,
+  formatAtlasSellerFulfillmentStatusLabel,
   formatAtlasServicePricingModelLabel,
   formatAtlasServiceStatusLabel,
-  formatAtlasServiceVisibilityLabel
+  formatAtlasServiceVisibilityLabel,
+  isAtlasSellerPendingFulfillmentStatus,
+  isAtlasSellerRequestFulfillmentAllowed,
+  isAtlasSellerTerminalRequestStatus
 } from "./seller-workflow";
 
 describe("atlas seller workflow contracts", () => {
@@ -51,5 +56,31 @@ describe("atlas seller workflow contracts", () => {
     expect(formatAtlasServiceStatusLabel("PUBLISHED")).toBe("Published");
     expect(formatAtlasServiceVisibilityLabel("TRUSTED_BUYERS")).toBe("Trusted Buyers");
     expect(formatAtlasServicePricingModelLabel("FIXED")).toBe("Fixed");
+  });
+
+  it("validates seller fulfillment payloads", () => {
+    expect(() =>
+      atlasSellerRequestFulfillmentSchema.parse({
+        fulfillmentStatus: "DELIVERED",
+        note: "The seller delivered the requested API access and attached execution evidence."
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects invalid seller fulfillment payloads", () => {
+    expect(() =>
+      atlasSellerRequestFulfillmentSchema.parse({
+        fulfillmentStatus: "UNKNOWN",
+        note: "short"
+      })
+    ).toThrow();
+  });
+
+  it("formats fulfillment labels and status gates", () => {
+    expect(formatAtlasSellerFulfillmentStatusLabel("DELIVERED")).toBe("Delivered");
+    expect(isAtlasSellerRequestFulfillmentAllowed("APPROVED")).toBe(true);
+    expect(isAtlasSellerRequestFulfillmentAllowed("SUBMITTED")).toBe(false);
+    expect(isAtlasSellerPendingFulfillmentStatus("EXECUTING")).toBe(true);
+    expect(isAtlasSellerTerminalRequestStatus("FAILED")).toBe(true);
   });
 });

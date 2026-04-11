@@ -1,7 +1,14 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { getSellerProfile, listSellerRequests, listSellerTeamMembers } from "@atlas/database";
+import {
+  getSellerAnalytics,
+  getSellerProfile,
+  listSellerRequests,
+  listSellerTeamMembers,
+  recordSellerRequestFulfillment
+} from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import { createDomainSummary } from "../shared/domain-summary";
+import { rethrowSellerWorkflowError } from "../shared/workflow-error";
 
 @Injectable()
 export class SellersService {
@@ -21,9 +28,25 @@ export class SellersService {
     };
   }
 
+  async analytics(actor: AtlasActorContext) {
+    return {
+      item: await getSellerAnalytics(actor.organization.id)
+    };
+  }
+
   async requests(actor: AtlasActorContext) {
     return {
       items: await listSellerRequests(actor.organization.id)
     };
+  }
+
+  async recordRequestFulfillment(actor: AtlasActorContext, requestId: string, input: unknown) {
+    try {
+      return {
+        item: await recordSellerRequestFulfillment(actor, requestId, input)
+      };
+    } catch (error) {
+      rethrowSellerWorkflowError(error);
+    }
   }
 }
