@@ -86,7 +86,6 @@ Detailed setup guidance lives in [docs/runbooks/local-development-intel-mac-2019
 ## Product and roadmap docs
 
 - [product-spec-v1.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/product/product-spec-v1.md)
-- [naming-options.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/product/naming-options.md)
 - [docs/backlog/README.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/README.md)
 - [phase-0-foundation.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-0-foundation.md)
 - [phase-1-public-narrative-and-demo.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-1-public-narrative-and-demo.md)

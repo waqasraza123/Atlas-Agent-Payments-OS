@@ -38,7 +38,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 ## Completed Major Slices
 
 - Initial monorepo scaffold and root tooling
-- Architecture, product, naming, and phase roadmap docs
+- Architecture, product, and phase roadmap docs
 - Local Docker Compose for PostgreSQL, Redis, MinIO, and MailHog
 - Next.js marketing and workspace placeholder routes
 - NestJS API bootstrap with `GET /health`

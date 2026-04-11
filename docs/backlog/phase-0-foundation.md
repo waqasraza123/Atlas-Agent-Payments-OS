@@ -79,7 +79,6 @@ The phase is complete when:
 
 - stack baseline doc
 - product spec doc
-- naming options doc
 - detailed phase backlog docs
 - hardened route shells across marketing, buyer, seller, and operator
 - auth/session baseline
