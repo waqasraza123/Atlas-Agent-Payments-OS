@@ -39,6 +39,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 - Initial monorepo scaffold and root tooling
 - Architecture, product, and phase roadmap docs
+- Repository governance docs, license, and collaboration guidance
 - Local Docker Compose for PostgreSQL, Redis, MinIO, and MailHog
 - Next.js marketing and workspace placeholder routes
 - NestJS API bootstrap with `GET /health`
@@ -54,6 +55,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Prisma is held on `6.19.x` for build stability while the domain is still changing
 - Root `pnpm build` is currently defined as workspace typecheck only
 - Git pre-push verification is repo-versioned under `.githooks/pre-push`
+- Repository license is Apache-2.0
 
 ## Deferred / Not Yet Implemented
 
@@ -70,7 +72,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 - The repo is still in Phase 0, so domain modules exist more in docs and schema than in working API features
 - Local verification depends on Docker Desktop being up and the repo-owned Postgres instance owning port `5432`
-- `pnpm build` currently validates the workspace and web production build; API and worker still run natively via `tsx`
+- `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
 - Future tasks should avoid widening the stack or introducing extra infra before Phase 0 hardening is complete
 
 ## Standard Verification

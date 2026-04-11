@@ -2,8 +2,32 @@
   "name": "atlas-agent-payments-os",
   "private": true,
   "version": "0.1.0",
+  "description": "Atlas Agent Payments OS is a premium B2B control plane for AI agent spending on paid APIs and digital services.",
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.11.1",
+  "homepage": "https://github.com/waqasraza123/Atlas-Agent-Payments-OS#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/waqasraza123/Atlas-Agent-Payments-OS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/waqasraza123/Atlas-Agent-Payments-OS/issues"
+  },
+  "keywords": [
+    "agent-payments",
+    "ai-agents",
+    "approvals",
+    "audit-trail",
+    "bullmq",
+    "digital-services",
+    "nest",
+    "nextjs",
+    "payments-control-plane",
+    "policy-engine",
+    "prisma",
+    "typescript"
+  ],
   "engines": {
     "node": "24.x",
     "pnpm": ">=10.11.1"
