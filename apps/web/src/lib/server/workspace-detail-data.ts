@@ -5,6 +5,7 @@ import type { OrganizationKind } from "@atlas/types";
 import type { DetailGridItem, RecordListPanelItem, TimelinePanelItem } from "@atlas/ui";
 import type { WorkspaceMetric } from "./workspace-data";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
+import { createAtlasFocusedDemoScenarioCards, type AtlasDemoScenarioCard } from "@/lib/demo-scenarios";
 import { buildAtlasLifecycleTimeline } from "@/lib/workspace-timeline";
 
 export type WorkspaceDetailModel = {
@@ -38,6 +39,12 @@ export type WorkspaceDetailModel = {
     items: RecordListPanelItem[];
     emptyTitle: string;
     emptyDescription: string;
+  };
+  demoJourney: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    items: AtlasDemoScenarioCard[];
   };
 };
 
@@ -384,6 +391,13 @@ async function loadRequestDetailModel(
       ].filter(Boolean) as RecordListPanelItem[],
       emptyTitle: "No related records available",
       emptyDescription: "Linked approval, payment, receipt, and audit records will appear here as the lifecycle deepens."
+    },
+    demoJourney: {
+      eyebrow: "Replayable demo flow",
+      title: "Related seeded scenarios",
+      description:
+        "Atlas now keeps the seeded walkthrough coherent by linking this detail view to the surrounding lifecycle scenarios in the buyer journey.",
+      items: createAtlasFocusedDemoScenarioCards(request.id)
     }
   };
 }
@@ -488,7 +502,8 @@ async function loadApprovalDetailModel(actor: AtlasActorContext, recordId: strin
       ],
       emptyTitle: "No approval summary available",
       emptyDescription: "Atlas will render approval-specific context here when the record is available."
-    }
+    },
+    demoJourney: requestDetail.demoJourney
   };
 }
 
@@ -601,7 +616,8 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       ],
       emptyTitle: "No payment evidence available",
       emptyDescription: "Atlas will render settlement evidence here when the payment record exists."
-    }
+    },
+    demoJourney: requestDetail.demoJourney
   };
 }
 
@@ -817,6 +833,13 @@ async function loadAuditDetailModel(
       ].filter(Boolean) as RecordListPanelItem[],
       emptyTitle: "No related records available",
       emptyDescription: "Related request and oversight records will appear here when they exist."
+    },
+    demoJourney: {
+      eyebrow: "Replayable demo flow",
+      title: "Related seeded scenarios",
+      description:
+        "Audit detail now remains anchored to the same seeded buyer-side walkthrough so the demo story stays coherent from overview to evidence.",
+      items: createAtlasFocusedDemoScenarioCards(event.request?.id ?? null)
     }
   };
 }

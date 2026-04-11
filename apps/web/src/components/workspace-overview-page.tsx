@@ -1,11 +1,15 @@
 import type { WorkspaceSurfacePageModel } from "./workspace-surface-page";
 import { MetricCard, PageHeader, Panel, RecordListPanel, StatusChip } from "@atlas/ui";
+import { createAtlasDemoScenarioCards } from "@/lib/demo-scenarios";
+import { DemoScenarioPanel } from "./demo-scenario-panel";
 
 type WorkspaceOverviewPageProps = Readonly<{
   model: WorkspaceSurfacePageModel;
 }>;
 
 export function WorkspaceOverviewPage({ model }: WorkspaceOverviewPageProps) {
+  const buyerDemoScenarioCards = model.surface.href === "/buyer" ? createAtlasDemoScenarioCards().slice(0, 4) : [];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -60,6 +64,14 @@ export function WorkspaceOverviewPage({ model }: WorkspaceOverviewPageProps) {
           </div>
         </Panel>
       </section>
+      {buyerDemoScenarioCards.length > 0 ? (
+        <DemoScenarioPanel
+          eyebrow="Replayable buyer demo"
+          title="Move from overview into real seeded lifecycle detail"
+          description="The buyer overview is now the start of a replayable demo path. Open one of the seeded request scenarios to inspect approvals, payment posture, and evidence detail."
+          items={buyerDemoScenarioCards}
+        />
+      ) : null}
       <section className="grid gap-6 xl:grid-cols-2">
         <RecordListPanel
           eyebrow={model.activity.eyebrow}

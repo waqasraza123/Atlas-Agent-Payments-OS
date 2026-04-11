@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- next dev --port 3000",
-    "build": "dotenv -e ../../.env -- next build",
-    "start": "dotenv -e ../../.env -- next start --port 3000",
+    "dev": "dotenv -e ../../.env -- env NODE_ENV=development next dev --port 3000",
+    "build": "dotenv -e ../../.env -- env NODE_ENV=production next build",
+    "start": "dotenv -e ../../.env -- env NODE_ENV=production next start --port 3000",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",

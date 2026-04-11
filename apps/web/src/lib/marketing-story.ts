@@ -1,5 +1,6 @@
-import { createAtlasSeedManifest, atlasSeedSpendRequests } from "@atlas/database";
+import { atlasSeedSpendRequests, createAtlasSeedManifest } from "@atlas/database/seed-data";
 import { listAtlasQueueDefinitions, listAtlasWorkspaceDefinitions } from "@atlas/domain";
+import { createAtlasDemoScenarioCards } from "./demo-scenarios";
 
 export type MarketingHeroMetric = {
   label: string;
@@ -36,6 +37,7 @@ export type MarketingStoryModel = {
   workflow: MarketingFlowStep[];
   workspacePreviews: MarketingWorkspacePreview[];
   narrativeHighlights: MarketingValueCard[];
+  demoScenarioCards: ReturnType<typeof createAtlasDemoScenarioCards>;
 };
 
 function formatNumber(value: number) {
@@ -56,6 +58,7 @@ export function createMarketingStoryModel(): MarketingStoryModel {
     .filter((request) => request.status === "COMPLETED")
     .reduce((total, request) => total + request.amountMinor, 0);
   const queueFamilies = new Set(listAtlasQueueDefinitions().map((queue) => queue.family));
+  const demoScenarioCards = createAtlasDemoScenarioCards();
   const workspacePreviews = listAtlasWorkspaceDefinitions().map((workspace) => ({
     id: workspace.workspace.toLowerCase(),
     title: workspace.title,
@@ -86,6 +89,11 @@ export function createMarketingStoryModel(): MarketingStoryModel {
         label: "Workspace surfaces",
         value: formatNumber(workspacePreviews.reduce((total, workspace) => total + Number.parseInt(workspace.detail, 10), 0)),
         detail: "Buyer, seller, and operator routes already map to durable application surfaces."
+      },
+      {
+        label: "Guided scenarios",
+        value: formatNumber(demoScenarioCards.length),
+        detail: "Replayable seeded narratives now link directly into the buyer-side lifecycle detail views."
       }
     ],
     trustPillars: [
@@ -132,6 +140,7 @@ export function createMarketingStoryModel(): MarketingStoryModel {
       }
     ],
     workspacePreviews,
+    demoScenarioCards,
     narrativeHighlights: [
       {
         id: "buyers",

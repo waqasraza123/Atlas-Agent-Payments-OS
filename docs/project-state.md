@@ -21,6 +21,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Queue namespace conventions now exist through a shared queue registry in `@atlas/domain`, worker queue-family bootstrapping, and a platform queue discovery route in the API
 - The repo now has an expanded automated test baseline with package-level unit tests, worker and database tests, API e2e, and web HTTP smoke coverage
 - Durable planning now covers both the focused v1 execution track and the longer-term platform blueprint through `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, the blueprint docs under `docs/architecture`, and the detailed phase docs under `docs/backlog`
+- Phase 1 seeded demo storytelling is now reinforced by replayable scenario cards and request-linked lifecycle detail routes
+- Standalone web production build now passes through `pnpm --filter @atlas/web build`
 
 ## Non-Negotiable Rules
 
@@ -72,6 +74,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Automated unit and e2e test foundation expanded across packages, API, and web workspace smoke routes
 - Phase 1 narrative and dashboard baseline across marketing, buyer, seller, and operator overview surfaces
 - Phase 1 detail baseline across seeded buyer request, approval, timeline, payment, and audit-linked record presentation
+- Phase 1.6 demo-mode polish baseline across replayable scenario storytelling, richer loading states, and linked lifecycle detail flows
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -85,8 +88,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
-- Phase 1.5 timeline and detail baseline is now in repo scope
-- The current active execution slice is Phase 1.6 demo-mode polish, followed by Phase 2 core buyer workflow
+- Phase 1 implementation slices 1.1 through 1.6 are now in place in repo scope
+- The current active execution slice is Phase 2 core buyer workflow
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -101,7 +104,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Receipt artifact generation beyond seeded records
 - Operator exception center and analytics
 - Onchain settlement support
-- Browser-level interaction tests beyond HTTP smoke coverage
+- Browser-level interaction tests beyond current HTTP and route-level smoke coverage
 - Seeded database integration tests against a reliably provisioned local database
 - Broader automated coverage across every seller and operator detail route
 
@@ -110,8 +113,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 0 structure is now in place, but domain modules still remain mostly skeleton boundaries rather than full product workflows
 - Local actor resolution and real seed execution still depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for `pnpm db:seed`
 - `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
-- Current web e2e is still HTTP smoke coverage, not full browser automation
-- Current web e2e detail coverage is strongest on buyer-side seeded detail routes; seller and operator detail routes still need broader automated runtime coverage
+- Current web e2e remains route and HTTP smoke coverage rather than full browser automation
+- Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
+- The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before Phase 1 demo foundation is in place
@@ -125,6 +129,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `pnpm test`
 - `pnpm test:e2e`
 - `pnpm build`
+- `pnpm --filter @atlas/web build`
 - `pnpm verify:phase0`
 - `pnpm db:seed`
 - `pnpm verify:push`

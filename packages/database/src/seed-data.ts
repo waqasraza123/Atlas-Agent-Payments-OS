@@ -108,6 +108,21 @@ export type AtlasSeedAuditEventDefinition = {
   occurredAt: string;
 };
 
+export type AtlasSeedScenarioSummary = {
+  key: string;
+  label: string;
+  requestId: string;
+  title: string;
+  amountMinor: number;
+  currency: string;
+  requestStatus: SpendRequestStatus;
+  approvalStatus: ApprovalStatus | null;
+  paymentStatus: PaymentStatus | null;
+  receiptStatus: ReceiptStatus | null;
+  serviceCategory: string;
+  sellerOrganizationSlug: string | null;
+};
+
 export const atlasSeedOrganizations: AtlasSeedOrganizationDefinition[] = [
   {
     slug: "atlas-demo-buyer",
@@ -856,4 +871,37 @@ export function createAtlasSeedManifest() {
       )
     }))
   };
+}
+
+export function listAtlasSeedScenarioSummaries(): AtlasSeedScenarioSummary[] {
+  const approvalsByRequestId = new Map(atlasSeedApprovals.map((approval) => [approval.requestId, approval]));
+  const paymentsByRequestId = new Map(atlasSeedPayments.map((payment) => [payment.requestId, payment]));
+  const receiptsByRequestId = new Map(atlasSeedReceipts.map((receipt) => [receipt.requestId, receipt]));
+
+  return atlasSeedSpendRequests.map((request) => {
+    const metadata = typeof request.metadata === "object" && request.metadata !== null ? request.metadata : null;
+    const scenarioKey =
+      metadata && "scenarioKey" in metadata && typeof metadata.scenarioKey === "string"
+        ? metadata.scenarioKey
+        : request.id;
+    const scenarioLabel =
+      metadata && "scenarioLabel" in metadata && typeof metadata.scenarioLabel === "string"
+        ? metadata.scenarioLabel
+        : request.title;
+
+    return {
+      key: scenarioKey,
+      label: scenarioLabel,
+      requestId: request.id,
+      title: request.title,
+      amountMinor: request.amountMinor,
+      currency: request.currency,
+      requestStatus: request.status,
+      approvalStatus: approvalsByRequestId.get(request.id)?.status ?? null,
+      paymentStatus: paymentsByRequestId.get(request.id)?.status ?? null,
+      receiptStatus: receiptsByRequestId.get(request.id)?.status ?? null,
+      serviceCategory: request.serviceCategory,
+      sellerOrganizationSlug: request.sellerOrganizationSlug
+    };
+  });
 }

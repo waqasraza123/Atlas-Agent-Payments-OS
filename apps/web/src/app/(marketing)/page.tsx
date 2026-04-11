@@ -2,6 +2,7 @@ import Link from "next/link";
 import { atlasProduct } from "@atlas/config";
 import { Panel } from "@atlas/ui";
 import { createMarketingStoryModel } from "@/lib/marketing-story";
+import { DemoScenarioPanel } from "@/components/demo-scenario-panel";
 
 export default function MarketingPage() {
   const model = createMarketingStoryModel();
@@ -43,7 +44,7 @@ export default function MarketingPage() {
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {model.heroMetrics.map((metric) => (
                 <Panel key={metric.label} className="min-h-[164px] bg-white/4 p-5">
                   <div className="space-y-3">
@@ -142,6 +143,13 @@ export default function MarketingPage() {
           </Panel>
         ))}
       </section>
+
+      <DemoScenarioPanel
+        eyebrow="Guided demo story"
+        title="Walk the seeded lifecycle Atlas is built around"
+        description="The current demo is replayable from real seed records. Start from the buyer-side request detail and follow approvals, payment posture, receipt evidence, and audit history from there."
+        items={model.demoScenarioCards.slice(0, 4)}
+      />
 
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <Panel className="space-y-5 p-6 sm:p-8">

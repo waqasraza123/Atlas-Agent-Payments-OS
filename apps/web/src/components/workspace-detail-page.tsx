@@ -1,5 +1,6 @@
 import type { WorkspaceDetailModel } from "@/lib/server/workspace-detail-data";
 import { DetailGrid, MetricCard, PageHeader, RecordListPanel, StatusChip, TimelinePanel } from "@atlas/ui";
+import { DemoScenarioPanel } from "./demo-scenario-panel";
 
 type WorkspaceDetailPageProps = Readonly<{
   model: WorkspaceDetailModel;
@@ -42,6 +43,12 @@ export function WorkspaceDetailPage({ model }: WorkspaceDetailPageProps) {
         items={model.timeline.items}
         emptyTitle={model.timeline.emptyTitle}
         emptyDescription={model.timeline.emptyDescription}
+      />
+      <DemoScenarioPanel
+        eyebrow={model.demoJourney.eyebrow}
+        title={model.demoJourney.title}
+        description={model.demoJourney.description}
+        items={model.demoJourney.items}
       />
       <RecordListPanel
         eyebrow={model.related.eyebrow}

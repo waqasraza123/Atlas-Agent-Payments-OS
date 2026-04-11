@@ -16,7 +16,7 @@ Atlas needs a premium product story early, but the demo should still be anchored
 
 ## Current Status
 
-Phase 1.1 through 1.5 now have a baseline in repo scope through a stronger marketing narrative, more polished buyer, seller, and operator overview dashboards, and seeded request and approval detail surfaces with timeline-first presentation. The next active step is Phase 1.6 demo-mode polish, followed by Phase 2 buyer workflow implementation.
+Phase 1.1 through 1.6 now have a baseline in repo scope through a stronger marketing narrative, more polished buyer, seller, and operator overview dashboards, seeded request and approval detail surfaces with timeline-first presentation, replayable seeded scenario storytelling, and a green standalone web production build. Phase 1 is now complete in repo scope. The next active step is Phase 2 buyer workflow implementation.
 
 ## Exit Criteria
 
@@ -63,6 +63,8 @@ Phase 1.1 through 1.5 now have a baseline in repo scope through a stronger marke
 - seeded scenarios feel coherent and replayable
 - empty, loading, and error states are polished
 - data density, motion, and visual hierarchy are refined
+- request-linked detail routes reinforce the guided demo path
+- standalone web production build stays green during demo polish work
 
 ## Modules Touched
 
@@ -100,6 +102,7 @@ Later tracks may add:
 ## Verification Commands
 
 - `pnpm build`
+- `pnpm --filter @atlas/web build`
 - `pnpm dev:web`
 - manual walkthrough of marketing, buyer, seller, and operator seeded views
 
@@ -107,3 +110,4 @@ Later tracks may add:
 
 - a founder or client can understand Atlas in one guided session
 - the seeded product feels premium and credible
+- marketing, buyer overview, and buyer detail routes form a coherent guided demo path

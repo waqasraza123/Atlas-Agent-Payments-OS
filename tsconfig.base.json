@@ -21,6 +21,7 @@
       "@atlas/auth": ["packages/auth/src/index.ts"],
       "@atlas/config": ["packages/config/src/index.ts"],
       "@atlas/database": ["packages/database/src/index.ts"],
+      "@atlas/database/seed-data": ["packages/database/src/seed-data.ts"],
       "@atlas/database/*": ["packages/database/src/*"],
       "@atlas/domain": ["packages/domain/src/index.ts"],
       "@atlas/types": ["packages/types/src/index.ts"],

@@ -9,7 +9,8 @@ import {
   atlasSeedReceipts,
   atlasSeedScenarioKey,
   atlasSeedSpendRequests,
-  createAtlasSeedManifest
+  createAtlasSeedManifest,
+  listAtlasSeedScenarioSummaries
 } from "./seed-data";
 
 describe("atlas seed data", () => {
@@ -61,5 +62,15 @@ describe("atlas seed data", () => {
         (event) => event.eventType === "operator.reviewed_failure" && event.organizationSlug === "atlas-demo-operator"
       )
     ).toBe(true);
+  });
+
+  it("builds scenario summaries that stay aligned to seeded lifecycle records", () => {
+    const scenarios = listAtlasSeedScenarioSummaries();
+    const scenarioByKey = new Map(scenarios.map((scenario) => [scenario.key, scenario]));
+
+    expect(scenarios).toHaveLength(atlasSeedSpendRequests.length);
+    expect(scenarioByKey.get("completed-success")?.receiptStatus).toBe("AVAILABLE");
+    expect(scenarioByKey.get("awaiting-approval")?.approvalStatus).toBe("PENDING");
+    expect(scenarioByKey.get("payment-failed")?.paymentStatus).toBe("FAILED");
   });
 });
