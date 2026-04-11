@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const requestedPort = 3401;
+const requestedPort = 3401 + Math.floor(Math.random() * 200);
 
 async function waitForHttp(url: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -121,6 +121,44 @@ describe("marketing e2e", () => {
         html.includes("Choose a operator session to continue".replace("a operator", "an operator")) ||
         html.includes("Operator context could not be resolved") ||
         html.includes("Operator workspace")
+    ).toBe(true);
+  });
+
+  it("serves the buyer request detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/requests/phase-0-request-completed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Request detail") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the buyer approval detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/approvals/phase-0-request-submitted`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Approval detail") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves an additional buyer request detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/requests/phase-0-request-failed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Request detail") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Buyer context could not be resolved")
     ).toBe(true);
   });
 });

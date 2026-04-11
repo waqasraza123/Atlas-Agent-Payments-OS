@@ -1,5 +1,6 @@
 import { getAtlasWorkspaceSurfaceByKey, type AtlasWorkspaceSurfaceKey } from "@atlas/domain";
 import type { OrganizationKind } from "@atlas/types";
+import { StatePanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { loadWorkspaceSurfaceModel } from "@/lib/server/workspace-surface-data";
 import { WorkspaceSurfacePage } from "./workspace-surface-page";
@@ -22,7 +23,18 @@ export async function WorkspaceSurfaceRoute({ workspace, surfaceKey }: Workspace
     throw new Error(`Unknown surface ${surfaceKey} for ${workspace}`);
   }
 
-  const model = await loadWorkspaceSurfaceModel(resolution.actor, surfaceKey);
+  try {
+    const model = await loadWorkspaceSurfaceModel(resolution.actor, surfaceKey);
 
-  return <WorkspaceSurfacePage model={{ ...model, surface }} />;
+    return <WorkspaceSurfacePage model={{ ...model, surface }} />;
+  } catch (error) {
+    return (
+      <StatePanel
+        eyebrow={surface.label}
+        title="Workspace surface failed to load"
+        description={error instanceof Error ? error.message : "Unknown workspace loading failure"}
+        tone="error"
+      />
+    );
+  }
 }

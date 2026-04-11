@@ -16,7 +16,7 @@ Atlas needs a premium product story early, but the demo should still be anchored
 
 ## Current Status
 
-Phase 1.1 through 1.4 now have a baseline in repo scope through a stronger marketing narrative and more polished buyer, seller, and operator overview dashboards. The next active step is Phase 1.5 timeline and detail experience, followed by Phase 1.6 demo-mode polish.
+Phase 1.1 through 1.5 now have a baseline in repo scope through a stronger marketing narrative, more polished buyer, seller, and operator overview dashboards, and seeded request and approval detail surfaces with timeline-first presentation. The next active step is Phase 1.6 demo-mode polish, followed by Phase 2 buyer workflow implementation.
 
 ## Exit Criteria
 

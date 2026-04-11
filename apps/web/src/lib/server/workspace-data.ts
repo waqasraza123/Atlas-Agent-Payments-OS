@@ -3,6 +3,7 @@ import { listAtlasQueueDefinitions } from "@atlas/domain";
 import type { AtlasActorContext } from "@atlas/auth";
 import type { OrganizationKind } from "@atlas/types";
 import type { AuditEvent, SpendRequest } from "@atlas/database";
+import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 
 export type WorkspaceMetric = {
   label: string;
@@ -15,6 +16,7 @@ export type WorkspaceActivityItem = {
   title: string;
   description: string;
   detail: string;
+  href?: string;
 };
 
 export type WorkspaceOverviewModel = {
@@ -129,7 +131,8 @@ export async function loadWorkspaceOverviewModel(
         id: request.id,
         title: request.title,
         description: `${request.status} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
-        detail: request.sellerOrganization?.name ?? "No seller linked"
+        detail: request.sellerOrganization?.name ?? "No seller linked",
+        href: getAtlasWorkspaceDetailHref("BUYER", "requests", request.id) ?? undefined
       }))
     };
   }
@@ -220,7 +223,8 @@ export async function loadWorkspaceOverviewModel(
         id: request.id,
         title: request.title,
         description: `${request.status} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
-        detail: request.organization.name
+        detail: request.organization.name,
+        href: getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? undefined
       }))
     };
   }
@@ -284,12 +288,13 @@ export async function loadWorkspaceOverviewModel(
         detail: "The current operator-side actor context used for local development."
       }
     ],
-    activity: recentAuditEvents.map((event: AuditEvent) => ({
-      id: event.id,
-      title: event.eventType,
-      description: `${event.targetType} · ${event.targetId}`,
-      detail: event.actorType
-    }))
+      activity: recentAuditEvents.map((event: AuditEvent) => ({
+        id: event.id,
+        title: event.eventType,
+        description: `${event.targetType} · ${event.targetId}`,
+        detail: event.actorType,
+        href: getAtlasWorkspaceDetailHref("OPERATOR", "audit", event.id) ?? undefined
+      }))
   };
 }
 

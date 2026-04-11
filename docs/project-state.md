@@ -71,6 +71,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Package-level tests for config, types, UI, database seed definitions, and worker queue contracts
 - Automated unit and e2e test foundation expanded across packages, API, and web workspace smoke routes
 - Phase 1 narrative and dashboard baseline across marketing, buyer, seller, and operator overview surfaces
+- Phase 1 detail baseline across seeded buyer request, approval, timeline, payment, and audit-linked record presentation
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -84,7 +85,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
-- The current active execution slice is Phase 1.5 timeline and detail experience, followed by Phase 1.6 demo-mode polish
+- Phase 1.5 timeline and detail baseline is now in repo scope
+- The current active execution slice is Phase 1.6 demo-mode polish, followed by Phase 2 core buyer workflow
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -101,6 +103,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Onchain settlement support
 - Browser-level interaction tests beyond HTTP smoke coverage
 - Seeded database integration tests against a reliably provisioned local database
+- Broader automated coverage across every seller and operator detail route
 
 ## Risks / Watchouts
 
@@ -108,6 +111,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Local actor resolution and real seed execution still depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for `pnpm db:seed`
 - `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
 - Current web e2e is still HTTP smoke coverage, not full browser automation
+- Current web e2e detail coverage is strongest on buyer-side seeded detail routes; seller and operator detail routes still need broader automated runtime coverage
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before Phase 1 demo foundation is in place

@@ -43,7 +43,16 @@ export function WorkspaceOverviewPage({ model }: WorkspaceOverviewPageProps) {
                 key={activity.id}
                 className="rounded-[24px] border border-[var(--atlas-line)] bg-white/4 px-5 py-4"
               >
-                <h3 className="text-base font-medium">{activity.title}</h3>
+                {activity.href ? (
+                  <a
+                    href={activity.href}
+                    className="text-base font-medium text-[var(--atlas-ink)] transition hover:text-[var(--atlas-accent-strong)]"
+                  >
+                    {activity.title}
+                  </a>
+                ) : (
+                  <h3 className="text-base font-medium">{activity.title}</h3>
+                )}
                 <p className="mt-2 text-sm leading-6 text-[var(--atlas-muted)]">{activity.description}</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--atlas-accent-strong)]">{activity.detail}</p>
               </article>

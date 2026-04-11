@@ -1,6 +1,8 @@
 import { WorkspaceLayout } from "@/components/workspace-layout";
 import type { ReactNode } from "react";
 
+export const dynamic = "force-dynamic";
+
 type OperatorLayoutProps = Readonly<{
   children: ReactNode;
 }>;

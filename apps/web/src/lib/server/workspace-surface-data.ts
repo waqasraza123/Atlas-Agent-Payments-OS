@@ -9,6 +9,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import type { OrganizationKind, PaymentStatus, SpendRequestStatus } from "@atlas/types";
 import type { RecordListPanelItem } from "@atlas/ui";
 import { getWorkspaceEmptyStateDescription, loadWorkspaceOverviewModel, type WorkspaceOverviewModel } from "./workspace-data";
+import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 
 export type WorkspaceSurfaceModel = {
   surfaceKey: AtlasWorkspaceSurfaceKey;
@@ -166,6 +167,7 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
         title: approval.request.title,
         description: `Approval state: ${approval.status}`,
         detail: approval.decisionReason ?? "Decision reason not captured yet",
+        href: getAtlasWorkspaceDetailHref("BUYER", "approvals", approval.id) ?? undefined,
         statusLabel: approval.status,
         statusTone: approval.status === "APPROVED" ? "success" : approval.status === "PENDING" ? "warning" : "critical"
       }))
@@ -244,6 +246,7 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
       title: request.title,
       description: `${formatCurrencyMinor(request.amountMinor, request.currency)} · ${request.serviceCategory}`,
       detail: request.sellerOrganization?.name ?? "No seller linked",
+      href: getAtlasWorkspaceDetailHref("BUYER", "requests", request.id) ?? undefined,
       statusLabel: request.status,
       statusTone: resolveRequestStatusTone(request.status)
     }));
@@ -271,6 +274,7 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
       title: approval.request.title,
       description: approval.approver?.name ?? approval.approver?.email ?? "Awaiting assignee context",
       detail: approval.decisionReason ?? "Decision reason not captured yet",
+      href: getAtlasWorkspaceDetailHref("BUYER", "approvals", approval.id) ?? undefined,
       statusLabel: approval.status,
       statusTone: approval.status === "APPROVED" ? "success" : approval.status === "PENDING" ? "warning" : "critical"
     }));
@@ -292,6 +296,7 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
       title: event.eventType,
       description: `${event.targetType} · ${event.targetId}`,
       detail: event.actorType,
+      href: getAtlasWorkspaceDetailHref("BUYER", "activity", event.id) ?? undefined,
       statusLabel: "event"
     }));
   }
@@ -339,6 +344,7 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
         title: request.title,
         description: `${request.organization.name} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
         detail: request.serviceCategory,
+        href: getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? undefined,
         statusLabel: request.status,
         statusTone: resolveRequestStatusTone(request.status)
       })),
@@ -398,6 +404,7 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
       title: request.title,
       description: `${request.organization.name} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
       detail: request.serviceCategory,
+      href: getAtlasWorkspaceDetailHref("SELLER", "requests", request.id) ?? undefined,
       statusLabel: request.status,
       statusTone: resolveRequestStatusTone(request.status)
     }));
@@ -423,6 +430,7 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
       title: payment.request.title,
       description: `${payment.organization.name} · ${formatCurrencyMinor(payment.amountMinor, payment.currency)}`,
       detail: payment.reference ?? "No payment reference",
+      href: getAtlasWorkspaceDetailHref("SELLER", "payments", payment.id) ?? undefined,
       statusLabel: payment.status,
       statusTone: resolvePaymentStatusTone(payment.status)
     }));
@@ -527,6 +535,7 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
         title: request.title,
         description: `${request.organization.name} → ${request.sellerOrganization?.name ?? "No seller"}`,
         detail: `${formatCurrencyMinor(request.amountMinor, request.currency)} · failed lifecycle`,
+        href: getAtlasWorkspaceDetailHref("OPERATOR", "transactions", request.id) ?? undefined,
         statusLabel: request.status,
         statusTone: "critical" as const
       })),
@@ -593,6 +602,7 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
       title: request.title,
       description: `${request.organization.name} → ${request.sellerOrganization?.name ?? "No seller"}`,
       detail: request.payment?.status ?? request.status,
+      href: getAtlasWorkspaceDetailHref("OPERATOR", "transactions", request.id) ?? undefined,
       statusLabel: request.status,
       statusTone: resolveRequestStatusTone(request.status)
     }));
@@ -644,6 +654,7 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
       title: request.title,
       description: `${request.organization.name} → ${request.sellerOrganization?.name ?? "No seller"}`,
       detail: `${formatCurrencyMinor(request.amountMinor, request.currency)} · ${request.serviceCategory}`,
+      href: getAtlasWorkspaceDetailHref("OPERATOR", "transactions", request.id) ?? undefined,
       statusLabel: request.status,
       statusTone: "critical"
     }));
@@ -662,6 +673,7 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
       title: event.eventType,
       description: `${event.targetType} · ${event.targetId}`,
       detail: event.actorType,
+      href: getAtlasWorkspaceDetailHref("OPERATOR", "audit", event.id) ?? undefined,
       statusLabel: "event"
     }));
   }

@@ -1,3 +1,4 @@
+export { DetailGrid, type DetailGridItem } from "./components/detail-grid";
 export { AppFrame } from "./components/app-frame";
 export { ContextDisplay } from "./components/context-display";
 export { MetricCard } from "./components/metric-card";
@@ -7,4 +8,5 @@ export { RecordListPanel, type RecordListPanelItem } from "./components/record-l
 export { SidebarNav, type SidebarNavItem } from "./components/sidebar-nav";
 export { StatusChip } from "./components/status-chip";
 export { StatePanel } from "./components/state-panel";
+export { TimelinePanel, type TimelinePanelItem } from "./components/timeline-panel";
 export { TopBar } from "./components/top-bar";

@@ -8,6 +8,8 @@ export type RecordListPanelItem = {
   title: string;
   description: string;
   detail: string;
+  href?: string;
+  hrefLabel?: string;
   statusLabel?: string;
   statusTone?: "default" | "success" | "warning" | "critical";
 };
@@ -53,14 +55,33 @@ export function RecordListPanel({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-medium text-[var(--atlas-ink)]">{item.title}</h3>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        className="text-base font-medium text-[var(--atlas-ink)] transition hover:text-[var(--atlas-accent-strong)]"
+                      >
+                        {item.title}
+                      </a>
+                    ) : (
+                      <h3 className="text-base font-medium text-[var(--atlas-ink)]">{item.title}</h3>
+                    )}
                     {item.statusLabel ? (
                       <StatusChip label={item.statusLabel} tone={item.statusTone} />
                     ) : null}
                   </div>
                   <p className="text-sm leading-6 text-[var(--atlas-muted)]">{item.description}</p>
                 </div>
-                <p className="text-sm leading-6 text-[var(--atlas-muted)]">{item.detail}</p>
+                <div className="space-y-2 text-right">
+                  <p className="text-sm leading-6 text-[var(--atlas-muted)]">{item.detail}</p>
+                  {item.href ? (
+                    <a
+                      href={item.href}
+                      className="inline-flex text-sm font-medium text-[var(--atlas-accent-strong)] transition hover:text-[var(--atlas-ink)]"
+                    >
+                      {item.hrefLabel ?? "Open detail"}
+                    </a>
+                  ) : null}
+                </div>
               </div>
             </article>
           ))}
