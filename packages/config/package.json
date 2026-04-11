@@ -1,0 +1,16 @@
+{
+  "name": "@atlas/config",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"process.stdout.write('Config tests not added in phase 0\\n')\""
+  }
+}

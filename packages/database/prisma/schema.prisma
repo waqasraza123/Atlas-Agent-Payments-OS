@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationKind {
+  BUYER
+  SELLER
+  OPERATOR
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  REVIEWER
+  FINANCE
+}
+
+enum AgentStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum PolicyStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SpendRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  EXECUTING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  VOIDED
+}
+
+enum ReceiptStatus {
+  PENDING
+  AVAILABLE
+  FAILED
+}
+
+enum AuditActorType {
+  HUMAN
+  AGENT
+  SYSTEM
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String?
+  memberships Membership[]
+  approvals   Approval[]
+  auditEvents AuditEvent[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Organization {
+  id             String         @id @default(cuid())
+  kind           OrganizationKind
+  slug           String         @unique
+  name           String
+  memberships    Membership[]
+  agents         Agent[]
+  policies       Policy[]
+  buyerRequests  SpendRequest[] @relation("BuyerOrganizationRequests")
+  sellerRequests SpendRequest[] @relation("SellerOrganizationRequests")
+  payments       Payment[]      @relation("BuyerOrganizationPayments")
+  sellerPayments Payment[]      @relation("SellerOrganizationPayments")
+  receipts       Receipt[]
+  auditEvents    AuditEvent[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MembershipRole
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+
+  @@unique([userId, organizationId, role])
+}
+
+model Agent {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  externalRef    String?
+  status         AgentStatus  @default(DRAFT)
+  policyId       String?
+  metadata       Json?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  policy         Policy?      @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  requests       SpendRequest[]
+  auditEvents    AuditEvent[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Policy {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  status         PolicyStatus @default(DRAFT)
+  rules          Json
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agents         Agent[]
+  requests       SpendRequest[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model SpendRequest {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  agentId              String
+  policyId             String?
+  sellerOrganizationId String?
+  title                String
+  amountMinor          Int
+  currency             String             @default("USD")
+  serviceCategory      String
+  status               SpendRequestStatus @default(DRAFT)
+  requestPayload       Json
+  metadata             Json?
+  organization         Organization       @relation("BuyerOrganizationRequests", fields: [organizationId], references: [id], onDelete: Cascade)
+  agent                Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  policy               Policy?            @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  sellerOrganization   Organization?      @relation("SellerOrganizationRequests", fields: [sellerOrganizationId], references: [id], onDelete: SetNull)
+  approval             Approval?
+  payment              Payment?
+  receipt              Receipt?
+  auditEvents          AuditEvent[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model Approval {
+  id             String         @id @default(cuid())
+  requestId      String         @unique
+  approverId     String?
+  status         ApprovalStatus @default(PENDING)
+  decisionReason String?
+  request        SpendRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver       User?          @relation(fields: [approverId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  requestId            String        @unique
+  organizationId       String
+  sellerOrganizationId String?
+  provider             String
+  reference            String?
+  status               PaymentStatus @default(PENDING)
+  amountMinor          Int
+  currency             String        @default("USD")
+  metadata             Json?
+  request              SpendRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  organization         Organization  @relation("BuyerOrganizationPayments", fields: [organizationId], references: [id], onDelete: Cascade)
+  sellerOrganization   Organization? @relation("SellerOrganizationPayments", fields: [sellerOrganizationId], references: [id], onDelete: SetNull)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model Receipt {
+  id          String        @id @default(cuid())
+  requestId   String        @unique
+  organizationId String
+  storageKey  String?
+  contentType String?
+  status      ReceiptStatus @default(PENDING)
+  metadata    Json?
+  request     SpendRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model AuditEvent {
+  id             String         @id @default(cuid())
+  organizationId String?
+  userId         String?
+  agentId        String?
+  requestId      String?
+  actorType      AuditActorType
+  eventType      String
+  targetType     String
+  targetId       String
+  payload        Json
+  occurredAt     DateTime       @default(now())
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agent          Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  request        SpendRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+}

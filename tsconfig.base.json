@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "ignoreDeprecations": "6.0",
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@atlas/auth": ["packages/auth/src/index.ts"],
+      "@atlas/config": ["packages/config/src/index.ts"],
+      "@atlas/database": ["packages/database/src/index.ts"],
+      "@atlas/domain": ["packages/domain/src/index.ts"],
+      "@atlas/types": ["packages/types/src/index.ts"],
+      "@atlas/ui": ["packages/ui/src/index.ts"]
+    }
+  }
+}

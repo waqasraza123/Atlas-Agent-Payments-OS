@@ -1,0 +1,19 @@
+{
+  "name": "@atlas/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/main.ts",
+    "start": "dotenv -e ../../.env -- tsx src/main.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"process.stdout.write('Worker tests not added in phase 0\\n')\""
+  },
+  "dependencies": {
+    "@atlas/config": "workspace:*",
+    "@atlas/domain": "workspace:*",
+    "bullmq": "^5.73.4",
+    "ioredis": "^5.8.1"
+  }
+}

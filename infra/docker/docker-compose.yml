@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: atlas-postgres
+    environment:
+      POSTGRES_DB: atlas
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+    ports:
+      - "5432:5432"
+    volumes:
+      - atlas-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: atlas-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - atlas-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: atlas-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: atlasminio
+      MINIO_ROOT_PASSWORD: atlasminio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - atlas-minio-data:/data
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: atlas-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  atlas-postgres-data:
+  atlas-redis-data:
+  atlas-minio-data:
