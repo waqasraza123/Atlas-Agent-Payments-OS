@@ -14,9 +14,9 @@ Without a real Phase 0 baseline, every later feature lands on placeholders. Phas
 - durable planning docs and repo memory exist
 - safe push workflow exists
 - web, API, worker, and database packages boot at a basic level
-- buyer, seller, and operator routes are still placeholders
-- auth and actor context do not exist yet
-- API domain modules are still mostly skeletal
+- buyer, seller, and operator overview shells exist with actor-aware layouts and route surfaces
+- local-first auth and actor context exist across web and API
+- API domain modules are now moving from scaffold into thin but explicit module boundaries
 
 ## Entry Criteria
 
@@ -187,12 +187,14 @@ Purpose:
 Tasks:
 
 - ensure build, typecheck, seed, and basic boot work cleanly
+- establish the first durable unit and e2e test baseline
 - update docs to reflect the actual baseline
 - keep the push workflow working through the pre-push gate
 
 Expected outputs:
 
 - stable verification path
+- automated unit and e2e coverage for the current highest-risk phase-0 surfaces
 - trustworthy current-session handoff
 - updated durable memory reflecting the true Phase 0 state
 

@@ -2,7 +2,7 @@
 
 - Read `docs/project-state.md` before making implementation decisions.
 - Read `docs/architecture/master-execution-plan.md` before planning or sequencing work.
-- Read `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, and `docs/architecture/release-maturity-model.md` before making long-range architecture or rollout decisions.
+- Read `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`, and `docs/architecture/testing-strategy.md` before making long-range architecture, rollout, or testing decisions.
 - Read the active detailed phase doc named in `docs/project-state.md` before implementing product changes.
 - Read `docs/_local/current-session.md` if it exists before starting work.
 - Treat `docs/project-state.md` as durable repo memory.

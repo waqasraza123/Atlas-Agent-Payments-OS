@@ -1,3 +1,5 @@
+"use client";
+
 import {
   formatAtlasRoleLabel,
   formatAtlasWorkspaceLabel,
@@ -15,6 +17,7 @@ import {
   type SidebarNavItem
 } from "@atlas/ui";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 type WorkspaceShellProps = Readonly<{
@@ -74,12 +77,17 @@ export function WorkspaceShell({
   profiles,
   children
 }: WorkspaceShellProps) {
+  const pathname = usePathname();
   const currentProfile = profiles.find(
     (profile) =>
       profile.userEmail === actor.user.email &&
       profile.organizationSlug === actor.organization.slug &&
       profile.role === actor.membership.role
   );
+  const resolvedItems = items.map((item) => ({
+    ...item,
+    current: pathname === item.href
+  }));
 
   return (
     <AppFrame
@@ -87,7 +95,7 @@ export function WorkspaceShell({
         <SidebarNav
           title={title}
           subtitle={subtitle}
-          items={items}
+          items={resolvedItems}
           footer={
             <Panel className="space-y-3 p-4">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--atlas-muted)]">

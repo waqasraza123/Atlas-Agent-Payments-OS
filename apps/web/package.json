@@ -9,12 +9,14 @@
     "start": "dotenv -e ../../.env -- next start --port 3000",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.stdout.write('Web tests not added in phase 0\\n')\""
+    "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@atlas/auth": "workspace:*",
     "@atlas/config": "workspace:*",
     "@atlas/database": "workspace:*",
+    "@atlas/domain": "workspace:*",
     "@atlas/types": "workspace:*",
     "@atlas/ui": "workspace:*",
     "next": "^16.2.3",
