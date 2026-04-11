@@ -1,5 +1,7 @@
 # Technical Execution Plan
 
+This file is now a summary companion. The authoritative execution source of truth is [master-execution-plan.md](./master-execution-plan.md).
+
 ## Objective
 
 Deliver Atlas Agent Payments OS as a single monorepo with one premium web surface, one API, one worker, and a shared domain model that can grow into approvals, payments, receipts, auditability, and programmable settlement without a structural rewrite.

@@ -1,5 +1,7 @@
 # Phase 4 Payments and Receipts
 
+This file is a summary companion. The authoritative implementation guide is [phase-4-payments-and-receipts-detailed.md](./phase-4-payments-and-receipts-detailed.md).
+
 ## Goal
 
 Turn Atlas from a control-only system into a real payment execution and evidence platform.

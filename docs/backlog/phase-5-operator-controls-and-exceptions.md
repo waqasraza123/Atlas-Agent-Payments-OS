@@ -1,5 +1,7 @@
 # Phase 5 Operator Controls and Exceptions
 
+This file is a summary companion. The authoritative implementation guide is [phase-5-operator-controls-detailed.md](./phase-5-operator-controls-detailed.md).
+
 ## Goal
 
 Make Atlas trustworthy under failure, review, and investigation scenarios.

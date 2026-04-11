@@ -1,5 +1,7 @@
 # Phase 0 Foundation and Platform Baseline
 
+This file is a summary companion. The authoritative implementation guide is [phase-0-foundation-detailed.md](./phase-0-foundation-detailed.md).
+
 ## Goal
 
 Turn the existing scaffold into a dependable platform baseline for every later phase. This phase ends when the repo is not just organized correctly, but can support auth, seeded demo flows, policy evaluation, audit events, and seller/payment work without another round of architecture churn.

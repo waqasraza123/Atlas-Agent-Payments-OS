@@ -1,5 +1,7 @@
 # Phase 7 Programmable Settlement Extension
 
+This file is a summary companion. The authoritative implementation guide is [phase-7-programmable-settlement-detailed.md](./phase-7-programmable-settlement-detailed.md).
+
 ## Goal
 
 Add blockchain settlement as an optional extension after the offchain control plane, receipts, and operator workflows are already credible.

@@ -1,17 +1,21 @@
 # Phase Backlog
 
-Use the phase files in this directory as the execution sequence for Atlas Agent Payments OS.
+Use the detailed phase files in this directory as the authoritative implementation sequence for Atlas Agent Payments OS. The master sequencing source of truth is [master-execution-plan.md](../architecture/master-execution-plan.md).
 
 ## Order
 
-1. [phase-0-foundation.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-0-foundation.md)
-2. [phase-1-public-narrative-and-demo.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-1-public-narrative-and-demo.md)
-3. [phase-2-buyer-controls-and-approvals.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-2-buyer-controls-and-approvals.md)
-4. [phase-3-seller-services-and-delivery.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-3-seller-services-and-delivery.md)
-5. [phase-4-payments-and-receipts.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-4-payments-and-receipts.md)
-6. [phase-5-operator-controls-and-exceptions.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-5-operator-controls-and-exceptions.md)
-7. [phase-6-analytics-reporting-and-polish.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-6-analytics-reporting-and-polish.md)
-8. [phase-7-programmable-settlement-extension.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-7-programmable-settlement-extension.md)
+1. [phase-0-foundation-detailed.md](./phase-0-foundation-detailed.md)
+2. [phase-1-demo-foundation-detailed.md](./phase-1-demo-foundation-detailed.md)
+3. [phase-2-core-buyer-workflow-detailed.md](./phase-2-core-buyer-workflow-detailed.md)
+4. [phase-3-seller-workflow-detailed.md](./phase-3-seller-workflow-detailed.md)
+5. [phase-4-payments-and-receipts-detailed.md](./phase-4-payments-and-receipts-detailed.md)
+6. [phase-5-operator-controls-detailed.md](./phase-5-operator-controls-detailed.md)
+7. [phase-6-analytics-and-polish-detailed.md](./phase-6-analytics-and-polish-detailed.md)
+8. [phase-7-programmable-settlement-detailed.md](./phase-7-programmable-settlement-detailed.md)
+
+## Legacy Summary Docs
+
+The existing phase summary docs remain in the repo as lightweight companions, but they are not the execution source of truth. Use the detailed phase docs above for implementation work.
 
 ## Rules
 

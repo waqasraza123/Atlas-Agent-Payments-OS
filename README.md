@@ -1,7 +1,7 @@
 # Atlas Agent Payments OS
 
-[![Phase](https://img.shields.io/badge/phase-0_foundation-0b1320?style=for-the-badge)](./docs/backlog/phase-0-foundation.md)
-[![Scope](https://img.shields.io/badge/scope-paid_APIs_%26_digital_services-0f766e?style=for-the-badge)](./docs/product/product-spec-v1.md)
+[![Phase](https://img.shields.io/badge/phase-0_foundation_hardening-0b1320?style=for-the-badge)](./docs/backlog/phase-0-foundation-detailed.md)
+[![Scope](https://img.shields.io/badge/scope-paid_APIs_%26_digital_services-0f766e?style=for-the-badge)](./docs/product/master-product-spec.md)
 [![License](https://img.shields.io/badge/license-Apache_2.0-1d4ed8?style=for-the-badge)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-24.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10.x-F69220?style=for-the-badge&logo=pnpm&logoColor=white)](https://pnpm.io/)
@@ -113,29 +113,40 @@ Phase 0 is complete when a new engineer can clone the repo, install dependencies
 
 ## Documentation
 
-- [technical-execution-plan.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/architecture/technical-execution-plan.md)
-- [stack-baseline.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/architecture/stack-baseline.md)
-- [system-overview.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/architecture/system-overview.md)
-- [domain-boundaries.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/architecture/domain-boundaries.md)
-- [0001-monorepo-stack.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/decisions/0001-monorepo-stack.md)
-- [product-spec-v1.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/product/product-spec-v1.md)
-- [docs/backlog/README.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/README.md)
-- [phase-0-foundation.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-0-foundation.md)
-- [phase-1-public-narrative-and-demo.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-1-public-narrative-and-demo.md)
-- [phase-2-buyer-controls-and-approvals.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-2-buyer-controls-and-approvals.md)
-- [phase-3-seller-services-and-delivery.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-3-seller-services-and-delivery.md)
-- [phase-4-payments-and-receipts.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-4-payments-and-receipts.md)
-- [phase-5-operator-controls-and-exceptions.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-5-operator-controls-and-exceptions.md)
-- [phase-6-analytics-reporting-and-polish.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-6-analytics-reporting-and-polish.md)
-- [phase-7-programmable-settlement-extension.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/backlog/phase-7-programmable-settlement-extension.md)
-- [collaboration-guide.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/docs/collaboration-guide.md)
+- [master-product-spec.md](./docs/product/master-product-spec.md)
+- [master-execution-plan.md](./docs/architecture/master-execution-plan.md)
+- [codex-execution-runbook.md](./docs/codex-execution-runbook.md)
+- [technical-execution-plan.md](./docs/architecture/technical-execution-plan.md)
+- [stack-baseline.md](./docs/architecture/stack-baseline.md)
+- [system-overview.md](./docs/architecture/system-overview.md)
+- [domain-boundaries.md](./docs/architecture/domain-boundaries.md)
+- [0001-monorepo-stack.md](./docs/decisions/0001-monorepo-stack.md)
+- [product-spec-v1.md](./docs/product/product-spec-v1.md)
+- [docs/backlog/README.md](./docs/backlog/README.md)
+- [phase-0-foundation-detailed.md](./docs/backlog/phase-0-foundation-detailed.md)
+- [phase-1-demo-foundation-detailed.md](./docs/backlog/phase-1-demo-foundation-detailed.md)
+- [phase-2-core-buyer-workflow-detailed.md](./docs/backlog/phase-2-core-buyer-workflow-detailed.md)
+- [phase-3-seller-workflow-detailed.md](./docs/backlog/phase-3-seller-workflow-detailed.md)
+- [phase-4-payments-and-receipts-detailed.md](./docs/backlog/phase-4-payments-and-receipts-detailed.md)
+- [phase-5-operator-controls-detailed.md](./docs/backlog/phase-5-operator-controls-detailed.md)
+- [phase-6-analytics-and-polish-detailed.md](./docs/backlog/phase-6-analytics-and-polish-detailed.md)
+- [phase-7-programmable-settlement-detailed.md](./docs/backlog/phase-7-programmable-settlement-detailed.md)
+- [phase-0-foundation.md](./docs/backlog/phase-0-foundation.md)
+- [phase-1-public-narrative-and-demo.md](./docs/backlog/phase-1-public-narrative-and-demo.md)
+- [phase-2-buyer-controls-and-approvals.md](./docs/backlog/phase-2-buyer-controls-and-approvals.md)
+- [phase-3-seller-services-and-delivery.md](./docs/backlog/phase-3-seller-services-and-delivery.md)
+- [phase-4-payments-and-receipts.md](./docs/backlog/phase-4-payments-and-receipts.md)
+- [phase-5-operator-controls-and-exceptions.md](./docs/backlog/phase-5-operator-controls-and-exceptions.md)
+- [phase-6-analytics-reporting-and-polish.md](./docs/backlog/phase-6-analytics-reporting-and-polish.md)
+- [phase-7-programmable-settlement-extension.md](./docs/backlog/phase-7-programmable-settlement-extension.md)
+- [collaboration-guide.md](./docs/collaboration-guide.md)
 
 ## Collaboration and governance
 
-- [CONTRIBUTING.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/CONTRIBUTING.md)
-- [SECURITY.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/SECURITY.md)
-- [LICENSE](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/LICENSE)
-- [AGENTS.md](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/AGENTS.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [SECURITY.md](./SECURITY.md)
+- [LICENSE](./LICENSE)
+- [AGENTS.md](./AGENTS.md)
 
 ## Intentionally out of scope for now
 
@@ -156,4 +167,4 @@ Phase 0 is complete when a new engineer can clone the repo, install dependencies
 
 ## License
 
-This repository is licensed under Apache-2.0. See [LICENSE](/Users/mc/development/blockchain/ethereum/Atlas-Agent-Payments-OS/LICENSE).
+This repository is licensed under Apache-2.0. See [LICENSE](./LICENSE).

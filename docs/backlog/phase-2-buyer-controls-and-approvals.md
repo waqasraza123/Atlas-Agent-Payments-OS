@@ -1,5 +1,7 @@
 # Phase 2 Buyer Controls and Approvals
 
+This file is a summary companion. The authoritative implementation guide is [phase-2-core-buyer-workflow-detailed.md](./phase-2-core-buyer-workflow-detailed.md).
+
 ## Goal
 
 Deliver the first real buyer-side controlled-spend loop using real agent, policy, request, approval, and audit data.

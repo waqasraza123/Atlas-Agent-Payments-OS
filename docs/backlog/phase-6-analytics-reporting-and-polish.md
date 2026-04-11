@@ -1,5 +1,7 @@
 # Phase 6 Analytics, Reporting, and Polish
 
+This file is a summary companion. The authoritative implementation guide is [phase-6-analytics-and-polish-detailed.md](./phase-6-analytics-and-polish-detailed.md).
+
 ## Goal
 
 Make Atlas design-partner-ready by strengthening analytics, reporting, discoverability, dense-data UX, and accessibility.

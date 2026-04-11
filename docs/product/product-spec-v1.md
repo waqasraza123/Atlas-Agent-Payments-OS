@@ -1,5 +1,7 @@
 # Product Spec v1
 
+This file is now a summary companion. The authoritative product source of truth is [master-product-spec.md](./master-product-spec.md).
+
 ## Product summary
 
 Atlas Agent Payments OS is a premium B2B platform that lets organizations give AI agents the ability to spend on paid APIs and digital services under human-defined controls. The product sits between agents and paid digital actions and provides policy enforcement, approval workflows, payment orchestration, receipts, and auditability.

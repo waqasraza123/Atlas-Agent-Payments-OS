@@ -1,5 +1,7 @@
 # Phase 3 Seller Services and Delivery
 
+This file is a summary companion. The authoritative implementation guide is [phase-3-seller-workflow-detailed.md](./phase-3-seller-workflow-detailed.md).
+
 ## Goal
 
 Make Atlas a credible two-sided platform by letting sellers publish paid digital services and respond to buyer requests in a structured way.

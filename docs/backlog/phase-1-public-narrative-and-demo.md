@@ -1,5 +1,7 @@
 # Phase 1 Public Narrative and Demo
 
+This file is a summary companion. The authoritative implementation guide is [phase-1-demo-foundation-detailed.md](./phase-1-demo-foundation-detailed.md).
+
 ## Goal
 
 Make Atlas immediately understandable and impressive before the full functional platform is complete. This phase builds the public story, the premium visual direction, and the seeded demo system using real domain entities.
