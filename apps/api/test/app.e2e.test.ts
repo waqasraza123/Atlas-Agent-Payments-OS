@@ -92,6 +92,28 @@ describe("atlas api e2e", () => {
     );
   });
 
+  it("lists the registered queue map", async () => {
+    const response = await request(app.getHttpServer()).get("/platform/queues");
+
+    expect(response.status).toBe(200);
+    expect(response.body.queues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          queue: expect.objectContaining({
+            key: "approvals-routing",
+            family: "approvals"
+          })
+        }),
+        expect.objectContaining({
+          queue: expect.objectContaining({
+            key: "payments-execution",
+            family: "payments"
+          })
+        })
+      ])
+    );
+  });
+
   it("returns unauthorized when a protected route has no actor header", async () => {
     const response = await request(app.getHttpServer()).get("/identity/session");
 

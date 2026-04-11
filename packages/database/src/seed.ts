@@ -1,410 +1,370 @@
-import { atlasLocalSessionProfileList } from "@atlas/auth";
 import { PrismaClient } from "./generated/client/index.js";
+import {
+  atlasSeedAgents,
+  atlasSeedApprovals,
+  atlasSeedAuditEvents,
+  atlasSeedMemberships,
+  atlasSeedOrganizations,
+  atlasSeedPayments,
+  atlasSeedPolicies,
+  atlasSeedReceipts,
+  atlasSeedSpendRequests,
+  atlasSeedUsers,
+  createAtlasSeedManifest
+} from "./seed-data.js";
 
 const prisma = new PrismaClient();
 
 async function ensureOrganizations() {
-  const organizations = await Promise.all([
-    prisma.organization.upsert({
-      where: { slug: "atlas-demo-buyer" },
-      update: {},
-      create: {
-        slug: "atlas-demo-buyer",
-        name: "Atlas Demo Buyer",
-        kind: "BUYER"
-      }
-    }),
-    prisma.organization.upsert({
-      where: { slug: "atlas-demo-seller" },
-      update: {},
-      create: {
-        slug: "atlas-demo-seller",
-        name: "Atlas Demo Seller",
-        kind: "SELLER"
-      }
-    }),
-    prisma.organization.upsert({
-      where: { slug: "atlas-demo-operator" },
-      update: {},
-      create: {
-        slug: "atlas-demo-operator",
-        name: "Atlas Demo Operator",
-        kind: "OPERATOR"
-      }
-    })
-  ]);
-
-  return {
-    buyerOrganization: organizations[0],
-    sellerOrganization: organizations[1],
-    operatorOrganization: organizations[2]
-  };
-}
-
-async function ensureUsersAndMemberships() {
-  const organizations = await prisma.organization.findMany({
-    where: {
-      slug: {
-        in: atlasLocalSessionProfileList.map((profile) => profile.organizationSlug)
-      }
-    }
-  });
-
-  const organizationBySlug = new Map(organizations.map((organization) => [organization.slug, organization]));
-
-  for (const profile of atlasLocalSessionProfileList) {
-    const user = await prisma.user.upsert({
-      where: { email: profile.userEmail },
-      update: {
-        name: profile.label
-      },
-      create: {
-        email: profile.userEmail,
-        name: profile.label
-      }
-    });
-
-    const organization = organizationBySlug.get(profile.organizationSlug);
-
-    if (!organization) {
-      throw new Error(`Missing organization for session profile ${profile.key}`);
-    }
-
-    await prisma.membership.upsert({
+  for (const organization of atlasSeedOrganizations) {
+    await prisma.organization.upsert({
       where: {
-        userId_organizationId_role: {
-          userId: user.id,
-          organizationId: organization.id,
-          role: profile.role
-        }
+        slug: organization.slug
       },
-      update: {},
+      update: {
+        name: organization.name,
+        kind: organization.kind
+      },
       create: {
-        userId: user.id,
-        organizationId: organization.id,
-        role: profile.role
+        slug: organization.slug,
+        name: organization.name,
+        kind: organization.kind
       }
     });
   }
 }
 
-async function ensurePoliciesAndAgents(buyerOrganizationId: string) {
-  const primaryPolicy = await prisma.policy.upsert({
-    where: {
-      id: "phase-0-demo-policy"
-    },
-    update: {},
-    create: {
-      id: "phase-0-demo-policy",
-      organizationId: buyerOrganizationId,
-      name: "Phase 0 Demo Policy",
-      status: "ACTIVE",
-      rules: {
-        serviceCategories: ["api-access", "digital-service"],
-        approvalThresholdMinor: 50000
-      }
-    }
-  });
-
-  const secondaryPolicy = await prisma.policy.upsert({
-    where: {
-      id: "phase-0-finance-policy"
-    },
-    update: {},
-    create: {
-      id: "phase-0-finance-policy",
-      organizationId: buyerOrganizationId,
-      name: "Finance Review Policy",
-      status: "ACTIVE",
-      rules: {
-        serviceCategories: ["api-access"],
-        approvalThresholdMinor: 100000
-      }
-    }
-  });
-
-  const primaryAgent = await prisma.agent.upsert({
-    where: {
-      id: "phase-0-demo-agent"
-    },
-    update: {},
-    create: {
-      id: "phase-0-demo-agent",
-      organizationId: buyerOrganizationId,
-      name: "Demo Procurement Agent",
-      externalRef: "agent://atlas/demo-procurement",
-      status: "ACTIVE",
-      policyId: primaryPolicy.id
-    }
-  });
-
-  await prisma.agent.upsert({
-    where: {
-      id: "phase-0-review-agent"
-    },
-    update: {},
-    create: {
-      id: "phase-0-review-agent",
-      organizationId: buyerOrganizationId,
-      name: "Finance Review Agent",
-      externalRef: "agent://atlas/demo-finance",
-      status: "PAUSED",
-      policyId: secondaryPolicy.id
-    }
-  });
-
-  return {
-    primaryPolicy,
-    primaryAgent
-  };
-}
-
-async function ensureLifecycleData(args: {
-  buyerOrganizationId: string;
-  sellerOrganizationId: string;
-  operatorOrganizationId: string;
-  ownerUserId: string;
-  financeUserId: string;
-  agentId: string;
-  policyId: string;
-}) {
-  const approvedRequest = await prisma.spendRequest.upsert({
-    where: {
-      id: "phase-0-demo-request"
-    },
-    update: {},
-    create: {
-      id: "phase-0-demo-request",
-      organizationId: args.buyerOrganizationId,
-      agentId: args.agentId,
-      policyId: args.policyId,
-      sellerOrganizationId: args.sellerOrganizationId,
-      title: "Demo paid API access",
-      amountMinor: 1900,
-      currency: "USD",
-      serviceCategory: "api-access",
-      status: "APPROVED",
-      requestPayload: {
-        service: "seller-demo-api",
-        plan: "team"
-      }
-    }
-  });
-
-  const pendingRequest = await prisma.spendRequest.upsert({
-    where: {
-      id: "phase-0-pending-request"
-    },
-    update: {},
-    create: {
-      id: "phase-0-pending-request",
-      organizationId: args.buyerOrganizationId,
-      agentId: args.agentId,
-      policyId: args.policyId,
-      sellerOrganizationId: args.sellerOrganizationId,
-      title: "Premium dataset unlock",
-      amountMinor: 8900,
-      currency: "USD",
-      serviceCategory: "digital-service",
-      status: "SUBMITTED",
-      requestPayload: {
-        service: "seller-dataset-access",
-        dataset: "global-procurement"
-      }
-    }
-  });
-
-  const failedRequest = await prisma.spendRequest.upsert({
-    where: {
-      id: "phase-0-failed-request"
-    },
-    update: {},
-    create: {
-      id: "phase-0-failed-request",
-      organizationId: args.buyerOrganizationId,
-      agentId: args.agentId,
-      policyId: args.policyId,
-      sellerOrganizationId: args.sellerOrganizationId,
-      title: "Specialized report generation",
-      amountMinor: 4200,
-      currency: "USD",
-      serviceCategory: "digital-service",
-      status: "FAILED",
-      requestPayload: {
-        service: "seller-report-generator",
-        reportType: "vendor-risk"
-      }
-    }
-  });
-
-  await prisma.approval.upsert({
-    where: {
-      requestId: approvedRequest.id
-    },
-    update: {},
-    create: {
-      requestId: approvedRequest.id,
-      approverId: args.ownerUserId,
-      status: "APPROVED",
-      decisionReason: "Foundation demo seed"
-    }
-  });
-
-  await prisma.approval.upsert({
-    where: {
-      requestId: pendingRequest.id
-    },
-    update: {},
-    create: {
-      requestId: pendingRequest.id,
-      approverId: args.financeUserId,
-      status: "PENDING"
-    }
-  });
-
-  await prisma.payment.upsert({
-    where: {
-      requestId: approvedRequest.id
-    },
-    update: {},
-    create: {
-      requestId: approvedRequest.id,
-      organizationId: args.buyerOrganizationId,
-      sellerOrganizationId: args.sellerOrganizationId,
-      provider: "placeholder",
-      reference: "demo-payment-001",
-      status: "CAPTURED",
-      amountMinor: 1900,
-      currency: "USD"
-    }
-  });
-
-  await prisma.payment.upsert({
-    where: {
-      requestId: failedRequest.id
-    },
-    update: {},
-    create: {
-      requestId: failedRequest.id,
-      organizationId: args.buyerOrganizationId,
-      sellerOrganizationId: args.sellerOrganizationId,
-      provider: "placeholder",
-      reference: "demo-payment-002",
-      status: "FAILED",
-      amountMinor: 4200,
-      currency: "USD"
-    }
-  });
-
-  await prisma.receipt.upsert({
-    where: {
-      requestId: approvedRequest.id
-    },
-    update: {},
-    create: {
-      requestId: approvedRequest.id,
-      organizationId: args.buyerOrganizationId,
-      storageKey: "receipts/phase-0-demo-request.json",
-      contentType: "application/json",
-      status: "AVAILABLE",
-      metadata: {
-        source: "seed"
-      }
-    }
-  });
-
-  await prisma.auditEvent.upsert({
-    where: {
-      id: "phase-0-demo-audit"
-    },
-    update: {},
-    create: {
-      id: "phase-0-demo-audit",
-      organizationId: args.buyerOrganizationId,
-      userId: args.ownerUserId,
-      agentId: args.agentId,
-      requestId: approvedRequest.id,
-      actorType: "HUMAN",
-      eventType: "seed.phase-0.initialized",
-      targetType: "SpendRequest",
-      targetId: approvedRequest.id,
-      payload: {
-        operatorOrganizationId: args.operatorOrganizationId
-      }
-    }
-  });
-
-  await prisma.auditEvent.upsert({
-    where: {
-      id: "phase-0-pending-audit"
-    },
-    update: {},
-    create: {
-      id: "phase-0-pending-audit",
-      organizationId: args.buyerOrganizationId,
-      userId: args.financeUserId,
-      agentId: args.agentId,
-      requestId: pendingRequest.id,
-      actorType: "HUMAN",
-      eventType: "approval.pending",
-      targetType: "SpendRequest",
-      targetId: pendingRequest.id,
-      payload: {
-        status: "PENDING"
-      }
-    }
-  });
-
-  await prisma.auditEvent.upsert({
-    where: {
-      id: "phase-0-failed-audit"
-    },
-    update: {},
-    create: {
-      id: "phase-0-failed-audit",
-      organizationId: args.buyerOrganizationId,
-      userId: args.ownerUserId,
-      agentId: args.agentId,
-      requestId: failedRequest.id,
-      actorType: "HUMAN",
-      eventType: "payment.failed",
-      targetType: "SpendRequest",
-      targetId: failedRequest.id,
-      payload: {
-        reason: "seeded payment failure"
-      }
-    }
-  });
-}
-
-async function main() {
-  const { buyerOrganization, sellerOrganization, operatorOrganization } = await ensureOrganizations();
-  await ensureUsersAndMemberships();
-
-  const [ownerUser, financeUser] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
+async function ensureUsers() {
+  for (const user of atlasSeedUsers) {
+    await prisma.user.upsert({
       where: {
-        email: "owner@atlas.local"
+        email: user.email
+      },
+      update: {
+        name: user.name
+      },
+      create: {
+        email: user.email,
+        name: user.name
+      }
+    });
+  }
+}
+
+async function createLookupMaps() {
+  const [organizations, users] = await Promise.all([
+    prisma.organization.findMany({
+      where: {
+        slug: {
+          in: atlasSeedOrganizations.map((organization) => organization.slug)
+        }
       }
     }),
-    prisma.user.findUniqueOrThrow({
+    prisma.user.findMany({
       where: {
-        email: "finance@atlas.local"
+        email: {
+          in: atlasSeedUsers.map((user) => user.email)
+        }
       }
     })
   ]);
 
-  const { primaryPolicy, primaryAgent } = await ensurePoliciesAndAgents(buyerOrganization.id);
+  return {
+    organizationIdsBySlug: new Map(organizations.map((organization) => [organization.slug, organization.id])),
+    userIdsByEmail: new Map(users.map((user) => [user.email, user.id]))
+  };
+}
 
-  await ensureLifecycleData({
-    buyerOrganizationId: buyerOrganization.id,
-    sellerOrganizationId: sellerOrganization.id,
-    operatorOrganizationId: operatorOrganization.id,
-    ownerUserId: ownerUser.id,
-    financeUserId: financeUser.id,
-    agentId: primaryAgent.id,
-    policyId: primaryPolicy.id
-  });
+async function ensureMemberships(args: {
+  organizationIdsBySlug: Map<string, string>;
+  userIdsByEmail: Map<string, string>;
+}) {
+  for (const membership of atlasSeedMemberships) {
+    const organizationId = args.organizationIdsBySlug.get(membership.organizationSlug);
+    const userId = args.userIdsByEmail.get(membership.userEmail);
+
+    if (!organizationId || !userId) {
+      throw new Error(`Missing lookup for membership ${membership.userEmail} -> ${membership.organizationSlug}`);
+    }
+
+    await prisma.membership.upsert({
+      where: {
+        userId_organizationId_role: {
+          userId,
+          organizationId,
+          role: membership.role
+        }
+      },
+      update: {},
+      create: {
+        userId,
+        organizationId,
+        role: membership.role
+      }
+    });
+  }
+}
+
+async function ensurePolicies(organizationIdsBySlug: Map<string, string>) {
+  for (const policy of atlasSeedPolicies) {
+    const organizationId = organizationIdsBySlug.get(policy.organizationSlug);
+
+    if (!organizationId) {
+      throw new Error(`Missing organization for policy ${policy.id}`);
+    }
+
+    await prisma.policy.upsert({
+      where: {
+        id: policy.id
+      },
+      update: {
+        organizationId,
+        name: policy.name,
+        status: policy.status,
+        rules: policy.rules
+      },
+      create: {
+        id: policy.id,
+        organizationId,
+        name: policy.name,
+        status: policy.status,
+        rules: policy.rules
+      }
+    });
+  }
+}
+
+async function ensureAgents(organizationIdsBySlug: Map<string, string>) {
+  for (const agent of atlasSeedAgents) {
+    const organizationId = organizationIdsBySlug.get(agent.organizationSlug);
+
+    if (!organizationId) {
+      throw new Error(`Missing organization for agent ${agent.id}`);
+    }
+
+    await prisma.agent.upsert({
+      where: {
+        id: agent.id
+      },
+      update: {
+        organizationId,
+        name: agent.name,
+        externalRef: agent.externalRef,
+        status: agent.status,
+        policyId: agent.policyId,
+        metadata: agent.metadata
+      },
+      create: {
+        id: agent.id,
+        organizationId,
+        name: agent.name,
+        externalRef: agent.externalRef,
+        status: agent.status,
+        policyId: agent.policyId,
+        metadata: agent.metadata
+      }
+    });
+  }
+}
+
+async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
+  for (const request of atlasSeedSpendRequests) {
+    const organizationId = organizationIdsBySlug.get(request.organizationSlug);
+    const sellerOrganizationId = request.sellerOrganizationSlug
+      ? organizationIdsBySlug.get(request.sellerOrganizationSlug) ?? null
+      : null;
+
+    if (!organizationId) {
+      throw new Error(`Missing buyer organization for request ${request.id}`);
+    }
+
+    await prisma.spendRequest.upsert({
+      where: {
+        id: request.id
+      },
+      update: {
+        organizationId,
+        agentId: request.agentId,
+        policyId: request.policyId,
+        sellerOrganizationId,
+        title: request.title,
+        amountMinor: request.amountMinor,
+        currency: request.currency,
+        serviceCategory: request.serviceCategory,
+        status: request.status,
+        requestPayload: request.requestPayload,
+        metadata: request.metadata
+      },
+      create: {
+        id: request.id,
+        organizationId,
+        agentId: request.agentId,
+        policyId: request.policyId,
+        sellerOrganizationId,
+        title: request.title,
+        amountMinor: request.amountMinor,
+        currency: request.currency,
+        serviceCategory: request.serviceCategory,
+        status: request.status,
+        requestPayload: request.requestPayload,
+        metadata: request.metadata
+      }
+    });
+  }
+}
+
+async function ensureApprovals(userIdsByEmail: Map<string, string>) {
+  for (const approval of atlasSeedApprovals) {
+    const approverId = approval.approverEmail ? userIdsByEmail.get(approval.approverEmail) ?? null : null;
+
+    await prisma.approval.upsert({
+      where: {
+        requestId: approval.requestId
+      },
+      update: {
+        approverId,
+        status: approval.status,
+        decisionReason: approval.decisionReason
+      },
+      create: {
+        requestId: approval.requestId,
+        approverId,
+        status: approval.status,
+        decisionReason: approval.decisionReason
+      }
+    });
+  }
+}
+
+async function ensurePayments(organizationIdsBySlug: Map<string, string>) {
+  for (const payment of atlasSeedPayments) {
+    const organizationId = organizationIdsBySlug.get(payment.organizationSlug);
+    const sellerOrganizationId = payment.sellerOrganizationSlug
+      ? organizationIdsBySlug.get(payment.sellerOrganizationSlug) ?? null
+      : null;
+
+    if (!organizationId) {
+      throw new Error(`Missing buyer organization for payment ${payment.requestId}`);
+    }
+
+    await prisma.payment.upsert({
+      where: {
+        requestId: payment.requestId
+      },
+      update: {
+        organizationId,
+        sellerOrganizationId,
+        provider: payment.provider,
+        reference: payment.reference,
+        status: payment.status,
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+        metadata: payment.metadata
+      },
+      create: {
+        requestId: payment.requestId,
+        organizationId,
+        sellerOrganizationId,
+        provider: payment.provider,
+        reference: payment.reference,
+        status: payment.status,
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+        metadata: payment.metadata
+      }
+    });
+  }
+}
+
+async function ensureReceipts(organizationIdsBySlug: Map<string, string>) {
+  for (const receipt of atlasSeedReceipts) {
+    const organizationId = organizationIdsBySlug.get(receipt.organizationSlug);
+
+    if (!organizationId) {
+      throw new Error(`Missing organization for receipt ${receipt.requestId}`);
+    }
+
+    await prisma.receipt.upsert({
+      where: {
+        requestId: receipt.requestId
+      },
+      update: {
+        organizationId,
+        storageKey: receipt.storageKey,
+        contentType: receipt.contentType,
+        status: receipt.status,
+        metadata: receipt.metadata
+      },
+      create: {
+        requestId: receipt.requestId,
+        organizationId,
+        storageKey: receipt.storageKey,
+        contentType: receipt.contentType,
+        status: receipt.status,
+        metadata: receipt.metadata
+      }
+    });
+  }
+}
+
+async function ensureAuditEvents(args: {
+  organizationIdsBySlug: Map<string, string>;
+  userIdsByEmail: Map<string, string>;
+}) {
+  for (const auditEvent of atlasSeedAuditEvents) {
+    const organizationId = auditEvent.organizationSlug
+      ? args.organizationIdsBySlug.get(auditEvent.organizationSlug) ?? null
+      : null;
+    const userId = auditEvent.userEmail ? args.userIdsByEmail.get(auditEvent.userEmail) ?? null : null;
+
+    await prisma.auditEvent.upsert({
+      where: {
+        id: auditEvent.id
+      },
+      update: {
+        organizationId,
+        userId,
+        agentId: auditEvent.agentId,
+        requestId: auditEvent.requestId,
+        actorType: auditEvent.actorType,
+        eventType: auditEvent.eventType,
+        targetType: auditEvent.targetType,
+        targetId: auditEvent.targetId,
+        payload: auditEvent.payload,
+        occurredAt: new Date(auditEvent.occurredAt)
+      },
+      create: {
+        id: auditEvent.id,
+        organizationId,
+        userId,
+        agentId: auditEvent.agentId,
+        requestId: auditEvent.requestId,
+        actorType: auditEvent.actorType,
+        eventType: auditEvent.eventType,
+        targetType: auditEvent.targetType,
+        targetId: auditEvent.targetId,
+        payload: auditEvent.payload,
+        occurredAt: new Date(auditEvent.occurredAt)
+      }
+    });
+  }
+}
+
+async function main() {
+  await ensureOrganizations();
+  await ensureUsers();
+  const lookups = await createLookupMaps();
+
+  await ensureMemberships(lookups);
+  await ensurePolicies(lookups.organizationIdsBySlug);
+  await ensureAgents(lookups.organizationIdsBySlug);
+  await ensureSpendRequests(lookups.organizationIdsBySlug);
+  await ensureApprovals(lookups.userIdsByEmail);
+  await ensurePayments(lookups.organizationIdsBySlug);
+  await ensureReceipts(lookups.organizationIdsBySlug);
+  await ensureAuditEvents(lookups);
+
+  console.log(JSON.stringify(createAtlasSeedManifest(), null, 2));
 }
 
 main()

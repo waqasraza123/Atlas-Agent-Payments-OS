@@ -84,4 +84,41 @@ describe("marketing e2e", () => {
     expect(html).toContain("/seller");
     expect(html).toContain("/operator");
   });
+
+  it("serves the buyer workspace route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved") ||
+        html.includes("Buyer workspace")
+    ).toBe(true);
+  });
+
+  it("serves the seller workspace route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved") ||
+        html.includes("Seller workspace")
+    ).toBe(true);
+  });
+
+  it("serves the operator workspace route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("operator session to continue") ||
+        html.includes("Choose a operator session to continue".replace("a operator", "an operator")) ||
+        html.includes("Operator context could not be resolved") ||
+        html.includes("Operator workspace")
+    ).toBe(true);
+  });
 });

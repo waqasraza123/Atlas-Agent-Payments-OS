@@ -9,7 +9,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Monorepo with `pnpm` workspaces and Turborepo
 - `apps/web`: Next.js App Router with route groups for marketing, buyer, seller, and operator
 - `apps/api`: NestJS modular monolith with a health endpoint
-- `apps/worker`: BullMQ worker scaffold with Redis-backed queue boot
+- `apps/worker`: BullMQ worker baseline with Redis-backed queue-family boot for approvals, notifications, payments, seller webhooks, and audit projections
 - `packages/config`, `types`, `ui`, `database`, `auth`, and `domain` as shared internal packages
 - PostgreSQL, Redis, MinIO, and MailHog defined in Docker Compose for local infra only
 - Prisma schema and committed initial migration under `packages/database/prisma`
@@ -17,7 +17,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Buyer, seller, and operator routes now use actor-aware workspace shells with explicit route surfaces instead of placeholder-only panels
 - Workspace and API domain structure now share a single route and module registry in `@atlas/domain`
 - The API now exposes thin domain skeleton modules for identity, organizations, agents, policies, requests, approvals, audit, sellers, services, payments, receipts, and operator controls
-- The repo now has an initial automated test baseline with unit, API e2e, and web HTTP smoke coverage
+- Phase 0 seed data is now scenario-driven, schema-backed, and aligned to all major lifecycle states through reusable seed definitions in `@atlas/database`
+- Queue namespace conventions now exist through a shared queue registry in `@atlas/domain`, worker queue-family bootstrapping, and a platform queue discovery route in the API
+- The repo now has an expanded automated test baseline with package-level unit tests, worker and database tests, API e2e, and web HTTP smoke coverage
 - Durable planning now covers both the focused v1 execution track and the longer-term platform blueprint through `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, the blueprint docs under `docs/architecture`, and the detailed phase docs under `docs/backlog`
 
 ## Non-Negotiable Rules
@@ -36,8 +38,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Execution source of truth: `docs/architecture/master-execution-plan.md`
 - Full-scale blueprint docs: `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Testing source of truth: `docs/architecture/testing-strategy.md`
-- Active detailed phase doc: `docs/backlog/phase-0-foundation-detailed.md`
-- Phase 0: foundation hardening and real application baseline
+- Active detailed phase doc: `docs/backlog/phase-1-demo-foundation-detailed.md`
+- Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow
 - Phase 3: seller workflow
@@ -64,7 +66,10 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Shared domain registry for workspace route surfaces and API module ownership
 - Buyer, seller, and operator workspace route shells beyond the overview page
 - Thin NestJS domain skeleton modules across the Phase 0.4 module map
-- Automated unit and e2e test foundation
+- Scenario-driven seed manifest with lifecycle coverage across request, approval, payment, receipt, and audit states
+- Shared queue family registry and worker boot structure for approvals, notifications, payments, seller webhooks, and audit projections
+- Package-level tests for config, types, UI, database seed definitions, and worker queue contracts
+- Automated unit and e2e test foundation expanded across packages, API, and web workspace smoke routes
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -77,7 +82,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Git pre-push verification is repo-versioned under `.githooks/pre-push`
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
-- The current active execution slice after planning is Phase 0.5 seed hardening, Phase 0.6 queue namespace conventions, and Phase 0.7 verification hardening
+- Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
+- The current active execution slice is Phase 1 premium demo foundation
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -92,17 +98,18 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Receipt artifact generation beyond seeded records
 - Operator exception center and analytics
 - Onchain settlement support
-- Full package-level test coverage for config, types, UI, database, and worker code
+- Browser-level interaction tests beyond HTTP smoke coverage
+- Seeded database integration tests against a reliably provisioned local database
 
 ## Risks / Watchouts
 
-- The repo is still in Phase 0, so domain modules exist more in docs and schema than in working API features
-- Local actor resolution and seeding depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for seed and protected actor lookups
+- Phase 0 structure is now in place, but domain modules still remain mostly skeleton boundaries rather than full product workflows
+- Local actor resolution and real seed execution still depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for `pnpm db:seed`
 - `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
-- Some package-level test scripts still use placeholders because those slices do not have meaningful executable logic yet
+- Current web e2e is still HTTP smoke coverage, not full browser automation
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
-- Future tasks should avoid widening the stack or introducing extra infra before Phase 0 hardening is complete
+- Future tasks should avoid widening the stack or introducing extra infra before Phase 1 demo foundation is in place
 
 ## Standard Verification
 
@@ -113,6 +120,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `pnpm test`
 - `pnpm test:e2e`
 - `pnpm build`
+- `pnpm verify:phase0`
 - `pnpm db:seed`
 - `pnpm verify:push`
 - `pnpm dev:api`

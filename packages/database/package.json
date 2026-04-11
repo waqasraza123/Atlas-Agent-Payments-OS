@@ -14,10 +14,12 @@
     "db:seed": "dotenv -e ../../.env -- prisma db seed --schema prisma/schema.prisma",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.stdout.write('Database tests not added in phase 0\\n')\""
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@atlas/auth": "workspace:*",
+    "@atlas/domain": "workspace:*",
+    "@atlas/types": "workspace:*",
     "@prisma/client": "^6.0.0"
   },
   "devDependencies": {

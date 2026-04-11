@@ -1,6 +1,7 @@
 import {
   getAtlasWorkspaceSurfaceByKey,
   listAtlasApiDomainDefinitionsForWorkspace,
+  listAtlasQueueDefinitionsForFamily,
   type AtlasWorkspaceSurfaceKey
 } from "@atlas/domain";
 import { prisma } from "@atlas/database";
@@ -329,7 +330,14 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
   }
 
   if (surfaceKey === "webhooks") {
-    return [];
+    return listAtlasQueueDefinitionsForFamily("seller-webhooks").map((queue) => ({
+      id: queue.key,
+      title: queue.title,
+      description: queue.description,
+      detail: `${queue.name} · ${queue.nextPhase}`,
+      statusLabel: queue.readiness,
+      statusTone: queue.readiness === "baseline" ? "success" : "warning"
+    }));
   }
 
   return [];

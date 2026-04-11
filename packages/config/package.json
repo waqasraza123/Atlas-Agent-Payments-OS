@@ -11,6 +11,6 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.stdout.write('Config tests not added in phase 0\\n')\""
+    "test": "vitest run --config vitest.config.ts"
   }
 }

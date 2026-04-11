@@ -14,4 +14,5 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
+export * from "./seed-data";
 export * from "./generated/client/index.js";

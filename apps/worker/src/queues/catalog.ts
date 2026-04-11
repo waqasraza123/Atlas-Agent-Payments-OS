@@ -1,5 +1,11 @@
-import { demoScenarioKey } from "@atlas/domain";
+import { listAtlasQueueDefinitions } from "@atlas/domain";
 
-export const queueCatalog = {
-  demoRequests: `atlas-${demoScenarioKey}-requests`
-} as const;
+export function listAtlasWorkerQueueCatalog() {
+  return listAtlasQueueDefinitions().map((definition) => ({
+    key: definition.key,
+    family: definition.family,
+    name: definition.name,
+    defaultAttempts: definition.defaultAttempts,
+    backoffDelayMs: definition.backoffDelayMs
+  }));
+}

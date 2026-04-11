@@ -68,6 +68,34 @@ export type AtlasApiDomainDefinition = {
   readiness: "skeleton" | "planned";
 };
 
+export type AtlasQueueFamilyKey =
+  | "approvals"
+  | "notifications"
+  | "payments"
+  | "seller-webhooks"
+  | "audit-projections";
+
+export type AtlasQueueKey =
+  | "approvals-routing"
+  | "approvals-reminders"
+  | "notifications-dispatch"
+  | "payments-execution"
+  | "seller-webhooks-delivery"
+  | "audit-projections-refresh";
+
+export type AtlasQueueDefinition = {
+  key: AtlasQueueKey;
+  family: AtlasQueueFamilyKey;
+  name: string;
+  title: string;
+  description: string;
+  ownerWorkspaces: OrganizationKind[];
+  nextPhase: string;
+  readiness: "placeholder" | "baseline" | "planned";
+  defaultAttempts: number;
+  backoffDelayMs: number;
+};
+
 const buyerWorkspaceDefinition: AtlasWorkspaceDefinition = {
   workspace: "BUYER",
   title: "Buyer workspace",
@@ -392,6 +420,81 @@ export const atlasApiDomainDefinitions: Record<AtlasApiDomainKey, AtlasApiDomain
   }
 };
 
+export const atlasQueueDefinitions: Record<AtlasQueueKey, AtlasQueueDefinition> = {
+  "approvals-routing": {
+    key: "approvals-routing",
+    family: "approvals",
+    name: `atlas-${demoScenarioKey}-approvals-routing`,
+    title: "Approval routing",
+    description: "Routes approval-required requests into the correct buyer-side decision path.",
+    ownerWorkspaces: ["BUYER", "OPERATOR"],
+    nextPhase: "Phase 2",
+    readiness: "baseline",
+    defaultAttempts: 5,
+    backoffDelayMs: 5000
+  },
+  "approvals-reminders": {
+    key: "approvals-reminders",
+    family: "approvals",
+    name: `atlas-${demoScenarioKey}-approvals-reminders`,
+    title: "Approval reminders",
+    description: "Sends reminder and expiration signals for pending approvals.",
+    ownerWorkspaces: ["BUYER", "OPERATOR"],
+    nextPhase: "Phase 2",
+    readiness: "baseline",
+    defaultAttempts: 5,
+    backoffDelayMs: 15000
+  },
+  "notifications-dispatch": {
+    key: "notifications-dispatch",
+    family: "notifications",
+    name: `atlas-${demoScenarioKey}-notifications-dispatch`,
+    title: "Notification dispatch",
+    description: "Delivers in-app and future out-of-band notifications for request, approval, and operator events.",
+    ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
+    nextPhase: "Phase 5",
+    readiness: "baseline",
+    defaultAttempts: 8,
+    backoffDelayMs: 10000
+  },
+  "payments-execution": {
+    key: "payments-execution",
+    family: "payments",
+    name: `atlas-${demoScenarioKey}-payments-execution`,
+    title: "Payment execution",
+    description: "Executes, retries, and reconciles payment attempts once Phase 4 turns the payment rail real.",
+    ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
+    nextPhase: "Phase 4",
+    readiness: "baseline",
+    defaultAttempts: 6,
+    backoffDelayMs: 20000
+  },
+  "seller-webhooks-delivery": {
+    key: "seller-webhooks-delivery",
+    family: "seller-webhooks",
+    name: `atlas-${demoScenarioKey}-seller-webhooks-delivery`,
+    title: "Seller webhook delivery",
+    description: "Handles seller-facing delivery callbacks, retries, and delivery evidence fanout.",
+    ownerWorkspaces: ["SELLER", "OPERATOR"],
+    nextPhase: "Phase 3",
+    readiness: "baseline",
+    defaultAttempts: 8,
+    backoffDelayMs: 30000
+  },
+  "audit-projections-refresh": {
+    key: "audit-projections-refresh",
+    family: "audit-projections",
+    name: `atlas-${demoScenarioKey}-audit-projections-refresh`,
+    title: "Audit projection refresh",
+    description: "Maintains timeline and analytics projections that later power operator, buyer, and seller activity views.",
+    ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
+    nextPhase: "Phase 5",
+    readiness: "baseline",
+    defaultAttempts: 4,
+    backoffDelayMs: 10000
+  }
+};
+
 export type AtlasApiDomainSnapshot = {
   key: AtlasApiDomainKey;
   title: string;
@@ -400,6 +503,19 @@ export type AtlasApiDomainSnapshot = {
   ownerWorkspaces: OrganizationKind[];
   nextPhase: string;
   readiness: "skeleton" | "planned";
+};
+
+export type AtlasQueueSnapshot = {
+  key: AtlasQueueKey;
+  family: AtlasQueueFamilyKey;
+  name: string;
+  title: string;
+  description: string;
+  ownerWorkspaces: OrganizationKind[];
+  nextPhase: string;
+  readiness: "placeholder" | "baseline" | "planned";
+  defaultAttempts: number;
+  backoffDelayMs: number;
 };
 
 export function isOrganizationKind(value: string): value is OrganizationKind {
@@ -446,6 +562,22 @@ export function listAtlasApiDomainDefinitionsForWorkspace(workspace: Organizatio
   return listAtlasApiDomainDefinitions().filter((definition) => definition.ownerWorkspaces.includes(workspace));
 }
 
+export function listAtlasQueueDefinitions() {
+  return Object.values(atlasQueueDefinitions);
+}
+
+export function getAtlasQueueDefinition(key: AtlasQueueKey) {
+  return atlasQueueDefinitions[key];
+}
+
+export function listAtlasQueueDefinitionsForWorkspace(workspace: OrganizationKind) {
+  return listAtlasQueueDefinitions().filter((definition) => definition.ownerWorkspaces.includes(workspace));
+}
+
+export function listAtlasQueueDefinitionsForFamily(family: AtlasQueueFamilyKey) {
+  return listAtlasQueueDefinitions().filter((definition) => definition.family === family);
+}
+
 export function createAtlasApiDomainSnapshot(
   key: AtlasApiDomainKey,
   options?: {
@@ -467,5 +599,21 @@ export function createAtlasApiDomainSnapshot(
     readiness: definition.readiness,
     actorRole: options?.actorRole ?? null,
     workspace: options?.workspace ?? null
+  };
+}
+
+export function createAtlasQueueSnapshot(key: AtlasQueueKey): AtlasQueueSnapshot {
+  const definition = getAtlasQueueDefinition(key);
+  return {
+    key: definition.key,
+    family: definition.family,
+    name: definition.name,
+    title: definition.title,
+    description: definition.description,
+    ownerWorkspaces: definition.ownerWorkspaces,
+    nextPhase: definition.nextPhase,
+    readiness: definition.readiness,
+    defaultAttempts: definition.defaultAttempts,
+    backoffDelayMs: definition.backoffDelayMs
   };
 }

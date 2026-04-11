@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   createAtlasApiDomainSnapshot,
+  createAtlasQueueSnapshot,
   getAtlasApiDomainDefinition,
+  getAtlasQueueDefinition,
   getAtlasWorkspaceSurfaceByHref,
   getAtlasWorkspaceSurfaceByKey,
   isTerminalSpendRequestStatus,
   listAtlasApiDomainDefinitionsForWorkspace,
+  listAtlasQueueDefinitionsForFamily,
   listAtlasWorkspaceSurfaces
 } from "./index";
 
@@ -55,5 +58,24 @@ describe("atlas domain registry", () => {
     expect(isTerminalSpendRequestStatus("COMPLETED")).toBe(true);
     expect(isTerminalSpendRequestStatus("FAILED")).toBe(true);
     expect(isTerminalSpendRequestStatus("SUBMITTED")).toBe(false);
+  });
+
+  it("defines queue families with stable names and retry posture", () => {
+    const paymentQueue = getAtlasQueueDefinition("payments-execution");
+
+    expect(paymentQueue.name).toBe("atlas-phase-0-payments-execution");
+    expect(paymentQueue.defaultAttempts).toBeGreaterThan(1);
+
+    expect(listAtlasQueueDefinitionsForFamily("approvals").map((queue) => queue.key)).toEqual([
+      "approvals-routing",
+      "approvals-reminders"
+    ]);
+  });
+
+  it("creates queue snapshots for platform discovery", () => {
+    expect(createAtlasQueueSnapshot("seller-webhooks-delivery")).toMatchObject({
+      family: "seller-webhooks",
+      readiness: "baseline"
+    });
   });
 });

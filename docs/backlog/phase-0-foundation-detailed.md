@@ -16,7 +16,10 @@ Without a real Phase 0 baseline, every later feature lands on placeholders. Phas
 - web, API, worker, and database packages boot at a basic level
 - buyer, seller, and operator overview shells exist with actor-aware layouts and route surfaces
 - local-first auth and actor context exist across web and API
-- API domain modules are now moving from scaffold into thin but explicit module boundaries
+- API domain modules now exist as thin but explicit module boundaries
+- schema-backed seed scenarios cover all major lifecycle states for request, approval, payment, receipt, and audit records
+- queue family conventions now exist across shared domain contracts, worker boot, and API platform discovery
+- verification now includes package-level tests, API e2e, and web workspace smoke coverage
 
 ## Entry Criteria
 
@@ -34,6 +37,10 @@ Without a real Phase 0 baseline, every later feature lands on placeholders. Phas
 - seeds support realistic dashboards and demo paths
 - queue namespace conventions exist
 - docs are updated to reflect the real Phase 0 state
+
+## Current Status
+
+Phase 0 implementation is complete in repo scope. The next active product phase is Phase 1 premium demo foundation.
 
 ## Sequence
 
@@ -248,7 +255,10 @@ Later tracks build on this phase through:
 - `pnpm install`
 - `pnpm lint`
 - `pnpm typecheck`
+- `pnpm test`
+- `pnpm test:e2e`
 - `pnpm build`
+- `pnpm verify:phase0`
 - `pnpm dev:web`
 - `pnpm dev:api`
 - `pnpm dev:worker`

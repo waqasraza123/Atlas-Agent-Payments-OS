@@ -8,6 +8,8 @@ This document defines the testing baseline for Atlas Agent Payments OS as the re
 
 - Unit tests for shared auth contracts in `packages/auth`
 - Unit tests for shared domain registry and route definitions in `packages/domain`
+- Unit tests for shared config, type guards, UI primitives, and database seed contracts in `packages/config`, `packages/types`, `packages/ui`, and `packages/database`
+- Unit tests for worker queue catalog and processor registry in `apps/worker`
 - API e2e tests in `apps/api/test`
 - Web unit and route tests in `apps/web/src`
 - Web HTTP smoke e2e tests in `apps/web/e2e`
@@ -22,23 +24,27 @@ This document defines the testing baseline for Atlas Agent Payments OS as the re
 - `pnpm --filter @atlas/web test:e2e`
 - `pnpm --filter @atlas/auth test`
 - `pnpm --filter @atlas/domain test`
+- `pnpm --filter @atlas/database test`
+- `pnpm --filter @atlas/worker test`
+- `pnpm verify:phase0`
 
 ## What Is Covered Now
 
 - local session selection parsing and serialization
 - workspace and role access helper behavior
 - shared workspace surface definitions and API module registry contracts
+- shared queue definitions and worker processor coverage
+- seed manifest lifecycle coverage and local-session membership alignment
 - API health route
 - API module registry route
+- API queue registry route
 - actor-guard edge cases for missing header, unavailable actor resolution, forbidden workspace access, and allowed shared-module access
 - web local-session route behavior
 - web workspace shell rendering and route-aware navigation state
-- marketing page HTTP smoke path
+- marketing page and workspace route HTTP smoke paths
 
 ## Immediate Gaps
 
-- no unit tests yet for `packages/config`, `packages/types`, `packages/ui`, `packages/database`, or `apps/worker`
-- no queue-family tests yet
 - no buyer request, policy evaluation, seller workflow, payment, or receipt lifecycle tests yet
 - no browser-level interaction suite yet
 - no seeded database integration suite yet because local database access is not reliable on this machine

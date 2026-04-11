@@ -49,6 +49,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @atlas/api test:e2e && pnpm --filter @atlas/web test:e2e",
+    "verify:phase0": "pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
     "verify:push": "sh ./scripts/verify-push.sh",
     "safe-push": "sh ./scripts/safe-push.sh"
   },

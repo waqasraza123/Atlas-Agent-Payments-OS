@@ -19,10 +19,10 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 ## Current Repository Baseline
 
 - The monorepo scaffold, governance docs, safe push workflow, and local infra definitions already exist.
-- `apps/web`, `apps/api`, `apps/worker`, and the shared packages boot at a basic scaffold level.
-- Prisma schema, initial migration, and a seed path already exist.
-- The repo is still in Phase 0 because the real application baseline is not complete yet.
-- The next active implementation slice remains Phase 0.2 auth and actor-context baseline.
+- `apps/web`, `apps/api`, `apps/worker`, and the shared packages now form a real Phase 0 application baseline.
+- Prisma schema, initial migration, and a scenario-driven seed path already exist.
+- Phase 0 implementation is now complete in repo scope.
+- The next active implementation slice is Phase 1 premium demo foundation.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks

@@ -11,7 +11,7 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.stdout.write('UI tests not added in phase 0\\n')\""
+    "test": "vitest run --config vitest.config.ts"
   },
   "peerDependencies": {
     "react": "^19.2.0",
