@@ -40,7 +40,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Execution source of truth: `docs/architecture/master-execution-plan.md`
 - Full-scale blueprint docs: `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Testing source of truth: `docs/architecture/testing-strategy.md`
-- Active detailed phase doc: `docs/backlog/phase-1-demo-foundation-detailed.md`
+- Active detailed phase doc: `docs/backlog/phase-2-core-buyer-workflow-detailed.md`
 - Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow
@@ -75,6 +75,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 1 narrative and dashboard baseline across marketing, buyer, seller, and operator overview surfaces
 - Phase 1 detail baseline across seeded buyer request, approval, timeline, payment, and audit-linked record presentation
 - Phase 1.6 demo-mode polish baseline across replayable scenario storytelling, richer loading states, and linked lifecycle detail flows
+- Phase 2 buyer workflow baseline across agent management, policy management, request creation, policy evaluation, approval decisions, and buyer write-path audit events
+- Shared buyer workflow contracts now live in `@atlas/domain` and Prisma-backed buyer workflow services now live in `@atlas/database`
+- Buyer-facing pages now support schema-backed create and update flows instead of overview-only seeded surfaces
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -89,16 +92,18 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
 - Phase 1 implementation slices 1.1 through 1.6 are now in place in repo scope
-- The current active execution slice is Phase 2 core buyer workflow
+- Phase 2.1 through 2.5 now have a baseline in repo scope
+- The current active execution slice is Phase 2.6 buyer request detail and workflow stabilization, followed by Phase 3 seller workflow
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
+- Policy evaluation results now persist on `SpendRequest.evaluationResult`, and idempotency keys persist on `SpendRequest.idempotencyKey`
+- Buyer workflow writes currently use shared domain validation plus Prisma-backed transaction helpers reused by both API and web
 
 ## Deferred / Not Yet Implemented
 
 - Real auth provider and organization session flows beyond the local-first baseline
-- Policy versioning and policy evaluation engine
-- Request and approval lifecycle endpoints
+- Richer policy version history beyond the current integer version increment and stored rule snapshots
 - Seller service management workflows
 - Stripe integration and payment reconciliation
 - Receipt artifact generation beyond seeded records
@@ -116,9 +121,10 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
+- The buyer workflow baseline now exists, but buyer detail views still need tighter evaluation and approval reason rendering sourced from the new persisted request state
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
-- Future tasks should avoid widening the stack or introducing extra infra before Phase 1 demo foundation is in place
+- Future tasks should avoid widening the stack or introducing extra infra before the Phase 2 buyer control loop is fully stabilized
 
 ## Standard Verification
 

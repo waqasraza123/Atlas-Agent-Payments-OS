@@ -14,6 +14,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@atlas/types": "workspace:*"
+    "@atlas/types": "workspace:*",
+    "zod": "^4.1.12"
   }
 }

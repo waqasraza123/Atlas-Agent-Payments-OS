@@ -99,6 +99,54 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the buyer agents route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/agents`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Agent management baseline") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the buyer policies route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/policies`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Policy management baseline") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the buyer requests route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/requests`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Spend request creation baseline") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the buyer approvals route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/approvals`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Approval decision baseline") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller workspace route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller`);
     const html = await response.text();

@@ -83,6 +83,9 @@ importers:
       '@atlas/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@atlas/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@atlas/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -113,6 +116,9 @@ importers:
       '@atlas/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@atlas/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@atlas/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -167,9 +173,18 @@ importers:
       '@atlas/auth':
         specifier: workspace:*
         version: link:../auth
+      '@atlas/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@atlas/types':
+        specifier: workspace:*
+        version: link:../types
       '@prisma/client':
         specifier: ^6.0.0
         version: 6.19.3(prisma@6.19.3(typescript@6.0.2))(typescript@6.0.2)
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
     devDependencies:
       prisma:
         specifier: ^6.0.0
@@ -180,6 +195,9 @@ importers:
       '@atlas/types':
         specifier: workspace:*
         version: link:../types
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
 
   packages/types: {}
 
@@ -2716,6 +2734,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@adobe/css-tools@4.4.4': {}
@@ -5054,3 +5075,5 @@ snapshots:
   xmlchars@2.2.0: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.3.6: {}

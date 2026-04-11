@@ -38,6 +38,7 @@ export type AtlasSeedPolicyDefinition = {
   organizationSlug: string;
   name: string;
   status: PolicyStatus;
+  version: number;
   rules: AtlasSeedJsonValue;
 };
 
@@ -57,11 +58,14 @@ export type AtlasSeedSpendRequestDefinition = {
   sellerOrganizationSlug: string | null;
   agentId: string;
   policyId: string | null;
+  idempotencyKey: string | null;
   title: string;
+  purpose: string;
   amountMinor: number;
   currency: string;
   serviceCategory: string;
   status: SpendRequestStatus;
+  evaluationResult: AtlasSeedJsonValue | null;
   requestPayload: AtlasSeedJsonValue;
   metadata: AtlasSeedJsonValue;
 };
@@ -226,10 +230,13 @@ export const atlasSeedPolicies: AtlasSeedPolicyDefinition[] = [
     organizationSlug: "atlas-demo-buyer",
     name: "Low Risk API Access",
     status: "ACTIVE",
+    version: 1,
     rules: {
       maxAmountMinor: 5000,
+      autoApprovalThresholdMinor: 2500,
       serviceCategories: ["api-access"],
-      sellerAllowlist: ["atlas-demo-seller"]
+      sellerAllowlist: ["atlas-demo-seller"],
+      emergencyStop: false
     }
   },
   {
@@ -237,10 +244,12 @@ export const atlasSeedPolicies: AtlasSeedPolicyDefinition[] = [
     organizationSlug: "atlas-demo-buyer",
     name: "Finance Review Required",
     status: "ACTIVE",
+    version: 1,
     rules: {
       autoApprovalThresholdMinor: 2500,
       escalationThresholdMinor: 10000,
-      serviceCategories: ["api-access", "digital-service"]
+      serviceCategories: ["api-access", "digital-service"],
+      emergencyStop: false
     }
   },
   {
@@ -248,9 +257,11 @@ export const atlasSeedPolicies: AtlasSeedPolicyDefinition[] = [
     organizationSlug: "atlas-demo-buyer",
     name: "Restricted Vendor Policy",
     status: "ARCHIVED",
+    version: 2,
     rules: {
       sellerAllowlist: ["atlas-demo-seller"],
-      blockedCategories: ["regulated-report"]
+      serviceCategories: ["api-access"],
+      emergencyStop: true
     }
   }
 ];
@@ -325,13 +336,17 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-procurement-agent",
     policyId: "phase-0-low-risk-policy",
+    idempotencyKey: "seed-draft-benchmark-session",
     title: "Draft benchmark API session",
+    purpose: "Prepare a benchmark API session request before formal submission.",
     amountMinor: 900,
     currency: "USD",
     serviceCategory: "api-access",
     status: "DRAFT",
+    evaluationResult: null,
     requestPayload: {
       service: "benchmark-api",
+      serviceKey: "benchmark-api",
       plan: "developer"
     },
     metadata: {
@@ -345,13 +360,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-market-intel-agent",
     policyId: "phase-0-finance-policy",
+    idempotencyKey: "seed-premium-dataset-unlock",
     title: "Premium dataset unlock",
+    purpose: "Unlock a premium dataset needed for market intelligence analysis.",
     amountMinor: 8900,
     currency: "USD",
     serviceCategory: "digital-service",
     status: "SUBMITTED",
+    evaluationResult: {
+      outcome: "allow_requires_approval",
+      matchedPolicyId: "phase-0-finance-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    },
     requestPayload: {
       service: "global-dataset-access",
+      serviceKey: "global-dataset-access",
       dataset: "global-procurement"
     },
     metadata: {
@@ -365,13 +391,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-procurement-agent",
     policyId: "phase-0-low-risk-policy",
+    idempotencyKey: "seed-compliance-api-bundle",
     title: "Compliance API bundle",
+    purpose: "Purchase an approved compliance API bundle for automated vendor checks.",
     amountMinor: 2400,
     currency: "USD",
     serviceCategory: "api-access",
     status: "APPROVED",
+    evaluationResult: {
+      outcome: "allow_auto_approved",
+      matchedPolicyId: "phase-0-low-risk-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request amount is within the policy auto-approval threshold."],
+      requiresApproval: false,
+      autoApproved: true
+    },
     requestPayload: {
       service: "compliance-api-bundle",
+      serviceKey: "compliance-api-bundle",
       plan: "team"
     },
     metadata: {
@@ -385,13 +422,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-market-intel-agent",
     policyId: "phase-0-finance-policy",
+    idempotencyKey: "seed-vendor-intelligence-report",
     title: "Vendor intelligence report",
+    purpose: "Generate a paid vendor intelligence report for internal buyer review.",
     amountMinor: 6200,
     currency: "USD",
     serviceCategory: "digital-service",
     status: "EXECUTING",
+    evaluationResult: {
+      outcome: "allow_requires_approval",
+      matchedPolicyId: "phase-0-finance-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    },
     requestPayload: {
       service: "vendor-intelligence-report",
+      serviceKey: "vendor-intelligence-report",
       reportType: "vendor-risk"
     },
     metadata: {
@@ -405,13 +453,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-procurement-agent",
     policyId: "phase-0-low-risk-policy",
+    idempotencyKey: "seed-demo-paid-api-access",
     title: "Demo paid API access",
+    purpose: "Complete the canonical happy-path paid API flow for the buyer demo.",
     amountMinor: 1900,
     currency: "USD",
     serviceCategory: "api-access",
     status: "COMPLETED",
+    evaluationResult: {
+      outcome: "allow_auto_approved",
+      matchedPolicyId: "phase-0-low-risk-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request amount is within the policy auto-approval threshold."],
+      requiresApproval: false,
+      autoApproved: true
+    },
     requestPayload: {
       service: "seller-demo-api",
+      serviceKey: "seller-demo-api",
       plan: "team"
     },
     metadata: {
@@ -425,13 +484,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-market-intel-agent",
     policyId: "phase-0-finance-policy",
+    idempotencyKey: "seed-specialized-report-generation",
     title: "Specialized report generation",
+    purpose: "Request a specialized report that will fail after approval and payment attempt.",
     amountMinor: 4200,
     currency: "USD",
     serviceCategory: "digital-service",
     status: "FAILED",
+    evaluationResult: {
+      outcome: "allow_requires_approval",
+      matchedPolicyId: "phase-0-finance-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    },
     requestPayload: {
       service: "seller-report-generator",
+      serviceKey: "seller-report-generator",
       reportType: "vendor-risk"
     },
     metadata: {
@@ -445,13 +515,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "lighthouse-data",
     agentId: "phase-0-finance-review-agent",
     policyId: "phase-0-finance-policy",
+    idempotencyKey: "seed-canceled-regulatory-dataset",
     title: "Canceled regulatory dataset",
+    purpose: "Create a request that expires before its approval is completed.",
     amountMinor: 11200,
     currency: "USD",
     serviceCategory: "digital-service",
     status: "CANCELED",
+    evaluationResult: {
+      outcome: "allow_requires_approval",
+      matchedPolicyId: "phase-0-finance-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    },
     requestPayload: {
       service: "regulatory-dataset",
+      serviceKey: "regulatory-dataset",
       region: "EU"
     },
     metadata: {
@@ -465,13 +546,24 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "lighthouse-data",
     agentId: "phase-0-disabled-agent",
     policyId: "phase-0-restricted-policy",
+    idempotencyKey: "seed-restricted-supplier-intelligence",
     title: "Restricted supplier intelligence",
+    purpose: "Attempt a restricted request that should be denied under buyer controls.",
     amountMinor: 5700,
     currency: "USD",
     serviceCategory: "regulated-report",
     status: "REJECTED",
+    evaluationResult: {
+      outcome: "deny_agent_inactive",
+      matchedPolicyId: "phase-0-restricted-policy",
+      matchedPolicyVersion: 2,
+      reasons: ["The selected agent is not active and cannot create spend requests."],
+      requiresApproval: false,
+      autoApproved: false
+    },
     requestPayload: {
       service: "supplier-intelligence",
+      serviceKey: "supplier-intelligence",
       classification: "restricted"
     },
     metadata: {
@@ -485,13 +577,17 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     sellerOrganizationSlug: "atlas-demo-seller",
     agentId: "phase-0-northstar-agent",
     policyId: null,
+    idempotencyKey: "seed-northstar-dataset-refresh",
     title: "Northstar dataset refresh",
+    purpose: "Refresh a second buyer organization dataset to enrich seller-side history.",
     amountMinor: 3600,
     currency: "USD",
     serviceCategory: "api-access",
     status: "COMPLETED",
+    evaluationResult: null,
     requestPayload: {
       service: "northstar-refresh",
+      serviceKey: "northstar-refresh",
       plan: "research"
     },
     metadata: {

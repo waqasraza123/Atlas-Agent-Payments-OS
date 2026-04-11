@@ -1,6 +1,6 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
-import { CurrentActor, RequireWorkspaces } from "../actor/actor.decorators";
+import { Body, Controller, Get, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import { CurrentActor, RequireRoles, RequireWorkspaces } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { ApprovalsService } from "./approvals.service";
 
@@ -15,5 +15,18 @@ export class ApprovalsController {
   @Get("summary")
   summary(@CurrentActor() actor: AtlasActorContext) {
     return this.approvalsService.getSummary(actor);
+  }
+
+  @Get()
+  @RequireWorkspaces("BUYER")
+  list(@CurrentActor() actor: AtlasActorContext) {
+    return this.approvalsService.list(actor);
+  }
+
+  @Post(":approvalId/decision")
+  @RequireWorkspaces("BUYER")
+  @RequireRoles("OWNER", "ADMIN", "REVIEWER", "FINANCE")
+  decide(@CurrentActor() actor: AtlasActorContext, @Param("approvalId") approvalId: string, @Body() body: unknown) {
+    return this.approvalsService.decide(actor, approvalId, body);
   }
 }

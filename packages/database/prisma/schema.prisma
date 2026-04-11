@@ -135,6 +135,7 @@ model Policy {
   organizationId String
   name           String
   status         PolicyStatus @default(DRAFT)
+  version        Int          @default(1)
   rules          Json
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   agents         Agent[]
@@ -149,11 +150,14 @@ model SpendRequest {
   agentId              String
   policyId             String?
   sellerOrganizationId String?
+  idempotencyKey       String?
   title                String
+  purpose              String
   amountMinor          Int
   currency             String             @default("USD")
   serviceCategory      String
   status               SpendRequestStatus @default(DRAFT)
+  evaluationResult     Json?
   requestPayload       Json
   metadata             Json?
   organization         Organization       @relation("BuyerOrganizationRequests", fields: [organizationId], references: [id], onDelete: Cascade)
@@ -168,6 +172,7 @@ model SpendRequest {
   updatedAt            DateTime           @updatedAt
 
   @@index([organizationId, status])
+  @@unique([organizationId, idempotencyKey])
 }
 
 model Approval {

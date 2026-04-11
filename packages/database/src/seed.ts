@@ -1,4 +1,4 @@
-import { PrismaClient } from "./generated/client/index.js";
+import { Prisma, PrismaClient } from "./generated/client/index.js";
 import {
   atlasSeedAgents,
   atlasSeedApprovals,
@@ -121,6 +121,7 @@ async function ensurePolicies(organizationIdsBySlug: Map<string, string>) {
         organizationId,
         name: policy.name,
         status: policy.status,
+        version: policy.version,
         rules: policy.rules
       },
       create: {
@@ -128,6 +129,7 @@ async function ensurePolicies(organizationIdsBySlug: Map<string, string>) {
         organizationId,
         name: policy.name,
         status: policy.status,
+        version: policy.version,
         rules: policy.rules
       }
     });
@@ -187,11 +189,14 @@ async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
         agentId: request.agentId,
         policyId: request.policyId,
         sellerOrganizationId,
+        idempotencyKey: request.idempotencyKey,
         title: request.title,
+        purpose: request.purpose,
         amountMinor: request.amountMinor,
         currency: request.currency,
         serviceCategory: request.serviceCategory,
         status: request.status,
+        evaluationResult: request.evaluationResult ?? Prisma.JsonNull,
         requestPayload: request.requestPayload,
         metadata: request.metadata
       },
@@ -201,11 +206,14 @@ async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
         agentId: request.agentId,
         policyId: request.policyId,
         sellerOrganizationId,
+        idempotencyKey: request.idempotencyKey,
         title: request.title,
+        purpose: request.purpose,
         amountMinor: request.amountMinor,
         currency: request.currency,
         serviceCategory: request.serviceCategory,
         status: request.status,
+        evaluationResult: request.evaluationResult ?? Prisma.JsonNull,
         requestPayload: request.requestPayload,
         metadata: request.metadata
       }

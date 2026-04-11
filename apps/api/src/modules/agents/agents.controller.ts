@@ -1,6 +1,6 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
-import { CurrentActor, RequireWorkspace } from "../actor/actor.decorators";
+import { Body, Controller, Get, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { CurrentActor, RequireRoles, RequireWorkspace } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { AgentsService } from "./agents.service";
 
@@ -15,5 +15,22 @@ export class AgentsController {
   @Get("summary")
   summary(@CurrentActor() actor: AtlasActorContext) {
     return this.agentsService.getSummary(actor);
+  }
+
+  @Get()
+  list(@CurrentActor() actor: AtlasActorContext) {
+    return this.agentsService.list(actor);
+  }
+
+  @Post()
+  @RequireRoles("OWNER", "ADMIN")
+  create(@CurrentActor() actor: AtlasActorContext, @Body() body: unknown) {
+    return this.agentsService.create(actor, body);
+  }
+
+  @Patch(":agentId")
+  @RequireRoles("OWNER", "ADMIN")
+  update(@CurrentActor() actor: AtlasActorContext, @Param("agentId") agentId: string, @Body() body: unknown) {
+    return this.agentsService.update(actor, agentId, body);
   }
 }

@@ -13,6 +13,10 @@ Phase 1 makes Atlas believable. Phase 2 makes the buyer-side control loop operat
 - Phase 1 demo foundation is stable
 - domain modules and seeds exist
 
+## Current Status
+
+Phase 2.1 through 2.5 now have a baseline in repo scope. Buyer agents and policies can be created and updated, spend requests can be submitted through real schema-backed write paths, policy evaluation now persists structured outcomes, and approvals can be decided with audit events. The next active step is Phase 2.6 request detail timeline and workflow stabilization before moving into Phase 3 seller workflow.
+
 ## Exit Criteria
 
 - buyers can manage agents and policies
@@ -72,6 +76,8 @@ Phase 1 makes Atlas believable. Phase 2 makes the buyer-side control loop operat
 - request detail page
 - timeline events across request and approval lifecycle
 - reason visibility for approvals and policy outcomes
+- reflect persisted evaluation results directly in the buyer detail surface
+- tighten buyer-side e2e around create-to-detail progression
 
 ## Modules Touched
 
@@ -111,6 +117,7 @@ Later tracks may add:
 ## Verification Commands
 
 - `pnpm build`
+- `pnpm --filter @atlas/web build`
 - `pnpm dev:web`
 - `pnpm dev:api`
 - request and approval lifecycle smoke tests
