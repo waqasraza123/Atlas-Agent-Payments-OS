@@ -2,6 +2,7 @@ import type { AtlasWorkspaceSurfaceDefinition } from "@atlas/domain";
 import type { WorkspaceOverviewModel } from "@/lib/server/workspace-data";
 import { MetricCard, PageHeader, RecordListPanel, StatusChip } from "@atlas/ui";
 import type { RecordListPanelItem } from "@atlas/ui";
+import { WorkspaceOverviewPage } from "./workspace-overview-page";
 
 export type WorkspaceSurfacePageModel = {
   surface: AtlasWorkspaceSurfaceDefinition;
@@ -37,6 +38,10 @@ type WorkspaceSurfacePageProps = Readonly<{
 }>;
 
 export function WorkspaceSurfacePage({ model }: WorkspaceSurfacePageProps) {
+  if (model.surface.key === "overview") {
+    return <WorkspaceOverviewPage model={model} />;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader

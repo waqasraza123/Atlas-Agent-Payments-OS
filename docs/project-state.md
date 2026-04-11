@@ -70,6 +70,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Shared queue family registry and worker boot structure for approvals, notifications, payments, seller webhooks, and audit projections
 - Package-level tests for config, types, UI, database seed definitions, and worker queue contracts
 - Automated unit and e2e test foundation expanded across packages, API, and web workspace smoke routes
+- Phase 1 narrative and dashboard baseline across marketing, buyer, seller, and operator overview surfaces
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -83,7 +84,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
-- The current active execution slice is Phase 1 premium demo foundation
+- The current active execution slice is Phase 1.5 timeline and detail experience, followed by Phase 1.6 demo-mode polish
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage

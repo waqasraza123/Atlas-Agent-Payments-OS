@@ -1,4 +1,5 @@
 import { prisma } from "@atlas/database";
+import { listAtlasQueueDefinitions } from "@atlas/domain";
 import type { AtlasActorContext } from "@atlas/auth";
 import type { OrganizationKind } from "@atlas/types";
 import type { AuditEvent, SpendRequest } from "@atlas/database";
@@ -36,10 +37,12 @@ export async function loadWorkspaceOverviewModel(
   actor: AtlasActorContext
 ): Promise<WorkspaceOverviewModel> {
   if (actor.workspace === "BUYER") {
-    const [agents, policies, requests, pendingApprovals, recentRequests] = await Promise.all([
+    const [activeAgents, policies, requests, pendingApprovals, capturedPayments, recentRequests, failedRequests] =
+      await Promise.all([
       prisma.agent.count({
         where: {
-          organizationId: actor.organization.id
+          organizationId: actor.organization.id,
+          status: "ACTIVE"
         }
       }),
       prisma.policy.count({
@@ -60,6 +63,15 @@ export async function loadWorkspaceOverviewModel(
           status: "PENDING"
         }
       }),
+      prisma.payment.aggregate({
+        where: {
+          organizationId: actor.organization.id,
+          status: "CAPTURED"
+        },
+        _sum: {
+          amountMinor: true
+        }
+      }),
       prisma.spendRequest.findMany({
         where: {
           organizationId: actor.organization.id
@@ -71,30 +83,46 @@ export async function loadWorkspaceOverviewModel(
           createdAt: "desc"
         },
         take: 3
+      }),
+      prisma.spendRequest.count({
+        where: {
+          organizationId: actor.organization.id,
+          status: "FAILED"
+        }
       })
     ]);
 
     return {
       metrics: [
         {
-          label: "Agents",
-          value: formatCount(agents),
-          detail: "Buyer-linked actors currently bound to this workspace."
+          label: "Active agents",
+          value: formatCount(activeAgents),
+          detail: "Buyer-linked actors currently allowed to initiate spend against seeded policies."
         },
         {
-          label: "Policies",
+          label: "Spend policies",
           value: formatCount(policies),
-          detail: "Policy records available to govern request decisions."
+          detail: "Policy records defining allowlists, thresholds, and approval posture."
         },
         {
-          label: "Requests",
+          label: "Request volume",
           value: formatCount(requests),
-          detail: "Seeded spend requests mapped to the buyer organization."
+          detail: "Seeded request states already span draft through completed, failed, and rejected flows."
         },
         {
           label: "Pending approvals",
           value: formatCount(pendingApprovals),
-          detail: "Requests that still require a human decision."
+          detail: "Requests that still require a human decision before payment can proceed."
+        },
+        {
+          label: "Captured spend",
+          value: formatCurrencyMinor(capturedPayments._sum.amountMinor ?? 0, "USD"),
+          detail: "Completed seeded spend already reflects money movement across buyer and seller organizations."
+        },
+        {
+          label: "Exceptions",
+          value: formatCount(failedRequests),
+          detail: "Failed seeded requests already surface the buyer-side operational watchlist."
         }
       ],
       activity: recentRequests.map((request: SpendRequest & { sellerOrganization: { name: string } | null }) => ({
@@ -107,7 +135,8 @@ export async function loadWorkspaceOverviewModel(
   }
 
   if (actor.workspace === "SELLER") {
-    const [inboundRequests, capturedPayments, recentBuyers, recentSellerRequests] = await Promise.all([
+    const [inboundRequests, capturedPayments, recentBuyers, recentSellerRequests, pendingAuthorizations, failedDeliveries] =
+      await Promise.all([
       prisma.spendRequest.count({
         where: {
           sellerOrganizationId: actor.organization.id
@@ -139,6 +168,18 @@ export async function loadWorkspaceOverviewModel(
           createdAt: "desc"
         },
         take: 3
+      }),
+      prisma.payment.count({
+        where: {
+          sellerOrganizationId: actor.organization.id,
+          status: "AUTHORIZED"
+        }
+      }),
+      prisma.spendRequest.count({
+        where: {
+          sellerOrganizationId: actor.organization.id,
+          status: "FAILED"
+        }
       })
     ]);
 
@@ -152,7 +193,7 @@ export async function loadWorkspaceOverviewModel(
         {
           label: "Captured payments",
           value: formatCount(capturedPayments),
-          detail: "Payments already settled toward seller-side delivery."
+          detail: "Settled seeded payments already visible to the seller-side operating surface."
         },
         {
           label: "Buyer organizations",
@@ -160,9 +201,19 @@ export async function loadWorkspaceOverviewModel(
           detail: "Distinct buyer organizations present in current seeded data."
         },
         {
-          label: "Workspace role",
+          label: "Awaiting confirmation",
+          value: formatCount(pendingAuthorizations),
+          detail: "Payment-authorized work still waiting on seller confirmation or downstream completion."
+        },
+        {
+          label: "Failed actions",
+          value: formatCount(failedDeliveries),
+          detail: "Seeded failures that later webhook and support tooling must explain."
+        },
+        {
+          label: "Active role",
           value: actor.membership.role,
-          detail: "The active seller-side role used for local development."
+          detail: "The current seller-side actor context used for local development."
         }
       ],
       activity: recentSellerRequests.map((request: SpendRequest & { organization: { name: string } }) => ({
@@ -174,7 +225,8 @@ export async function loadWorkspaceOverviewModel(
     };
   }
 
-  const [organizations, pendingApprovals, failedRequests, recentAuditEvents] = await Promise.all([
+  const queueFamilies = new Set(listAtlasQueueDefinitions().map((definition) => definition.family)).size;
+  const [organizations, pendingApprovals, failedRequests, recentAuditEvents, completedPayments] = await Promise.all([
     prisma.organization.count(),
     prisma.approval.count({
       where: {
@@ -191,6 +243,11 @@ export async function loadWorkspaceOverviewModel(
         occurredAt: "desc"
       },
       take: 4
+    }),
+    prisma.payment.count({
+      where: {
+        status: "CAPTURED"
+      }
     })
   ]);
 
@@ -212,9 +269,19 @@ export async function loadWorkspaceOverviewModel(
         detail: "Seeded lifecycle failures that should surface in operator review."
       },
       {
-        label: "Workspace role",
+        label: "Captured payments",
+        value: formatCount(completedPayments),
+        detail: "Platform-wide settled payments already visible in the current demo baseline."
+      },
+      {
+        label: "Queue families",
+        value: formatCount(queueFamilies),
+        detail: "Background work is already separated by approval, notification, payment, webhook, and audit families."
+      },
+      {
+        label: "Active role",
         value: actor.membership.role,
-        detail: "The active operator-side role used for local development."
+        detail: "The current operator-side actor context used for local development."
       }
     ],
     activity: recentAuditEvents.map((event: AuditEvent) => ({

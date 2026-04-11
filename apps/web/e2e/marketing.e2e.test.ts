@@ -79,7 +79,9 @@ describe("marketing e2e", () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain("Let AI agents buy paid APIs and digital services without losing human control.");
+    expect(html).toContain("Let agents pay for paid APIs and digital services without losing human control.");
+    expect(html).toContain("The control plane for agent spending");
+    expect(html).toContain("How Atlas works");
     expect(html).toContain("/buyer");
     expect(html).toContain("/seller");
     expect(html).toContain("/operator");

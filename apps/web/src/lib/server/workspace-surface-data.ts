@@ -94,6 +94,84 @@ function createModuleAlignmentItems(workspace: OrganizationKind): RecordListPane
 }
 
 async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: AtlasWorkspaceSurfaceKey) {
+  if (surfaceKey === "overview") {
+    const [agents, sellers, approvals] = await Promise.all([
+      prisma.agent.findMany({
+        where: {
+          organizationId: actor.organization.id
+        },
+        include: {
+          _count: {
+            select: {
+              requests: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 3
+      }),
+      prisma.organization.findMany({
+        where: {
+          sellerRequests: {
+            some: {
+              organizationId: actor.organization.id
+            }
+          }
+        },
+        include: {
+          _count: {
+            select: {
+              sellerRequests: true
+            }
+          }
+        },
+        take: 2
+      }),
+      prisma.approval.findMany({
+        where: {
+          request: {
+            organizationId: actor.organization.id
+          }
+        },
+        include: {
+          request: true
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 2
+      })
+    ]);
+
+    return [
+      ...agents.map((agent) => ({
+        id: agent.id,
+        title: agent.name,
+        description: `${agent._count.requests} seeded requests linked to this agent`,
+        detail: `Status: ${agent.status}`,
+        statusLabel: "agent",
+        statusTone: agent.status === "ACTIVE" ? "success" : "warning"
+      })),
+      ...sellers.map((seller) => ({
+        id: seller.id,
+        title: seller.name,
+        description: `${seller._count.sellerRequests} seeded requests routed to this seller`,
+        detail: `${seller.kind} organization`,
+        statusLabel: "seller"
+      })),
+      ...approvals.map((approval) => ({
+        id: approval.id,
+        title: approval.request.title,
+        description: `Approval state: ${approval.status}`,
+        detail: approval.decisionReason ?? "Decision reason not captured yet",
+        statusLabel: approval.status,
+        statusTone: approval.status === "APPROVED" ? "success" : approval.status === "PENDING" ? "warning" : "critical"
+      }))
+    ];
+  }
+
   if (surfaceKey === "agents") {
     const agents = await prisma.agent.findMany({
       where: {
@@ -198,7 +276,7 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
     }));
   }
 
-  if (surfaceKey === "activity" || surfaceKey === "overview") {
+  if (surfaceKey === "activity") {
     const events = await prisma.auditEvent.findMany({
       where: {
         organizationId: actor.organization.id
@@ -222,6 +300,58 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
 }
 
 async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: AtlasWorkspaceSurfaceKey) {
+  if (surfaceKey === "overview") {
+    const [recentRequests, topCustomers] = await Promise.all([
+      prisma.spendRequest.findMany({
+        where: {
+          sellerOrganizationId: actor.organization.id
+        },
+        include: {
+          organization: true
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 4
+      }),
+      prisma.organization.findMany({
+        where: {
+          buyerRequests: {
+            some: {
+              sellerOrganizationId: actor.organization.id
+            }
+          }
+        },
+        include: {
+          _count: {
+            select: {
+              buyerRequests: true
+            }
+          }
+        },
+        take: 2
+      })
+    ]);
+
+    return [
+      ...recentRequests.map((request) => ({
+        id: request.id,
+        title: request.title,
+        description: `${request.organization.name} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
+        detail: request.serviceCategory,
+        statusLabel: request.status,
+        statusTone: resolveRequestStatusTone(request.status)
+      })),
+      ...topCustomers.map((organization) => ({
+        id: organization.id,
+        title: organization.name,
+        description: `${organization._count.buyerRequests} seeded requests`,
+        detail: `${organization.kind} organization`,
+        statusLabel: "customer"
+      }))
+    ];
+  }
+
   if (surfaceKey === "services") {
     const requests = await prisma.spendRequest.findMany({
       where: {
@@ -249,7 +379,7 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
     });
   }
 
-  if (surfaceKey === "requests" || surfaceKey === "overview") {
+  if (surfaceKey === "requests") {
     const requests = await prisma.spendRequest.findMany({
       where: {
         sellerOrganizationId: actor.organization.id
@@ -344,6 +474,80 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
 }
 
 async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: AtlasWorkspaceSurfaceKey) {
+  if (surfaceKey === "overview") {
+    const [exceptionRequests, pendingApprovals, organizations] = await Promise.all([
+      prisma.spendRequest.findMany({
+        where: {
+          status: "FAILED"
+        },
+        include: {
+          organization: true,
+          sellerOrganization: true
+        },
+        orderBy: {
+          updatedAt: "desc"
+        },
+        take: 3
+      }),
+      prisma.approval.findMany({
+        where: {
+          status: "PENDING"
+        },
+        include: {
+          request: {
+            include: {
+              organization: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 2
+      }),
+      prisma.organization.findMany({
+        include: {
+          _count: {
+            select: {
+              buyerRequests: true,
+              sellerRequests: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 2
+      })
+    ]);
+
+    return [
+      ...exceptionRequests.map((request) => ({
+        id: request.id,
+        title: request.title,
+        description: `${request.organization.name} → ${request.sellerOrganization?.name ?? "No seller"}`,
+        detail: `${formatCurrencyMinor(request.amountMinor, request.currency)} · failed lifecycle`,
+        statusLabel: request.status,
+        statusTone: "critical" as const
+      })),
+      ...pendingApprovals.map((approval) => ({
+        id: approval.id,
+        title: approval.request.title,
+        description: approval.request.organization.name,
+        detail: `Pending decision for ${approval.request.currency} ${approval.request.amountMinor / 100}`,
+        statusLabel: approval.status,
+        statusTone: "warning" as const
+      })),
+      ...organizations.map((organization) => ({
+        id: organization.id,
+        title: organization.name,
+        description: `${organization.kind} organization`,
+        detail: `${formatCount(organization._count.buyerRequests + organization._count.sellerRequests)} tracked requests`,
+        statusLabel: organization.kind
+      }))
+    ];
+  }
+
   if (surfaceKey === "organizations") {
     const organizations = await prisma.organization.findMany({
       include: {
@@ -445,7 +649,7 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
     }));
   }
 
-  if (surfaceKey === "audit" || surfaceKey === "overview") {
+  if (surfaceKey === "audit") {
     const events = await prisma.auditEvent.findMany({
       orderBy: {
         occurredAt: "desc"
@@ -470,8 +674,11 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
     return {
       primary: {
         eyebrow: "Buyer surface",
-        title: "Buyer workspace data",
-        description: "This shell uses current seeded buyer data and the durable route structure that later buyer workflows will inherit.",
+        title: surfaceKey === "overview" ? "Buyer command view" : "Buyer workspace data",
+        description:
+          surfaceKey === "overview"
+            ? "The buyer overview now reads like a real control center: active agents, sellers, pending decisions, and seeded lifecycle pressure in one place."
+            : "This shell uses current seeded buyer data and the durable route structure that later buyer workflows will inherit.",
         emptyTitle: "No buyer records available",
         emptyDescription: getWorkspaceEmptyStateDescription("BUYER")
       },
@@ -485,7 +692,10 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
       activity: {
         eyebrow: surfaceKey === "activity" ? "Audit posture" : "Recent lifecycle",
         title: surfaceKey === "activity" ? "Buyer audit flow" : "Recent buyer activity",
-        description: "Recent lifecycle data remains grounded in the schema and will later feed request and approval detail views.",
+        description:
+          surfaceKey === "overview"
+            ? "Recent activity shows the buyer-side narrative that Phase 2 will turn into deeper request, approval, and policy detail surfaces."
+            : "Recent lifecycle data remains grounded in the schema and will later feed request and approval detail views.",
         emptyTitle: "No buyer activity yet",
         emptyDescription: getWorkspaceEmptyStateDescription("BUYER")
       }
@@ -496,8 +706,11 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
     return {
       primary: {
         eyebrow: "Seller surface",
-        title: "Seller workspace data",
-        description: "This shell keeps the seller-side route map durable while staying grounded in current seeded request and payment state.",
+        title: surfaceKey === "overview" ? "Seller operating view" : "Seller workspace data",
+        description:
+          surfaceKey === "overview"
+            ? "The seller overview now highlights inbound demand, customer concentration, payment posture, and the delivery boundary Atlas is preparing."
+            : "This shell keeps the seller-side route map durable while staying grounded in current seeded request and payment state.",
         emptyTitle: "No seller records available",
         emptyDescription: getWorkspaceEmptyStateDescription("SELLER")
       },
@@ -511,7 +724,10 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
       activity: {
         eyebrow: surfaceKey === "payments" ? "Settlement posture" : "Recent lifecycle",
         title: surfaceKey === "payments" ? "Seller-side lifecycle evidence" : "Recent seller activity",
-        description: "The seller shell now exposes durable surfaces for future fulfillment, payout, and webhook behavior.",
+        description:
+          surfaceKey === "overview"
+            ? "Seller activity keeps the demo grounded in buyer demand, payment state, and the future webhook-driven delivery model."
+            : "The seller shell now exposes durable surfaces for future fulfillment, payout, and webhook behavior.",
         emptyTitle: "No seller activity yet",
         emptyDescription: getWorkspaceEmptyStateDescription("SELLER")
       }
@@ -521,8 +737,11 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
   return {
     primary: {
       eyebrow: "Operator surface",
-      title: "Operator workspace data",
-      description: "This shell keeps oversight routes durable while using current organization, request, approval, and audit records.",
+      title: surfaceKey === "overview" ? "Operator trust center" : "Operator workspace data",
+      description:
+        surfaceKey === "overview"
+          ? "The operator overview now reads like a true trust surface: organizations, pending decisions, failures, and queue-backed system posture."
+          : "This shell keeps oversight routes durable while using current organization, request, approval, and audit records.",
       emptyTitle: "No operator records available",
       emptyDescription: getWorkspaceEmptyStateDescription("OPERATOR")
     },
@@ -536,7 +755,10 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
     activity: {
       eyebrow: surfaceKey === "exceptions" ? "Exception posture" : "Recent lifecycle",
       title: surfaceKey === "audit" ? "Audit-heavy activity" : "Recent operator activity",
-      description: "The operator shell is now anchored to real route boundaries for later exception handling and audit exploration.",
+      description:
+        surfaceKey === "overview"
+          ? "Operator activity keeps the demo grounded in real failures, pending decisions, and cross-entity oversight."
+          : "The operator shell is now anchored to real route boundaries for later exception handling and audit exploration.",
       emptyTitle: "No operator activity yet",
       emptyDescription: getWorkspaceEmptyStateDescription("OPERATOR")
     }

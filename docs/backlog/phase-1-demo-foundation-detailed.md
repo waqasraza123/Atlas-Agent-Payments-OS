@@ -14,6 +14,10 @@ Atlas needs a premium product story early, but the demo should still be anchored
 - actor-aware product shells exist
 - richer seeded state exists
 
+## Current Status
+
+Phase 1.1 through 1.4 now have a baseline in repo scope through a stronger marketing narrative and more polished buyer, seller, and operator overview dashboards. The next active step is Phase 1.5 timeline and detail experience, followed by Phase 1.6 demo-mode polish.
+
 ## Exit Criteria
 
 - public marketing site is polished and category-clear
