@@ -38,6 +38,10 @@ export function getAtlasWorkspaceDetailHref(
     return `/operator/transactions/${recordId}`;
   }
 
+  if (workspace === "OPERATOR" && surfaceKey === "exceptions") {
+    return `/operator/exceptions/${recordId}`;
+  }
+
   if (workspace === "OPERATOR" && surfaceKey === "receipts") {
     return `/operator/receipts/${recordId}`;
   }

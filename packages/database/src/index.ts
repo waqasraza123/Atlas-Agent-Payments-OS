@@ -1,5 +1,6 @@
 export { prisma } from "./client";
 export * from "./buyer-workflow";
+export * from "./operator-workflow";
 export * from "./payments-workflow";
 export * from "./seller-workflow";
 export * from "./seed-data";

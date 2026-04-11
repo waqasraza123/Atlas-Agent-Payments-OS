@@ -432,7 +432,232 @@ const databaseMock = vi.hoisted(() => ({
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  }))
+  })),
+  getOperatorOverview: vi.fn(async () => ({
+    openCaseCount: 2,
+    criticalCaseCount: 1,
+    actionRequiredCount: 1,
+    unreadNotificationCount: 2,
+    delayedCaseCount: 1,
+    failedCaseCount: 1,
+    recentCases: [
+      {
+        id: "case-1",
+        caseKey: "PAYMENT_FAILURE:request-created",
+        category: "PAYMENT_FAILURE",
+        severity: "HIGH",
+        status: "OPEN",
+        title: "Payment failure · Created Request",
+        summary: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+        requestId: "request-created",
+        paymentId: "payment-1",
+        paymentRail: "INTERNAL_SIMULATED",
+        receiptId: "receipt-1",
+        buyerOrganizationId: "org-buyer",
+        buyerOrganizationName: "Atlas Demo Buyer",
+        sellerOrganizationId: "org-seller",
+        sellerOrganizationName: "Atlas Demo Seller",
+        requestTitle: "Created Request",
+        requestStatus: "FAILED",
+        paymentStatus: "FAILED",
+        receiptStatus: "FAILED",
+        providerStatus: "failed",
+        reconciliationState: "FAILED",
+        attemptCount: 2,
+        paused: false,
+        resolutionReason: null,
+        availableActions: ["ANNOTATE_CASE", "PAUSE_REQUEST", "REQUEUE_PAYMENT", "RESOLVE_CASE"],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ],
+    recentNotifications: [
+      {
+        id: "notification-1",
+        dedupeKey: "operator-case:PAYMENT_FAILURE:request-created",
+        caseId: "case-1",
+        category: "PAYMENT_FAILURE",
+        title: "Payment failure · Created Request",
+        description: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+        status: "UNREAD",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ],
+    recentAuditEvents: [
+      {
+        id: "audit-1",
+        eventType: "operator.case_opened",
+        targetType: "OperatorCase",
+        targetId: "case-1",
+        actorType: "SYSTEM",
+        actorLabel: "Atlas system",
+        organizationName: "Atlas Demo Buyer",
+        requestTitle: "Created Request",
+        occurredAt: new Date().toISOString()
+      }
+    ]
+  })),
+  listOperatorCases: vi.fn(async () => [
+    {
+      id: "case-1",
+      caseKey: "PAYMENT_FAILURE:request-created",
+      category: "PAYMENT_FAILURE",
+      severity: "HIGH",
+      status: "OPEN",
+      title: "Payment failure · Created Request",
+      summary: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+      requestId: "request-created",
+      paymentId: "payment-1",
+      paymentRail: "INTERNAL_SIMULATED",
+      receiptId: "receipt-1",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      requestTitle: "Created Request",
+      requestStatus: "FAILED",
+      paymentStatus: "FAILED",
+      receiptStatus: "FAILED",
+      providerStatus: "failed",
+      reconciliationState: "FAILED",
+      attemptCount: 2,
+      paused: false,
+      resolutionReason: null,
+      availableActions: ["ANNOTATE_CASE", "PAUSE_REQUEST", "REQUEUE_PAYMENT", "RESOLVE_CASE"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ]),
+  getOperatorCase: vi.fn(async () => ({
+    item: {
+      id: "case-1",
+      caseKey: "PAYMENT_FAILURE:request-created",
+      category: "PAYMENT_FAILURE",
+      severity: "HIGH",
+      status: "OPEN",
+      title: "Payment failure · Created Request",
+      summary: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+      requestId: "request-created",
+      paymentId: "payment-1",
+      paymentRail: "INTERNAL_SIMULATED",
+      receiptId: "receipt-1",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      requestTitle: "Created Request",
+      requestStatus: "FAILED",
+      paymentStatus: "FAILED",
+      receiptStatus: "FAILED",
+      providerStatus: "failed",
+      reconciliationState: "FAILED",
+      attemptCount: 2,
+      paused: false,
+      resolutionReason: null,
+      availableActions: ["ANNOTATE_CASE", "PAUSE_REQUEST", "REQUEUE_PAYMENT", "RESOLVE_CASE"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    actions: [
+      {
+        id: "operator-action-1",
+        caseId: "case-1",
+        actionType: "ANNOTATE_CASE",
+        reason: "Initial operator triage note.",
+        actorUserId: "user-operator",
+        actorUserName: "Operator Tester",
+        actorUserEmail: "operator@atlas.local",
+        createdAt: new Date().toISOString()
+      }
+    ],
+    notifications: [
+      {
+        id: "notification-1",
+        dedupeKey: "operator-case:PAYMENT_FAILURE:request-created",
+        caseId: "case-1",
+        category: "PAYMENT_FAILURE",
+        title: "Payment failure · Created Request",
+        description: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+        status: "UNREAD",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ],
+    auditEvents: [
+      {
+        id: "audit-1",
+        eventType: "operator.case_opened",
+        targetType: "OperatorCase",
+        targetId: "case-1",
+        actorType: "SYSTEM",
+        actorLabel: "Atlas system",
+        organizationName: "Atlas Demo Buyer",
+        requestTitle: "Created Request",
+        occurredAt: new Date().toISOString()
+      }
+    ]
+  })),
+  listOperatorNotifications: vi.fn(async () => [
+    {
+      id: "notification-1",
+      dedupeKey: "operator-case:PAYMENT_FAILURE:request-created",
+      caseId: "case-1",
+      category: "PAYMENT_FAILURE",
+      title: "Payment failure · Created Request",
+      description: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+      status: "UNREAD",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ]),
+  performOperatorCaseAction: vi.fn(async () => ({
+    item: {
+      id: "case-1",
+      caseKey: "PAYMENT_FAILURE:request-created",
+      category: "PAYMENT_FAILURE",
+      severity: "HIGH",
+      status: "INVESTIGATING",
+      title: "Payment failure · Created Request",
+      summary: "A payment attempt failed or was voided before the request reached a final usable receipt state.",
+      requestId: "request-created",
+      paymentId: "payment-1",
+      paymentRail: "INTERNAL_SIMULATED",
+      receiptId: "receipt-1",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      requestTitle: "Created Request",
+      requestStatus: "FAILED",
+      paymentStatus: "FAILED",
+      receiptStatus: "FAILED",
+      providerStatus: "failed",
+      reconciliationState: "FAILED",
+      attemptCount: 2,
+      paused: true,
+      resolutionReason: null,
+      availableActions: ["ANNOTATE_CASE", "RELEASE_REQUEST", "RESOLVE_CASE"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    actions: [],
+    notifications: [],
+    auditEvents: []
+  })),
+  listOperatorAuditEvents: vi.fn(async () => [
+    {
+      id: "audit-1",
+      eventType: "operator.case_opened",
+      targetType: "OperatorCase",
+      targetId: "case-1",
+      actorType: "SYSTEM",
+      actorLabel: "Atlas system",
+      organizationName: "Atlas Demo Buyer",
+      requestTitle: "Created Request",
+      occurredAt: new Date().toISOString()
+    }
+  ])
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -464,7 +689,13 @@ vi.mock("@atlas/database", async () => {
     getPaymentIntent: databaseMock.getPaymentIntent,
     executeBuyerPayment: databaseMock.executeBuyerPayment,
     listReceiptRecords: databaseMock.listReceiptRecords,
-    getReceiptRecord: databaseMock.getReceiptRecord
+    getReceiptRecord: databaseMock.getReceiptRecord,
+    getOperatorOverview: databaseMock.getOperatorOverview,
+    listOperatorCases: databaseMock.listOperatorCases,
+    getOperatorCase: databaseMock.getOperatorCase,
+    listOperatorNotifications: databaseMock.listOperatorNotifications,
+    performOperatorCaseAction: databaseMock.performOperatorCaseAction,
+    listOperatorAuditEvents: databaseMock.listOperatorAuditEvents
   };
 });
 
@@ -896,6 +1127,104 @@ describe("atlas api e2e", () => {
       rail: "INTERNAL_SIMULATED",
       sellerOrganizationName: "Atlas Demo Seller",
       evidenceSummary: expect.arrayContaining(["Reconciliation Receipt Available", "Seller Delivered"])
+    });
+  });
+
+  it("serves operator overview, cases, notifications, and audit explorer routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "OPERATOR",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "OPERATOR")
+    });
+
+    const overviewResponse = await request(app.getHttpServer()).get("/operator-controls/overview").set("x-atlas-local-session", "local-token");
+    const casesResponse = await request(app.getHttpServer()).get("/operator-controls/cases").set("x-atlas-local-session", "local-token");
+    const notificationsResponse = await request(app.getHttpServer()).get("/operator-controls/notifications").set("x-atlas-local-session", "local-token");
+    const auditResponse = await request(app.getHttpServer())
+      .get("/audit/events")
+      .query({
+        query: "payment"
+      })
+      .set("x-atlas-local-session", "local-token");
+
+    expect(overviewResponse.status).toBe(200);
+    expect(overviewResponse.body.item).toMatchObject({
+      openCaseCount: 2,
+      unreadNotificationCount: 2
+    });
+
+    expect(casesResponse.status).toBe(200);
+    expect(casesResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "case-1",
+        category: "PAYMENT_FAILURE",
+        availableActions: expect.arrayContaining(["REQUEUE_PAYMENT"])
+      })
+    ]);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(notificationsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "notification-1",
+        status: "UNREAD"
+      })
+    ]);
+
+    expect(auditResponse.status).toBe(200);
+    expect(auditResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "audit-1",
+        targetType: "OperatorCase"
+      })
+    ]);
+  });
+
+  it("records reason-captured operator case actions through the protected operator module", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "OPERATOR",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "OPERATOR")
+    });
+
+    const [detailResponse, actionResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/operator-controls/cases/case-1").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer())
+        .post("/operator-controls/cases/case-1/actions")
+        .set("x-atlas-local-session", "local-token")
+        .send({
+          actionType: "PAUSE_REQUEST",
+          reason: "Pause this request while payment failure evidence is reviewed."
+        })
+    ]);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.item).toMatchObject({
+      item: expect.objectContaining({
+        id: "case-1",
+        category: "PAYMENT_FAILURE"
+      })
+    });
+
+    expect(actionResponse.status).toBe(201);
+    expect(actionResponse.body.item).toMatchObject({
+      item: expect.objectContaining({
+        id: "case-1",
+        paused: true
+      })
     });
   });
 

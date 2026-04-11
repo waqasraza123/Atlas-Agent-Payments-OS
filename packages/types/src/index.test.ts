@@ -3,12 +3,22 @@ import {
   approvalStatuses,
   isApprovalStatus,
   isMembershipRole,
+  isNotificationStatus,
+  isOperatorActionType,
+  isOperatorCaseCategory,
+  isOperatorCaseSeverity,
+  isOperatorCaseStatus,
   isPaymentRail,
   isOrganizationKind,
   isPaymentStatus,
   isReceiptStatus,
   isSpendRequestStatus,
   membershipRoleLabels,
+  notificationStatuses,
+  operatorActionTypes,
+  operatorCaseCategories,
+  operatorCaseSeverities,
+  operatorCaseStatuses,
   organizationKindLabels,
   paymentRails,
   paymentStatuses,
@@ -30,6 +40,11 @@ describe("atlas shared types", () => {
     expect(paymentStatuses.every((status) => isPaymentStatus(status))).toBe(true);
     expect(paymentRails.every((rail) => isPaymentRail(rail))).toBe(true);
     expect(receiptStatuses.every((status) => isReceiptStatus(status))).toBe(true);
+    expect(operatorCaseCategories.every((category) => isOperatorCaseCategory(category))).toBe(true);
+    expect(operatorCaseSeverities.every((severity) => isOperatorCaseSeverity(severity))).toBe(true);
+    expect(operatorCaseStatuses.every((status) => isOperatorCaseStatus(status))).toBe(true);
+    expect(operatorActionTypes.every((action) => isOperatorActionType(action))).toBe(true);
+    expect(notificationStatuses.every((status) => isNotificationStatus(status))).toBe(true);
     expect(isPaymentStatus("SETTLED")).toBe(false);
     expect(isPaymentRail("BTC")).toBe(false);
   });

@@ -58,6 +58,35 @@ export type ReceiptStatus = (typeof receiptStatuses)[number];
 export const auditActorTypes = ["HUMAN", "AGENT", "SYSTEM"] as const;
 export type AuditActorType = (typeof auditActorTypes)[number];
 
+export const operatorCaseCategories = [
+  "PAYMENT_FAILURE",
+  "PAYMENT_RETRY_EXHAUSTED",
+  "SETTLEMENT_DELAY",
+  "SELLER_CONFIRMATION_DELAY",
+  "RECEIPT_FAILURE",
+  "RECEIPT_PENDING",
+  "REQUEST_PAUSED"
+] as const;
+export type OperatorCaseCategory = (typeof operatorCaseCategories)[number];
+
+export const operatorCaseSeverities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+export type OperatorCaseSeverity = (typeof operatorCaseSeverities)[number];
+
+export const operatorCaseStatuses = ["OPEN", "INVESTIGATING", "ACTION_REQUIRED", "RESOLVED", "CLOSED"] as const;
+export type OperatorCaseStatus = (typeof operatorCaseStatuses)[number];
+
+export const operatorActionTypes = [
+  "PAUSE_REQUEST",
+  "RELEASE_REQUEST",
+  "REQUEUE_PAYMENT",
+  "ANNOTATE_CASE",
+  "RESOLVE_CASE"
+] as const;
+export type OperatorActionType = (typeof operatorActionTypes)[number];
+
+export const notificationStatuses = ["UNREAD", "READ"] as const;
+export type NotificationStatus = (typeof notificationStatuses)[number];
+
 export function isOrganizationKind(value: string): value is OrganizationKind {
   return organizationKinds.includes(value as OrganizationKind);
 }
@@ -96,4 +125,24 @@ export function isPaymentRail(value: string): value is PaymentRail {
 
 export function isReceiptStatus(value: string): value is ReceiptStatus {
   return receiptStatuses.includes(value as ReceiptStatus);
+}
+
+export function isOperatorCaseCategory(value: string): value is OperatorCaseCategory {
+  return operatorCaseCategories.includes(value as OperatorCaseCategory);
+}
+
+export function isOperatorCaseSeverity(value: string): value is OperatorCaseSeverity {
+  return operatorCaseSeverities.includes(value as OperatorCaseSeverity);
+}
+
+export function isOperatorCaseStatus(value: string): value is OperatorCaseStatus {
+  return operatorCaseStatuses.includes(value as OperatorCaseStatus);
+}
+
+export function isOperatorActionType(value: string): value is OperatorActionType {
+  return operatorActionTypes.includes(value as OperatorActionType);
+}
+
+export function isNotificationStatus(value: string): value is NotificationStatus {
+  return notificationStatuses.includes(value as NotificationStatus);
 }

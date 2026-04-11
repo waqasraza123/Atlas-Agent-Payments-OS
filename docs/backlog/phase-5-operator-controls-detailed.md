@@ -91,3 +91,12 @@ Later tracks may add:
 ## Acceptance Criteria
 
 - Atlas can be trusted operationally under failure and investigation scenarios
+
+## Repo Status
+
+- Phase 5 is now complete in repo scope
+- operator case modeling now exists through persisted operator cases, actions, and notifications
+- operator overview, exception queue, case detail, and audit explorer routes now exist in the web app
+- guarded operator APIs now exist for overview, case listing, case detail, notifications, actions, and audit-event filtering
+- reason-captured operator actions now write durable action records and audit events
+- the next active execution slice is Phase 6 analytics, export readiness, and enterprise polish

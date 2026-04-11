@@ -26,7 +26,8 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - Phase 2 core buyer workflow is complete in repo scope.
 - Phase 3 seller workflow is complete in repo scope through seller catalog management, seller fulfillment recording, and seller analytics summaries.
 - Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, retry lifecycle hardening, richer receipt evidence, and broader reconciliation views are now in place in repo scope.
-- The next active implementation slice is Phase 5: operator controls, exception handling, and investigation depth.
+- Phase 5 operator controls and exceptions are now in place in repo scope through operator case modeling, persistent notifications, reason-captured actions, and a filterable audit explorer.
+- The next active implementation slice is Phase 6: analytics, export readiness, stronger filtering, and enterprise polish.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks

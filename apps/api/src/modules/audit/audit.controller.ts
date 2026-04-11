@@ -1,5 +1,5 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
 import { CurrentActor, RequireWorkspaces } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { AuditService } from "./audit.service";
@@ -15,5 +15,10 @@ export class AuditController {
   @Get("summary")
   summary(@CurrentActor() actor: AtlasActorContext) {
     return this.auditService.getSummary(actor);
+  }
+
+  @Get("events")
+  listEvents(@CurrentActor() actor: AtlasActorContext, @Query() query: Record<string, string | string[] | undefined>) {
+    return this.auditService.listEvents(actor, query);
   }
 }

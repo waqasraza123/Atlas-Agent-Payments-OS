@@ -88,6 +88,44 @@ enum ReceiptStatus {
   FAILED
 }
 
+enum OperatorCaseCategory {
+  PAYMENT_FAILURE
+  PAYMENT_RETRY_EXHAUSTED
+  SETTLEMENT_DELAY
+  SELLER_CONFIRMATION_DELAY
+  RECEIPT_FAILURE
+  RECEIPT_PENDING
+  REQUEST_PAUSED
+}
+
+enum OperatorCaseSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum OperatorCaseStatus {
+  OPEN
+  INVESTIGATING
+  ACTION_REQUIRED
+  RESOLVED
+  CLOSED
+}
+
+enum OperatorActionType {
+  PAUSE_REQUEST
+  RELEASE_REQUEST
+  REQUEUE_PAYMENT
+  ANNOTATE_CASE
+  RESOLVE_CASE
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -95,14 +133,15 @@ enum AuditActorType {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  name        String?
-  memberships Membership[]
-  approvals   Approval[]
-  auditEvents AuditEvent[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  memberships     Membership[]
+  approvals       Approval[]
+  auditEvents     AuditEvent[]
+  operatorActions OperatorAction[] @relation("OperatorActionUser")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model Organization {
@@ -120,6 +159,8 @@ model Organization {
   sellerPayments Payment[]      @relation("SellerOrganizationPayments")
   receipts       Receipt[]
   auditEvents    AuditEvent[]
+  operatorCases  OperatorCase[]
+  notifications  Notification[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -191,6 +232,7 @@ model SpendRequest {
   payment              Payment?
   receipt              Receipt?
   auditEvents          AuditEvent[]
+  operatorCases        OperatorCase[]
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -270,17 +312,17 @@ model PaymentAttempt {
 }
 
 model Receipt {
-  id          String        @id @default(cuid())
-  requestId   String        @unique
+  id             String         @id @default(cuid())
+  requestId      String         @unique
   organizationId String
-  storageKey  String?
-  contentType String?
-  status      ReceiptStatus @default(PENDING)
-  metadata    Json?
-  request     SpendRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  storageKey     String?
+  contentType    String?
+  status         ReceiptStatus @default(PENDING)
+  metadata       Json?
+  request        SpendRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model AuditEvent {
@@ -301,4 +343,59 @@ model AuditEvent {
   request        SpendRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
 
   @@index([targetType, targetId])
+}
+
+model OperatorCase {
+  id               String               @id @default(cuid())
+  caseKey          String               @unique
+  organizationId   String?
+  requestId        String?
+  category         OperatorCaseCategory
+  severity         OperatorCaseSeverity
+  status           OperatorCaseStatus   @default(OPEN)
+  title            String
+  summary          String
+  resolutionReason String?
+  metadata         Json?
+  organization     Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  request          SpendRequest?        @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  actions          OperatorAction[]
+  notifications    Notification[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([status, severity, category])
+  @@index([organizationId, status])
+}
+
+model OperatorAction {
+  id          String             @id @default(cuid())
+  caseId       String
+  actorUserId  String
+  actionType   OperatorActionType
+  reason       String
+  metadata     Json?
+  case         OperatorCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actorUser    User              @relation("OperatorActionUser", fields: [actorUserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+model Notification {
+  id             String             @id @default(cuid())
+  dedupeKey      String             @unique
+  organizationId String?
+  caseId         String?
+  category       String
+  title          String
+  description    String
+  status         NotificationStatus @default(UNREAD)
+  metadata       Json?
+  organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  case           OperatorCase?      @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([organizationId, status])
 }

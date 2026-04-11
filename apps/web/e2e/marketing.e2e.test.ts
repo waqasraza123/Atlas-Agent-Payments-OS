@@ -321,6 +321,43 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the operator exceptions route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/exceptions`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Exception queue") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the operator audit route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/audit`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Audit explorer") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the operator exception detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/exceptions/phase-0-request-failed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Operator case detail") ||
+        html.includes("Operator case not available") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the operator receipt detail route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/operator/receipts/phase-0-request-completed`);
     const html = await response.text();

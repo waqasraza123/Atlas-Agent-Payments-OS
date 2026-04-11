@@ -14,6 +14,10 @@ describe("getAtlasWorkspaceDetailHref", () => {
     expect(getAtlasWorkspaceDetailHref("SELLER", "services", "service-1")).toBe("/seller/services/service-1");
   });
 
+  it("returns the correct operator exception detail href", () => {
+    expect(getAtlasWorkspaceDetailHref("OPERATOR", "exceptions", "case-1")).toBe("/operator/exceptions/case-1");
+  });
+
   it("returns null for surfaces without detail routes", () => {
     expect(getAtlasWorkspaceDetailHref("BUYER", "policies", "policy-1")).toBeNull();
   });

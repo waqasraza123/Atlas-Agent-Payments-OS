@@ -103,6 +103,18 @@ function extractScenarioKey(metadata: Prisma.JsonValue | null) {
   return typeof scenarioKey === "string" && scenarioKey.trim().length > 0 ? scenarioKey : null;
 }
 
+function isRequestPaused(metadata: Prisma.JsonValue | null) {
+  const metadataObject = asJsonObject(metadata);
+  const operatorControls =
+    metadataObject?.operatorControls &&
+    typeof metadataObject.operatorControls === "object" &&
+    !Array.isArray(metadataObject.operatorControls)
+      ? (metadataObject.operatorControls as Record<string, unknown>)
+      : null;
+
+  return operatorControls?.paused === true;
+}
+
 function extractProviderStatus(value: Prisma.JsonValue | null) {
   const metadataObject = asJsonObject(value);
   const providerStatus = metadataObject?.providerStatus;
@@ -732,7 +744,7 @@ export async function getReceiptRecord(actor: AtlasActorContext, receiptId: stri
   return mapReceiptRecord(receipt);
 }
 
-export async function executeBuyerPayment(actor: AtlasActorContext, requestId: string, rawInput: unknown) {
+async function executePayment(actor: AtlasActorContext, requestId: string, rawInput: unknown, scope: "buyer" | "operator") {
   try {
     const input = atlasPaymentExecutionSchema.parse(rawInput);
 
@@ -740,7 +752,7 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
       const request = await transaction.spendRequest.findFirst({
         where: {
           id: requestId,
-          organizationId: actor.organization.id
+          ...(scope === "buyer" ? { organizationId: actor.organization.id } : {})
         },
         include: {
           organization: {
@@ -778,11 +790,23 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
       });
 
       if (!request) {
-        throw new AtlasPaymentsWorkflowError("The selected request is not available in this buyer organization.", "not_found");
+        throw new AtlasPaymentsWorkflowError(
+          scope === "buyer"
+            ? "The selected request is not available in this buyer organization."
+            : "The selected request is not available for operator payment control.",
+          "not_found"
+        );
       }
 
       if (!request.sellerOrganizationId) {
         throw new AtlasPaymentsWorkflowError("The request must target a seller organization before payment can execute.", "bad_request");
+      }
+
+      if (isRequestPaused(request.metadata)) {
+        throw new AtlasPaymentsWorkflowError(
+          "The request is currently paused by operator controls and cannot execute payment.",
+          "conflict"
+        );
       }
 
       if (!isAtlasPaymentExecutionEligible(request.status)) {
@@ -1081,4 +1105,12 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
   } catch (error) {
     normalizeValidationError(error);
   }
+}
+
+export async function executeBuyerPayment(actor: AtlasActorContext, requestId: string, rawInput: unknown) {
+  return executePayment(actor, requestId, rawInput, "buyer");
+}
+
+export async function executeOperatorPayment(actor: AtlasActorContext, requestId: string, rawInput: unknown) {
+  return executePayment(actor, requestId, rawInput, "operator");
 }

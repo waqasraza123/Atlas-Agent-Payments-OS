@@ -34,6 +34,32 @@ export {
   type AtlasPolicyEvaluationResult
 } from "./buyer-workflow";
 export {
+  atlasOperatorAuditFiltersSchema,
+  atlasOperatorCaseActionSchema,
+  atlasOperatorCaseFiltersSchema,
+  buildAtlasOperatorCaseKey,
+  classifyAtlasOperatorException,
+  deriveAtlasOperatorAvailableActions,
+  deriveAtlasOperatorReconciliationState,
+  formatAtlasNotificationStatusLabel,
+  formatAtlasOperatorActionTypeLabel,
+  formatAtlasOperatorCaseCategoryLabel,
+  formatAtlasOperatorCaseSeverityLabel,
+  formatAtlasOperatorCaseStatusLabel,
+  isAtlasOperatorActionAllowed,
+  matchesAtlasOperatorTextFilter,
+  type AtlasOperatorActionRecord,
+  type AtlasOperatorAuditEventRecord,
+  type AtlasOperatorCaseActionInput,
+  type AtlasOperatorCaseClassification,
+  type AtlasOperatorCaseFilters,
+  type AtlasOperatorCaseRecord,
+  type AtlasOperatorAuditFilters,
+  type AtlasOperatorExceptionSignal,
+  type AtlasOperatorNotificationRecord,
+  type AtlasOperatorOverviewRecord
+} from "./operator-workflow";
+export {
   atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
   atlasPaymentReconciliationStates,
