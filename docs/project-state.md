@@ -13,7 +13,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `packages/config`, `types`, `ui`, `database`, `auth`, and `domain` as shared internal packages
 - PostgreSQL, Redis, MinIO, and MailHog defined in Docker Compose for local infra only
 - Prisma schema and committed initial migration under `packages/database/prisma`
-- Durable planning centers on `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, and the detailed phase docs under `docs/backlog`
+- Durable planning now covers both the focused v1 execution track and the longer-term platform blueprint through `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, the blueprint docs under `docs/architecture`, and the detailed phase docs under `docs/backlog`
 
 ## Non-Negotiable Rules
 
@@ -29,6 +29,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 - Product source of truth: `docs/product/master-product-spec.md`
 - Execution source of truth: `docs/architecture/master-execution-plan.md`
+- Full-scale blueprint docs: `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Active detailed phase doc: `docs/backlog/phase-0-foundation-detailed.md`
 - Phase 0: foundation hardening and real application baseline
 - Phase 1: premium demo foundation
@@ -44,6 +45,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Initial monorepo scaffold and root tooling
 - Architecture, product, and phase roadmap docs
 - Authoritative master planning system and detailed per-phase execution docs
+- Full-scale product, platform, operations, security, and release blueprint docs
 - Repository governance docs, license, and collaboration guidance
 - Local Docker Compose for PostgreSQL, Redis, MinIO, and MailHog
 - Next.js marketing and workspace placeholder routes
@@ -63,6 +65,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - The current active execution slice after planning is Phase 0.2 auth and actor-context baseline
+- The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 
 ## Deferred / Not Yet Implemented
 
@@ -81,6 +84,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Local verification depends on Docker Desktop being up and the repo-owned Postgres instance owning port `5432`
 - `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
+- The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before Phase 0 hardening is complete
 
 ## Standard Verification

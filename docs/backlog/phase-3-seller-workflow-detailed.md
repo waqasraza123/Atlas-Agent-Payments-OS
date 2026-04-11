@@ -80,10 +80,25 @@ Atlas is not credible as an Agent Payments OS until the seller side of the lifec
 - inbound request monitoring
 - seller-side delivery outcomes and summaries
 
+## Focused V1 Track Boundary
+
+This phase completes the two-sided focused v1 product. It should prioritize credible seller participation over broader partner-program or marketplace complexity.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- seller verification workflows
+- richer seller API onboarding
+- partner-quality and trust scoring
+- broader payout and billing operations
+
 ## Deferred
 
 - real payout system
 - complex webhook retries beyond baseline
+- seller verification programs
+- marketplace expansion
 
 ## Verification Commands
 

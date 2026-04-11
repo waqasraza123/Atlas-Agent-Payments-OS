@@ -88,10 +88,25 @@ Phase 1 makes Atlas believable. Phase 2 makes the buyer-side control loop operat
 - real approval inbox and decision flow
 - request-level timeline inspectability
 
+## Focused V1 Track Boundary
+
+This phase is core focused-v1 product work. It should deliver a real buyer-side control loop for the narrow wedge before broader platform expansion.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- delegated approvals
+- department and cost-center governance
+- external buyer APIs
+- stronger compliance-facing exports
+
 ## Deferred
 
 - payment execution
 - seller fulfillment
+- advanced enterprise policy models
+- external API productization
 
 ## Verification Commands
 

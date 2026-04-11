@@ -80,10 +80,25 @@ Phases 0 through 3 build trust, structure, and two-sided workflows. Phase 4 turn
 - immutable payment attempts
 - durable receipts with evidence
 
+## Focused V1 Track Boundary
+
+This phase is required for a production-grade focused v1 because the control plane must execute and prove the purchase lifecycle, not just model it.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- additional rails
+- invoicing or credits
+- richer reconciliation operations
+- stronger financial evidence exports
+
 ## Deferred
 
 - on-chain settlement
 - refunds beyond minimal placeholder
+- broader billing system maturity
+- finance-system integration depth
 
 ## Verification Commands
 

@@ -9,8 +9,9 @@ This runbook defines how future Codex sessions should use the Atlas planning sys
 1. `AGENTS.md`
 2. `docs/project-state.md`
 3. `docs/architecture/master-execution-plan.md`
-4. the active detailed phase doc named in `docs/project-state.md`
-5. `docs/_local/current-session.md` if it exists
+4. the blueprint docs in `docs/architecture/` when the task affects long-range architecture, rollout, operations, or security
+5. the active detailed phase doc named in `docs/project-state.md`
+6. `docs/_local/current-session.md` if it exists
 
 ## How To Find The Active Phase
 
@@ -34,9 +35,11 @@ This runbook defines how future Codex sessions should use the Atlas planning sys
 
 - treat the master product spec as the product source of truth
 - treat the master execution plan as the sequencing source of truth
+- treat the full-scale blueprint docs as the long-range target state for product, platform, operations, security, and release maturity
 - treat detailed phase docs as the implementation guide for active work
 - keep old summary docs only as companions that point back to the source-of-truth docs
 - do not create contradictory roadmap documents
+- do not let the full-scale blueprint override the current focused v1 implementation order unless durable repo state changes explicitly
 
 ## Documentation Update Rules
 

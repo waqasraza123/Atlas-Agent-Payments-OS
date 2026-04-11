@@ -215,6 +215,19 @@ Expected outputs:
 - queue namespace conventions
 - updated project memory and current-session memory
 
+## Focused V1 Track Boundary
+
+This phase belongs directly to the focused v1 build track. It should establish the application baseline required for every later product phase without widening into deployment-platform or compliance-heavy implementation.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks build on this phase through:
+
+- stronger auth and identity maturity
+- tenant-boundary validation and support tooling guardrails
+- environment and deployment automation
+- deeper observability and incident readiness
+
 ## Intentionally Deferred In Phase 0
 
 - Stripe implementation
@@ -223,6 +236,8 @@ Expected outputs:
 - seller publication flow
 - receipt finalization workflow
 - operator cases
+- production deployment architecture
+- advanced security or compliance program implementation
 
 ## Verification Commands
 

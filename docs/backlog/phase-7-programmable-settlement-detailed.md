@@ -58,6 +58,18 @@ Blockchain support is an extension of the governed payment model, not the produc
 - deep DeFi behavior
 - escrow automation until later expansion
 
+## Focused V1 Track Boundary
+
+This phase is outside the minimum required path for a production-grade off-chain focused v1. It is a deliberate extension track for programmable settlement credibility.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- broader rail governance
+- more chains or settlement models
+- advanced treasury and reconciliation behavior
+
 ## Verification Commands
 
 - `pnpm build`

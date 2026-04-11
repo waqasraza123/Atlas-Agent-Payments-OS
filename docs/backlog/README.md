@@ -2,6 +2,8 @@
 
 Use the detailed phase files in this directory as the authoritative implementation sequence for Atlas Agent Payments OS. The master sequencing source of truth is [master-execution-plan.md](../architecture/master-execution-plan.md).
 
+These phase docs describe the focused v1 build track. The broader product, platform, operations, security, and release target state lives in the blueprint docs under `docs/architecture/`.
+
 ## Order
 
 1. [phase-0-foundation-detailed.md](./phase-0-foundation-detailed.md)

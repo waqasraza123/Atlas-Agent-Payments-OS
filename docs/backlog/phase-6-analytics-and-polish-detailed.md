@@ -80,6 +80,19 @@ Once the core lifecycle works and operators can investigate it, the platform nee
 - stronger multi-entity search and filtering
 - refined enterprise-grade UX
 
+## Focused V1 Track Boundary
+
+This phase closes the focused v1 track for an enterprise-credible narrow wedge. It strengthens reporting, discoverability, and UX without changing the wedge.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- deeper BI and reporting integration
+- customer-configurable dashboards
+- broader admin and governance analytics
+- higher-scale search infrastructure if needed
+
 ## Verification Commands
 
 - `pnpm build`

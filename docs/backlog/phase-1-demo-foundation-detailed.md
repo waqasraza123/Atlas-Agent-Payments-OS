@@ -74,10 +74,24 @@ Atlas needs a premium product story early, but the demo should still be anchored
 - demo-ready buyer, seller, and operator dashboards
 - signature Atlas detail views for approvals, timelines, and receipts
 
+## Focused V1 Track Boundary
+
+This phase is part of the focused v1 track because it makes the wedge legible and demoable. It should remain grounded in real domain entities rather than becoming a detached marketing prototype.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- customer-facing onboarding flows
+- richer environment-specific demo controls
+- external API and developer storytelling
+
 ## Deferred
 
 - real write flows beyond what Phase 2 requires
 - production seller webhooks
+- enterprise onboarding programs
+- broad support tooling
 
 ## Verification Commands
 

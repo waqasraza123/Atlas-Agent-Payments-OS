@@ -3,12 +3,12 @@
 ## Master Product Spec
 
 **Document status:** Execution-grade source of truth  
-**Version:** v1.0  
-**Purpose:** Durable product memory and the product-side source of truth for future implementation work
+**Version:** v1.1  
+**Purpose:** Durable product memory for the focused v1 wedge and the full-scale platform target state
 
 ## Product Identity
 
-### Working brand
+### Brand
 
 Atlas
 
@@ -28,7 +28,35 @@ Let agents pay without losing control.
 
 Atlas is the control plane between AI agents and paid actions. It is not a consumer shopping app, not a crypto dashboard, and not a billing page. It is the operational system that makes agent spending legible, governed, and auditable.
 
-The first product wedge is narrow on purpose: paid APIs and digital services. That gives Atlas a fast, credible, demoable starting point with immediate B2B relevance and minimal logistics complexity.
+The first wedge is intentionally narrow: paid APIs and digital services. That wedge remains the correct v1 because it is credible, B2B-relevant, operationally simpler than physical commerce, and demoable without logistics complexity.
+
+## V1 Wedge And Long-Term Platform Vision
+
+### Focused v1 wedge
+
+The initial product focuses on:
+
+- buyer organizations that want bounded agent spending
+- seller organizations exposing paid APIs and digital services
+- policy-driven approval and payment control
+- receipts, audit trails, and operator visibility
+- premium dashboards and seeded demo flows
+
+### Long-term platform vision
+
+The long-term product expands from a focused control plane into a broader machine-commerce platform with:
+
+- richer enterprise governance and delegation
+- a seller network with stronger onboarding and trust models
+- multiple payment rails and billing models
+- API productization and developer-facing surfaces
+- deeper operator, support, and investigation tooling
+- stronger deployment, security, compliance, and reliability posture
+- post-v1 procurement and programmable settlement extensions
+
+### Product boundary rule
+
+The long-term platform vision must never dilute the current v1 wedge. The full-scale platform grows outward from the v1 control plane rather than replacing it.
 
 ## Executive Summary
 
@@ -54,9 +82,9 @@ Atlas solves this by combining:
 - operator controls
 - premium dashboards for buyers, sellers, and platform operators
 
-The platform should feel beautiful, premium, and operationally serious while still behaving like real financial infrastructure.
+The platform must feel beautiful, premium, and operationally serious while behaving like disciplined financial infrastructure.
 
-## Vision, Mission, and Principles
+## Vision, Mission, And Principles
 
 ### Vision
 
@@ -75,6 +103,8 @@ Build the trust, approvals, payment, and audit layer that turns agent spending f
 5. Audit is a first-class product feature
 6. The UI must earn trust quickly
 7. The first wedge should stay narrow
+8. Operational trust must scale with product ambition
+9. Enterprise maturity must be planned before it is implemented
 
 ## Why Now
 
@@ -88,7 +118,7 @@ Atlas matters now because:
 
 The opportunity is the financial and operational control plane for agent actions, not AI plus blockchain as a gimmick.
 
-## Target Users and Stakeholders
+## Target Users And Stakeholders
 
 ### Primary buyer-side customer
 
@@ -187,6 +217,43 @@ Cares about:
 - data separation
 - control and evidence
 
+### Persona F — Security and compliance lead
+
+Assumes autonomy is unacceptable without guardrails, auditability, tenant boundaries, and evidence of disciplined data handling.
+
+Cares about:
+
+- tenant isolation
+- access control depth
+- audit completeness
+- retention and deletion behavior
+- incident handling maturity
+- future compliance posture
+
+### Persona G — Platform administrator or support lead
+
+Runs investigations, support operations, and internal oversight across multiple organizations.
+
+Cares about:
+
+- safe internal tooling
+- search and case management
+- reason capture
+- constrained support access
+- exportable evidence
+
+### Persona H — Enterprise procurement or vendor-risk evaluator
+
+Needs confidence that Atlas can be deployed and governed as a serious enterprise system.
+
+Cares about:
+
+- production readiness
+- role and permission boundaries
+- reliability expectations
+- data governance
+- rollout discipline
+
 ## Jobs To Be Done
 
 ### Buyer jobs
@@ -211,9 +278,16 @@ Cares about:
 - Audit what happened without needing engineering.
 - Export evidence and trace a lifecycle quickly.
 
+### Enterprise administration jobs
+
+- control rollout by organization, workspace, environment, and role
+- validate support actions and incident handling
+- understand data retention, export, and deletion behavior
+- assess whether Atlas can be trusted in a production environment
+
 ## Product Scope
 
-### In scope for v1
+### In scope for focused v1
 
 - organizations and memberships
 - buyer organizations
@@ -233,7 +307,19 @@ Cares about:
 - analytics summaries
 - export-friendly records
 
-### Explicitly out of scope for v1
+### Required for production-grade focused v1 rollout
+
+- bounded auth and actor model
+- organization-aware authorization
+- durable audit trails
+- repeatable operations runbooks
+- release gating and environment discipline
+- logging, alerting, backup, and rollback planning
+- tenant-boundary guardrails
+- seller onboarding trust checks
+- exportable evidence paths
+
+### Explicitly out of scope for focused v1
 
 - physical goods
 - shipping and returns
@@ -246,16 +332,19 @@ Cares about:
 - production SSO in Phase 0
 - blockchain-first settlement in the initial build
 
-### Later expansion areas
+### Post-v1 expansion areas
 
 - recurring budgets
-- multi-step delegated approvals
+- delegated and multi-step approvals
 - department limits
 - refunds
 - richer seller webhooks
 - contract-driven procurement
 - on-chain settlement evidence
 - programmable escrow patterns
+- subscriptions and usage plans
+- external developer APIs and SDKs
+- enterprise integration surfaces
 
 ## Product Pillars
 
@@ -267,6 +356,8 @@ Cares about:
 6. Receipts and auditability
 7. Operator trust surfaces
 8. Premium command-center UX
+9. Enterprise governance and data discipline
+10. Operational reliability
 
 ## Core Concepts
 
@@ -330,7 +421,7 @@ An append-only event that captures the timeline of what happened and why.
 
 An internal investigative construct used for exceptions, support, or risk review.
 
-## User Roles and Permission Model
+## User Roles And Permission Model
 
 ### Buyer-side roles
 
@@ -354,11 +445,20 @@ An internal investigative construct used for exceptions, support, or risk review
 - Risk operator
 - Platform admin
 
+### Future enterprise role expansion
+
+- organization security admin
+- tenant compliance admin
+- procurement reviewer
+- billing admin
+- support-restricted auditor
+
 ### Permission design principles
 
 - all state-changing actions must be attributable to an actor
 - operator actions are also auditable
-- permissions should be organization-aware
+- permissions must be organization-aware
+- internal support access must be constrained and reviewable
 - Phase 0 uses local-first auth and role context, not full enterprise identity
 
 ## Product Surfaces
@@ -404,6 +504,15 @@ Purpose:
 - resolve webhook or settlement issues
 - manage platform support actions
 
+### Full-scale maturity surfaces
+
+- buyer administration and governance center
+- seller onboarding and trust center
+- API and developer integration surface
+- internal support and case workspace
+- billing and settlement operations surface
+- reliability and environment operations surface
+
 ## Information Architecture
 
 ### Buyer
@@ -419,7 +528,7 @@ Purpose:
 - Team
 - Settings
 
-Buyer overview dashboard must show:
+Buyer overview must show:
 
 - total spend
 - requests created today
@@ -443,7 +552,7 @@ Buyer overview dashboard must show:
 - Webhooks
 - Settings
 
-Seller overview dashboard must show:
+Seller overview must show:
 
 - revenue
 - incoming requests
@@ -585,6 +694,15 @@ Operator overview must show:
 - emergency stop behavior
 - agent activation requirement
 
+### Later policy maturity
+
+- department and cost-center scoping
+- approver delegation
+- rail-specific policies
+- service category restrictions
+- seller risk bands
+- jurisdiction and data-boundary aware restrictions
+
 ### Policy evaluation outcomes
 
 - allow_auto_approved
@@ -612,9 +730,11 @@ Initial rails:
 - internal simulated rail
 - Stripe rail later in implementation
 
-Deferred rail:
+Later rails:
 
 - programmable on-chain USDC settlement
+- invoice or net-terms style settlement models
+- wallet and stored-balance abstractions if later required
 
 ### Payment abstraction responsibilities
 
@@ -624,6 +744,15 @@ Deferred rail:
 - record evidence and references
 - normalize settlement states
 - expose timeline events
+
+### Billing maturity beyond the first rail
+
+The long-term platform should support:
+
+- multiple payment rails with a common evidence model
+- price, usage, and entitlement separation
+- invoices, credits, and adjustments as later financial concepts
+- customer-level billing views without turning Atlas into a general accounting product
 
 ### Payment evidence requirements
 
@@ -653,9 +782,9 @@ Every finalized receipt should tie together:
 - metadata bundle
 - export-ready representation
 
-Receipts should feel official and valuable, not like loose log entries.
+Receipts must feel official and valuable, not like loose log entries.
 
-## Audit and Timeline Requirements
+## Audit And Timeline Requirements
 
 Every significant action should emit an audit event.
 
@@ -679,97 +808,7 @@ Minimum events:
 
 Timeline views should exist at request, agent, organization, seller, and operator-case level.
 
-## Notifications
-
-### Notification types
-
-- pending approval
-- approval granted
-- approval denied
-- budget threshold reached
-- unusual activity flagged
-- payment failed
-- seller confirmation delayed
-- payout completed
-- operator action required
-
-### Notification delivery channels
-
-Initial implementation:
-
-- in-app notifications
-- placeholder email structure later
-
-Notifications should feel important and crisp, not noisy.
-
-## Search, Filtering, and Discoverability
-
-### Search must support
-
-- organizations
-- agents
-- sellers
-- services
-- requests
-- approvals
-- payments
-- receipts
-- audit events
-
-### Filtering must support
-
-- date range
-- amount range
-- status
-- organization
-- agent
-- seller
-- service
-- approval status
-- request type
-- risk marker
-
-The experience should feel instant and focused, especially for operator workflows.
-
-## Analytics and Reporting
-
-### Buyer analytics
-
-- spend over time
-- spend by agent
-- spend by seller
-- spend by service
-- auto-approved vs manual-approved
-- approval turnaround time
-- exception rate
-- budget utilization
-
-### Seller analytics
-
-- revenue over time
-- usage by buyer
-- top services
-- success vs failure
-- payout status
-- repeat buyers
-
-### Platform analytics
-
-- active organizations
-- active agents
-- total requests
-- total approvals
-- exception count
-- successful payments
-- request-to-completion time
-
-### Reporting outputs
-
-- CSV export
-- PDF receipts later
-- audit bundle export later
-
-## Trust and Safety Model
+## Operational Trust Model
 
 Atlas must visibly communicate:
 
@@ -780,56 +819,115 @@ Atlas must visibly communicate:
 - receipt availability
 - service identity
 - organization-level control
+- internal operator action history
 
-Internal safety assumptions:
+Trust in Atlas depends on:
 
-- suspicious behavior can be paused
-- high-value actions can be escalated
-- overrides always require reason capture
-- operator and admin actions are auditable
+- bounded authority
+- actor traceability
+- deterministic lifecycle state
+- tenant-aware authorization
+- durable evidence
+- recoverable operations
+- support actions with reason capture
 
-## Accessibility and Usability
+## Multi-Tenant And Organization Isolation Expectations
 
-Requirements:
+The product is multi-tenant by default, even if early development uses simplified local-first assumptions.
 
-- strong readability
-- keyboard-usable flows
-- clear contrast
-- no color-only state communication
-- screen states paired with text and iconography
-- premium empty, loading, and error states
+Guardrails:
 
-The product must not sacrifice clarity for aesthetics.
+- every data access path must be tenant-aware
+- buyer, seller, and platform contexts must be explicit
+- internal support tooling must not silently bypass tenancy rules
+- exports, search, and analytics must preserve tenant boundaries
+- later enterprise environments may require stricter environment, region, or account-level isolation
 
-## Demo Mode Requirements
+## External Seller Onboarding Maturity
 
-Atlas needs a premium seeded demo mode that tells the story quickly.
+### Focused v1
 
-Demo mode must include:
+- seller profile creation
+- service creation
+- service visibility and pricing
+- request and delivery visibility
 
-- seeded buyer org
-- seeded seller org
-- seeded operator context
-- several agents
-- several services
-- multiple policies
-- pending approvals
-- successful path
-- failed path
-- exception path
-- polished dashboards
-- beautiful timeline views
+### Later maturity
 
-Core demo story:
+- verification workflow
+- support and operations contacts
+- onboarding checklist
+- webhook trust and signing management
+- risk scoring and seller quality signals
+- contractual and compliance workflow placeholders
 
-1. Agent requests a paid service.
-2. Policy evaluation requires approval.
-3. Human approval is granted.
-4. Payment executes.
-5. Seller confirms delivery.
-6. Receipt appears.
-7. Dashboards update.
-8. Audit timeline is inspectable.
+## API Productization Maturity
+
+### Focused v1
+
+- internal API for web, worker, and domain flows
+- durable domain contracts
+
+### Later maturity
+
+- external buyer API
+- seller-facing integration API
+- SDKs and examples
+- rate limiting and quota controls
+- versioned external contracts
+- customer-facing developer docs
+
+## Support, Operations, And Internal Admin Maturity
+
+The full-scale product must support:
+
+- constrained support access
+- investigation case workflows
+- internal annotations and handoff
+- reason-required overrides
+- audit-backed remediation actions
+- customer-safe exports and evidence packs
+
+## Data Governance And Lifecycle Expectations
+
+Atlas should treat governance as a product and platform concern.
+
+Expectations:
+
+- explicit retention strategy by data class
+- deletion and archival paths
+- exportability for audit and customer support
+- durable receipt and audit evidence
+- documented ownership of customer-generated, system-generated, and seller-generated data
+- future policy for PII minimization and restricted field handling
+
+## Reliability Expectations
+
+### Focused v1 expectations
+
+- request and approval flows should be explainable and recoverable
+- failed background work should be visible and retryable
+- receipts and audit trails should not be silently lost
+- platform failures must surface clearly to operators
+
+### Full-scale expectations
+
+- environment-specific SLOs
+- deploy-time and runtime safety checks
+- backup, recovery, and rollback readiness
+- monitoring for user-facing and queue-driven lifecycle failures
+
+## Launch Stages
+
+- internal concept demo
+- functional alpha
+- design partner pilot
+- private beta
+- public beta
+- GA
+- enterprise rollout
+
+Each stage should advance product, platform, operations, security, and documentation readiness together. The detailed criteria live in [release-maturity-model.md](../architecture/release-maturity-model.md).
 
 ## Design Direction
 

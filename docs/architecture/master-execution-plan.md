@@ -2,12 +2,16 @@
 
 ## Purpose
 
-This document is the execution-side source of truth for Atlas Agent Payments OS. Use it with [master-product-spec.md](../product/master-product-spec.md) to sequence implementation work, decide what not to build yet, and keep future Codex sessions on the same path.
+This document is the execution-side source of truth for Atlas Agent Payments OS. It preserves the focused v1 build order while also defining the parallel platform, operations, security, and full-scale expansion tracks required for a real production rollout.
 
 ## Source Of Truth Stack
 
 - Product source of truth: [master-product-spec.md](../product/master-product-spec.md)
 - Execution source of truth: [master-execution-plan.md](./master-execution-plan.md)
+- Full-scale end-state blueprint: [full-scale-product-blueprint.md](./full-scale-product-blueprint.md)
+- Production operations blueprint: [production-operations-blueprint.md](./production-operations-blueprint.md)
+- Security and compliance roadmap: [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
+- Release maturity model: [release-maturity-model.md](./release-maturity-model.md)
 - Durable repo memory: [project-state.md](../project-state.md)
 - Local handoff memory: `docs/_local/current-session.md`
 - Execution workflow: [codex-execution-runbook.md](../codex-execution-runbook.md)
@@ -18,9 +22,14 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - `apps/web`, `apps/api`, `apps/worker`, and the shared packages boot at a basic scaffold level.
 - Prisma schema, initial migration, and a seed path already exist.
 - The repo is still in Phase 0 because the real application baseline is not complete yet.
-- The next active implementation slice after this planning task is Phase 0.2 auth and actor-context baseline.
+- The next active implementation slice remains Phase 0.2 auth and actor-context baseline.
+- The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
-## Exact Phase Order
+## Execution Tracks
+
+### Focused v1 build track
+
+This track delivers the product wedge described in the current phases:
 
 1. Phase 0 — Foundation hardening and real application baseline
 2. Phase 1 — Premium demo foundation
@@ -31,16 +40,110 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 7. Phase 6 — Analytics and enterprise polish
 8. Phase 7 — Programmable settlement extension
 
-## Phase Dependency Summary
+### Platform engineering track
 
-- Phase 0 makes the app real enough to build on.
-- Phase 1 makes the product narratively powerful and demoable on top of real domain structures.
-- Phase 2 makes buyer-side controls operational.
-- Phase 3 completes two-sided product credibility.
-- Phase 4 makes money movement and evidence real.
-- Phase 5 proves the platform under failure and investigation.
-- Phase 6 makes the platform enterprise-polished.
-- Phase 7 adds programmable settlement credibility without distorting the core product narrative.
+This track makes the product operable at scale:
+
+- environment model
+- deployment topology
+- configuration and secret management
+- observability
+- background job reliability
+- operational tooling
+- cost and scaling controls
+
+### Operational maturity track
+
+This track makes Atlas safe to run:
+
+- incident response
+- backup and restore
+- release gating
+- rollback strategy
+- support runbooks
+- audit export readiness
+- data lifecycle handling
+
+### Security and compliance track
+
+This track makes Atlas safe to trust:
+
+- auth maturity
+- authorization depth
+- tenant-isolation guardrails
+- support-access constraints
+- seller trust boundaries
+- privacy and deletion handling
+- future compliance programs
+
+### Post-v1 expansion track
+
+This track extends the product after the focused wedge is working:
+
+- billing and rail expansion
+- enterprise governance depth
+- API productization
+- richer seller onboarding
+- broader procurement and workflow expansion
+
+## Exact Phase Order For The Focused V1 Track
+
+1. Phase 0 — Foundation hardening and real application baseline
+2. Phase 1 — Premium demo foundation
+3. Phase 2 — Core buyer workflow
+4. Phase 3 — Seller workflow
+5. Phase 4 — Payments and receipts
+6. Phase 5 — Operator controls and exceptions
+7. Phase 6 — Analytics and enterprise polish
+8. Phase 7 — Programmable settlement extension
+
+## Dependency Ordering Across Tracks
+
+- Focused v1 product work starts first because the product wedge defines the platform boundary.
+- Platform engineering starts lightly in Phase 0 and becomes release-critical before design partner and beta stages.
+- Security and compliance guardrails begin in Phase 0 with actor context and tenant boundaries, then deepen before real-world rollout.
+- Operational maturity work starts before Phase 4 because payment execution, receipts, and support actions require stronger runtime discipline.
+- Post-v1 expansion only begins after the focused v1 lifecycle is credible and the operational baseline is stable.
+
+## What Is Required For A Production-Grade Focused V1
+
+The following are required before calling the focused wedge production-grade:
+
+- focused v1 phases through at least Phase 6 implemented for the scoped product
+- real actor context and organization-aware authorization
+- repeatable payment and receipt evidence flow
+- operator exception handling and audit explorer baseline
+- observability, backup, restore, rollback, and release gating defined and tested
+- tenant-boundary guardrails in application logic and operational tooling
+- constrained support access and reason capture for internal actions
+- documented environments, incidents, and deployment procedures
+
+Phase 7 is valuable but not required for a production-grade off-chain focused v1. It is required only for programmable settlement maturity.
+
+## What Is Required For Full-Scale Product Maturity
+
+The following move Atlas beyond the focused wedge into broader platform maturity:
+
+- richer seller onboarding and trust scoring
+- external API productization and SDK maturity
+- billing maturity beyond one or two rails
+- enterprise admin and governance depth
+- stronger environment isolation and deployment automation
+- deeper observability, incident tooling, and service ownership
+- broader compliance and security programs
+- larger release and rollout discipline across segments and regions
+
+## Release Stages
+
+- internal concept demo
+- functional alpha
+- design partner pilot
+- private beta
+- public beta
+- GA
+- enterprise rollout
+
+Stage-specific go or no-go requirements live in [release-maturity-model.md](./release-maturity-model.md).
 
 ## Phase Plans
 
@@ -48,11 +151,17 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 
 Detailed doc: [phase-0-foundation-detailed.md](../backlog/phase-0-foundation-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- monorepo scaffold exists
-- docs, repo memory, and safe push workflow exist
-- web, API, worker, and database packages boot at a basic level
+- create actor-aware product shells, domain skeletons, seeds, and queue conventions
+
+Required platform and operations work in or near this phase:
+
+- session and actor model boundaries
+- initial tenant-boundary rules
+- environment and config discipline
+- queue family conventions
+- verification reliability
 
 Exit criteria:
 
@@ -65,194 +174,149 @@ Exit criteria:
 - queue namespace conventions exist
 - docs reflect the real Phase 0 state
 
-Verification gate:
-
-- `pnpm build`
-- `pnpm dev:web`
-- `pnpm dev:api`
-- `pnpm dev:worker`
-- `pnpm db:seed`
-
-Acceptance summary:
-
-- the app no longer feels like route placeholders
-- future work can land on real actor-aware shells and domain structure
-
 ### Phase 1 — Premium demo foundation
 
 Detailed doc: [phase-1-demo-foundation-detailed.md](../backlog/phase-1-demo-foundation-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- Phase 0 exit criteria met
+- make Atlas category-clear, premium, and demoable
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- public marketing site is polished and category-clear
-- buyer, seller, and operator overviews are attractive and believable
-- seeded demo flow exists end to end visually
-- timeline and dashboard storytelling work
-
-Verification gate:
-
-- `pnpm build`
-- `pnpm dev:web`
-- manual walkthrough of the seeded demo story
-
-Acceptance summary:
-
-- a founder or design partner can understand Atlas in one guided session
+- stable seeded data management
+- scenario coherence across web, API, and worker
+- cleaner environment-specific demo controls if needed
 
 ### Phase 2 — Core buyer workflow
 
 Detailed doc: [phase-2-core-buyer-workflow-detailed.md](../backlog/phase-2-core-buyer-workflow-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- Phase 1 demo foundation is stable
-- domain modules and seeds exist
+- deliver the first real controlled-spend loop for buyers
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- buyers can manage agents and policies
-- buyers can create spend requests
-- policy engine evaluates requests
-- approvals can be reviewed and decided
-- request timeline is real
-
-Verification gate:
-
-- `pnpm build`
-- `pnpm dev:web`
-- `pnpm dev:api`
-- request and approval smoke coverage
-
-Acceptance summary:
-
-- a real buyer-side spend request can move through policy and approval lifecycle states
+- stronger validation and idempotency
+- policy version persistence
+- audit completeness
+- first meaningful tenant-aware request boundaries
 
 ### Phase 3 — Seller workflow
 
 Detailed doc: [phase-3-seller-workflow-detailed.md](../backlog/phase-3-seller-workflow-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- Phase 2 buyer workflow is stable
+- make the product meaningfully two-sided
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- sellers can create services
-- pricing exists
-- buyer requests can target seller services
-- seller can confirm or fail delivery
-- seller overview is meaningful
-
-Verification gate:
-
-- `pnpm build`
-- buyer-to-seller seeded lifecycle walkthrough
-
-Acceptance summary:
-
-- Atlas becomes a credible two-sided product, not just a buyer control surface
+- seller trust boundaries
+- seller-facing operational visibility
+- webhook contract discipline
 
 ### Phase 4 — Payments and receipts
 
 Detailed doc: [phase-4-payments-and-receipts-detailed.md](../backlog/phase-4-payments-and-receipts-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- buyer and seller flows exist
+- make payment execution and evidence real
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- payment rail abstraction is real
-- internal simulated rail is fully usable
-- Stripe rail baseline exists
-- payment attempts are immutable
-- receipts are finalized from real lifecycle state
-
-Verification gate:
-
-- `pnpm build`
-- payment lifecycle smoke test
-- receipt finalization smoke test
-
-Acceptance summary:
-
-- Atlas can execute, prove, and record digital purchases with durable evidence
+- stronger queue reliability
+- secret handling for payment rails
+- reconciliation observability
+- backup and rollback thinking for financial records
 
 ### Phase 5 — Operator controls and exceptions
 
 Detailed doc: [phase-5-operator-controls-detailed.md](../backlog/phase-5-operator-controls-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- payment and receipt flows exist
+- make failure handling and investigation trustworthy
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- operator center exists
-- exception queue exists
-- safe operator actions exist
-- audit explorer is strong enough for real investigation
-
-Verification gate:
-
-- `pnpm build`
-- operator workflow smoke tests
-
-Acceptance summary:
-
-- Atlas can be trusted under failure and investigation scenarios
+- support tooling guardrails
+- incident triage baseline
+- safer internal action boundaries
 
 ### Phase 6 — Analytics and enterprise polish
 
 Detailed doc: [phase-6-analytics-and-polish-detailed.md](../backlog/phase-6-analytics-and-polish-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- operator workflows exist
+- make Atlas design-partner-ready and enterprise-credible
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- analytics are meaningful
-- exports are useful
-- search and filtering are strong
-- UX polish is enterprise-grade
-
-Verification gate:
-
-- `pnpm build`
-- analytics and export smoke tests
-
-Acceptance summary:
-
-- Atlas becomes design-partner-ready and boardroom-ready
+- export readiness
+- retention-aware reporting
+- performance and accessibility discipline
 
 ### Phase 7 — Programmable settlement extension
 
 Detailed doc: [phase-7-programmable-settlement-detailed.md](../backlog/phase-7-programmable-settlement-detailed.md)
 
-Entry criteria:
+Focused v1 purpose:
 
-- core off-chain platform is credible and stable
+- add programmable settlement after the off-chain platform is credible
 
-Exit criteria:
+Required platform and operations work in or near this phase:
 
-- wallet registry exists
-- programmable settlement rail exists
-- on-chain evidence appears in receipt timelines
-- organizations can control allowed rails
+- rail governance
+- chain-specific monitoring
+- stronger financial evidence normalization
 
-Verification gate:
+## Operational Readiness Gates By Release Stage
 
-- `pnpm build`
-- programmable settlement evidence smoke test
+### Internal concept demo
 
-Acceptance summary:
+- seeded scenarios work
+- core routes and shells are coherent
+- no real money or customer data reliance
 
-- Atlas gains programmable settlement credibility without becoming blockchain-first
+### Functional alpha
+
+- real request and approval paths exist
+- actor-aware authorization exists
+- seeded and local environments are reproducible
+
+### Design partner pilot
+
+- payment and receipt evidence flow exists for the narrow wedge
+- operator investigation baseline exists
+- initial observability and incident handling exist
+
+### Private beta
+
+- release gating, rollback, and backup paths are defined
+- tenant-boundary guardrails are validated
+- support access model is constrained
+
+### Public beta
+
+- environment discipline is stronger
+- alerting and operational ownership are explicit
+- reliability and data lifecycle risks are reviewed
+
+### GA
+
+- product, platform, and operations tracks all meet the scoped focused-v1 standard
+- customer-facing docs and support workflows exist
+- security posture is strong enough for intended customers
+
+### Enterprise rollout
+
+- stronger auth and SSO maturity
+- deeper audit, export, isolation, and support controls
+- roadmap for compliance and enterprise deployment expectations is active
 
 ## Detailed Do Not Do Yet List
 
@@ -261,9 +325,10 @@ Acceptance summary:
 - do not introduce multiple frontend apps
 - do not replace seeded realistic state with frontend-only mock state
 - do not build physical goods flows
-- do not widen infra with message buses or Kubernetes
+- do not widen infra with message buses or Kubernetes before there is a proven need
 - do not overcomplicate queues before approval, payment, and webhook families are real
 - do not overfit the product to one seller type too early
+- do not treat the full-scale blueprint as permission to skip the focused v1 sequence
 
 ## Success Criteria By Stage
 
@@ -271,29 +336,17 @@ Acceptance summary:
 
 The repo and app both feel real. Actor-aware shells, seeds, and domain module structure exist.
 
-### Success after Phase 1
-
-The product is demoable and visually persuasive.
-
 ### Success after Phase 2
 
 A buyer can truly create and control a spend request.
-
-### Success after Phase 3
-
-A seller can participate meaningfully in the lifecycle.
 
 ### Success after Phase 4
 
 Atlas can execute, prove, and record digital purchases.
 
-### Success after Phase 5
-
-Atlas can be trusted operationally.
-
 ### Success after Phase 6
 
-Atlas feels like an enterprise-grade product.
+Atlas is a production-grade focused v1 candidate for the narrow wedge if the platform and operations gates are also satisfied.
 
 ### Success after Phase 7
 
@@ -312,12 +365,12 @@ A slice is done only when:
 - verification commands are stated and run
 - safe push passes
 
-## Immediate Next Recommendation
+## Exact Recommendation From Current Repository State
 
-From the current repository state, the next safest implementation slice is:
+The next safest implementation slice is still:
 
 - Phase 0.2 auth and actor-context baseline
-- Phase 0.3 shared workspace shell primitives and protected buyer, seller, and operator shells
-- Phase 0.4 API domain module skeletons
-- Phase 0.5 stronger seeds
-- Phase 0.6 queue namespace conventions
+- followed by Phase 0.3 shared workspace shell primitives and protected buyer, seller, and operator shells
+- then Phase 0.4 API domain module skeletons
+
+Do not start platform hardening code or compliance-heavy work before the actor model, route gating, and real product shell exist. The blueprint docs should guide later release readiness, not distract from the current Phase 0 implementation order.

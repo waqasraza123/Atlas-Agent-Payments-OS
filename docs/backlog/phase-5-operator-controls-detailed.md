@@ -70,6 +70,19 @@ Production trust comes from failure handling, case ownership, audit clarity, and
 - safe operator actions with reason capture
 - audit explorer
 
+## Focused V1 Track Boundary
+
+This phase is part of the production-grade focused v1 track because operator trust surfaces are required before real-world rollout of the narrow wedge.
+
+## Full-Scale Platform Maturity Follow-Ons
+
+Later tracks may add:
+
+- richer internal support workflows
+- incident-specific tooling
+- case ownership automation
+- broader export and evidence packaging
+
 ## Verification Commands
 
 - `pnpm build`
