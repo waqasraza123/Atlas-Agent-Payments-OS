@@ -168,6 +168,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the buyer receipts route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/receipts`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Receipt records") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the buyer request detail route with payment execution posture", async () => {
     const response = await fetch(`${activeWebUrl}/buyer/requests/phase-0-request-approved`);
     const html = await response.text();
@@ -177,6 +189,19 @@ describe("marketing e2e", () => {
       html.includes("Execute payment attempt") ||
         html.includes("Retry payment attempt") ||
         html.includes("Execution currently unavailable") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the buyer receipt detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/receipts/phase-0-request-completed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Receipt detail") ||
         html.includes("Choose a buyer session to continue") ||
         html.includes("Record not available in this workspace") ||
         html.includes("Buyer context could not be resolved")
@@ -281,6 +306,31 @@ describe("marketing e2e", () => {
         html.includes("Choose a operator session to continue".replace("a operator", "an operator")) ||
         html.includes("Operator context could not be resolved") ||
         html.includes("Operator workspace")
+    ).toBe(true);
+  });
+
+  it("serves the operator receipts route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/receipts`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Receipt review") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the operator receipt detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/receipts/phase-0-request-completed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Receipt detail") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Operator context could not be resolved")
     ).toBe(true);
   });
 

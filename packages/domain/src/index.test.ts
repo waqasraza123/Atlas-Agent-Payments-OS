@@ -22,6 +22,7 @@ describe("atlas domain registry", () => {
       "/buyer/policies",
       "/buyer/requests",
       "/buyer/approvals",
+      "/buyer/receipts",
       "/buyer/activity"
     ]);
   });
@@ -29,6 +30,7 @@ describe("atlas domain registry", () => {
   it("resolves workspace surfaces by key and href", () => {
     expect(getAtlasWorkspaceSurfaceByKey("SELLER", "services")?.href).toBe("/seller/services");
     expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/audit")?.key).toBe("audit");
+    expect(getAtlasWorkspaceSurfaceByHref("BUYER", "/buyer/receipts")?.key).toBe("receipts");
   });
 
   it("creates API domain snapshots with actor context", () => {

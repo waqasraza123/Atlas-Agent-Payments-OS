@@ -24,7 +24,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 1 seeded demo storytelling is now reinforced by replayable scenario cards and request-linked lifecycle detail routes
 - Standalone web production build now passes through `pnpm --filter @atlas/web build`
 - Phase 3 seller workflow baseline and fulfillment path now exist through seller service records, seller request outcome recording, and seller-side analytics summaries
-- Phase 4 payment rail abstraction, internal simulated settlement, and the Stripe baseline now exist through immutable payment attempts, buyer-triggered execution, seller-visible payment detail, receipt truth updates, and reconciliation posture
+- Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, richer receipt evidence, and reconciliation surfaces now exist through immutable payment attempts, buyer-triggered execution, buyer and operator receipt views, seller-visible payment detail, receipt truth updates, and operator-facing transaction inspection
 
 ## Non-Negotiable Rules
 
@@ -47,7 +47,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow completed in repo scope
 - Phase 3: seller workflow completed in repo scope
-- Phase 4: payments and receipts
+- Phase 4: payments and receipts completed in repo scope
 - Phase 5: operator controls and exceptions
 - Phase 6: analytics and enterprise polish
 - Phase 7: programmable settlement extension
@@ -82,7 +82,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Buyer-facing pages now support schema-backed create and update flows instead of overview-only seeded surfaces
 - Phase 2.6 buyer request detail and workflow stabilization now render persisted policy outcomes, approval reasons, idempotency posture, and create-to-detail continuity directly from request state
 - Phase 3 seller workflow now supports seller profile and team visibility, service catalog management, service detail routing, inbound request monitoring, seller fulfillment recording, and seller-side analytics summaries
-- Phase 4.1 through 4.4 baseline now support shared payment rail contracts, internal simulated settlement, Stripe payment-intent creation behind config gates, immutable payment attempts, retry hardening, payment and receipt API routes, request-linked receipt truth updates, and reconciliation posture
+- Phase 4 is now complete in repo scope through shared payment rail contracts, internal simulated settlement, Stripe payment-intent creation behind config gates, immutable payment attempts, retry hardening, richer receipt evidence, buyer and operator receipt surfaces, payment and receipt API routes, request-linked receipt truth updates, and broader reconciliation posture
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -99,8 +99,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 1 implementation slices 1.1 through 1.6 are now in place in repo scope
 - Phase 2 is now complete in repo scope through Phase 2.6
 - Phase 3 is now complete in repo scope through seller catalog management, inbound request monitoring, seller fulfillment recording, and seller analytics summaries
-- Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, and retry lifecycle hardening are now in place in repo scope
-- The current active execution slice is the next Phase 4 step: richer receipt evidence, broader reconciliation views, and operator-facing payment inspection depth
+- Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, richer receipt evidence, and broader reconciliation views are now in place in repo scope
+- The current active execution slice is Phase 5: operator controls, exception handling, and investigation depth
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -112,7 +112,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Real auth provider and organization session flows beyond the local-first baseline
 - Richer policy version history beyond the current integer version increment and stored rule snapshots
 - Stripe webhook ingestion and settlement confirmation beyond the current payment-intent baseline
-- Broader reconciliation views and operator-facing financial exception handling beyond the current payment baseline
+- Operator exception center, reason-captured interventions, and broader financial investigation tooling beyond the current reconciliation baseline
 - Receipt artifact generation beyond JSON-backed receipt truth
 - Operator exception center and analytics
 - Onchain settlement support
@@ -128,7 +128,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
-- The buyer and seller lifecycle now includes payment execution and receipt truth through the internal simulated and Stripe-baseline rails, but webhook-backed settlement confirmation and broader reconciliation operations remain the next major product gap
+- The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, and broader reconciliation visibility through the internal simulated and Stripe-baseline rails, but webhook-backed settlement confirmation and Phase 5 exception tooling remain the next major product gaps
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before the Phase 2 buyer control loop is fully stabilized

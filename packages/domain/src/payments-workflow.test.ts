@@ -13,7 +13,8 @@ import {
   isAtlasPaymentRetryEligible,
   isAtlasStripePaymentIntentStatus,
   normalizeAtlasStripePaymentStatus,
-  resolveAtlasReceiptStatus
+  resolveAtlasReceiptStatus,
+  summarizeAtlasReceiptEvidence
 } from "./payments-workflow";
 
 describe("atlas payments workflow contracts", () => {
@@ -93,5 +94,27 @@ describe("atlas payments workflow contracts", () => {
     ).toBe("AWAITING_SELLER_CONFIRMATION");
     expect(isAtlasPaymentAttemptLimitReached(atlasPaymentMaximumAttemptCount)).toBe(true);
     expect(isAtlasPaymentAttemptLimitReached(atlasPaymentMaximumAttemptCount - 1)).toBe(false);
+  });
+
+  it("summarizes receipt evidence for detail and list surfaces", () => {
+    expect(
+      summarizeAtlasReceiptEvidence({
+        reconciliationState: "RECEIPT_AVAILABLE",
+        paymentReference: "pi_123",
+        providerStatus: "succeeded",
+        paymentStatus: "CAPTURED",
+        sellerFulfillmentStatus: "DELIVERED",
+        storageKey: "receipts/request-1.json",
+        attemptCount: 2
+      })
+    ).toEqual([
+      "Reconciliation Receipt Available",
+      "Payment Captured",
+      "Provider succeeded",
+      "Reference pi_123",
+      "Artifact receipts/request-1.json",
+      "Attempts 2",
+      "Seller Delivered"
+    ]);
   });
 });

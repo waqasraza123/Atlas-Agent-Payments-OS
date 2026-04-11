@@ -12,6 +12,7 @@ import {
   isAtlasStripePaymentIntentStatus,
   normalizeAtlasStripePaymentStatus,
   resolveAtlasReceiptStatus,
+  summarizeAtlasReceiptEvidence,
   type AtlasPaymentAttemptRecord,
   type AtlasPaymentIntentRecord,
   type AtlasReceiptRecord
@@ -106,6 +107,18 @@ function extractProviderStatus(value: Prisma.JsonValue | null) {
   const metadataObject = asJsonObject(value);
   const providerStatus = metadataObject?.providerStatus;
   return typeof providerStatus === "string" && providerStatus.trim().length > 0 ? providerStatus : null;
+}
+
+function extractLatestAttemptProviderStatus(attempts: Array<{ evidence: Prisma.JsonValue | null }>) {
+  for (const attempt of attempts) {
+    const providerStatus = extractProviderStatus(attempt.evidence);
+
+    if (providerStatus) {
+      return providerStatus;
+    }
+  }
+
+  return null;
 }
 
 function mapPaymentAttemptRecord(attempt: {
@@ -217,28 +230,82 @@ function mapReceiptRecord(receipt: {
   updatedAt: Date;
   metadata: Prisma.JsonValue | null;
   organization: { id: string; name: string };
+  request: {
+    title: string;
+    status: string;
+    serviceCategory: string;
+    amountMinor: number;
+    currency: string;
+    metadata: Prisma.JsonValue | null;
+    sellerOrganization: { id: string; name: string } | null;
+    payment: {
+      status: string;
+      rail: string;
+      reference: string | null;
+      amountMinor: number;
+      currency: string;
+      metadata: Prisma.JsonValue | null;
+      attempts: Array<{
+        evidence: Prisma.JsonValue | null;
+      }>;
+    } | null;
+  };
 }): AtlasReceiptRecord {
   const metadata = asJsonObject(receipt.metadata);
   const paymentReference = typeof metadata?.paymentReference === "string" ? metadata.paymentReference : null;
-  const paymentStatus = typeof metadata?.paymentStatus === "string" ? metadata.paymentStatus : null;
+  const paymentStatus =
+    typeof metadata?.paymentStatus === "string"
+      ? metadata.paymentStatus
+      : receipt.request.payment?.status ?? null;
   const sellerFulfillmentStatus =
     metadata?.sellerFulfillmentStatus === "DELIVERED" || metadata?.sellerFulfillmentStatus === "FAILED"
       ? metadata.sellerFulfillmentStatus
-      : null;
-  const rail = typeof metadata?.rail === "string" ? metadata.rail : null;
+      : extractSellerFulfillmentStatus(receipt.request.metadata);
+  const rail = typeof metadata?.rail === "string" ? metadata.rail : receipt.request.payment?.rail ?? null;
+  const paymentMetadata = asJsonObject(receipt.request.payment?.metadata ?? null);
+  const providerStatus =
+    (typeof metadata?.providerStatus === "string" ? metadata.providerStatus : null) ||
+    (typeof paymentMetadata?.latestProviderStatus === "string" ? paymentMetadata.latestProviderStatus : null) ||
+    extractLatestAttemptProviderStatus(receipt.request.payment?.attempts ?? []);
+  const attemptCount = receipt.request.payment?.attempts.length ?? 0;
+  const reconciliationState = deriveAtlasPaymentReconciliationState({
+    requestStatus: receipt.request.status,
+    paymentStatus: paymentStatus as AtlasReceiptRecord["paymentStatus"],
+    receiptStatus: receipt.status as AtlasReceiptRecord["status"],
+    sellerFulfillmentStatus
+  });
 
   return {
     id: receipt.id,
     requestId: receipt.requestId,
     buyerOrganizationId: receipt.organization.id,
     buyerOrganizationName: receipt.organization.name,
+    sellerOrganizationId: receipt.request.sellerOrganization?.id ?? null,
+    sellerOrganizationName: receipt.request.sellerOrganization?.name ?? null,
+    requestTitle: receipt.request.title,
+    requestStatus: receipt.request.status,
+    serviceCategory: receipt.request.serviceCategory,
     status: receipt.status as AtlasReceiptRecord["status"],
+    amountMinor: receipt.request.amountMinor,
+    currency: receipt.request.currency,
     storageKey: receipt.storageKey,
     contentType: receipt.contentType,
     paymentReference,
     paymentStatus: paymentStatus as AtlasReceiptRecord["paymentStatus"],
     sellerFulfillmentStatus,
     rail: rail as AtlasReceiptRecord["rail"],
+    providerStatus,
+    attemptCount,
+    reconciliationState,
+    evidenceSummary: summarizeAtlasReceiptEvidence({
+      reconciliationState,
+      paymentReference,
+      providerStatus,
+      paymentStatus: paymentStatus as AtlasReceiptRecord["paymentStatus"],
+      sellerFulfillmentStatus,
+      storageKey: receipt.storageKey,
+      attemptCount
+    }),
     createdAt: receipt.createdAt.toISOString(),
     updatedAt: receipt.updatedAt.toISOString()
   };
@@ -505,6 +572,40 @@ export async function listReceiptRecords(actor: AtlasActorContext, client: Datab
           id: true,
           name: true
         }
+      },
+      request: {
+        select: {
+          title: true,
+          status: true,
+          serviceCategory: true,
+          amountMinor: true,
+          currency: true,
+          metadata: true,
+          sellerOrganization: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          payment: {
+            select: {
+              status: true,
+              rail: true,
+              reference: true,
+              amountMinor: true,
+              currency: true,
+              metadata: true,
+              attempts: {
+                orderBy: {
+                  attemptNumber: "desc"
+                },
+                select: {
+                  evidence: true
+                }
+              }
+            }
+          }
+        }
       }
     },
     orderBy: {
@@ -530,7 +631,38 @@ export async function getReceiptRecord(actor: AtlasActorContext, receiptId: stri
         },
         request: {
           select: {
-            sellerOrganizationId: true
+            id: true,
+            title: true,
+            status: true,
+            serviceCategory: true,
+            amountMinor: true,
+            currency: true,
+            metadata: true,
+            sellerOrganizationId: true,
+            sellerOrganization: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            payment: {
+              select: {
+                status: true,
+                rail: true,
+                reference: true,
+                amountMinor: true,
+                currency: true,
+                metadata: true,
+                attempts: {
+                  orderBy: {
+                    attemptNumber: "desc"
+                  },
+                  select: {
+                    evidence: true
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -548,7 +680,38 @@ export async function getReceiptRecord(actor: AtlasActorContext, receiptId: stri
         },
         request: {
           select: {
-            sellerOrganizationId: true
+            id: true,
+            title: true,
+            status: true,
+            serviceCategory: true,
+            amountMinor: true,
+            currency: true,
+            metadata: true,
+            sellerOrganizationId: true,
+            sellerOrganization: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            payment: {
+              select: {
+                status: true,
+                rail: true,
+                reference: true,
+                amountMinor: true,
+                currency: true,
+                metadata: true,
+                attempts: {
+                  orderBy: {
+                    attemptNumber: "desc"
+                  },
+                  select: {
+                    evidence: true
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -580,17 +743,6 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
           organizationId: actor.organization.id
         },
         include: {
-          request: {
-            select: {
-              status: true,
-              metadata: true,
-              receipt: {
-                select: {
-                  status: true
-                }
-              }
-            }
-          },
           organization: {
             select: {
               id: true,

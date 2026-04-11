@@ -1,6 +1,7 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
+  deriveAtlasPaymentReconciliationState,
   formatAtlasPaymentRailLabel,
   formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
@@ -10,7 +11,9 @@ import {
   formatAtlasServicePricingModelLabel,
   formatAtlasServiceStatusLabel,
   formatAtlasServiceVisibilityLabel,
+  isAtlasPaymentStatus,
   parseAtlasPolicyEvaluationResult,
+  summarizeAtlasReceiptEvidence,
   summarizeAtlasPolicyEvaluation,
   type AtlasWorkspaceSurfaceKey
 } from "@atlas/domain";
@@ -162,6 +165,26 @@ function extractSellerFulfillment(metadata: Record<string, unknown> | null) {
   return null;
 }
 
+function extractAttemptProviderStatus(
+  attempts: Array<{
+    evidence: unknown;
+  }>
+) {
+  for (const attempt of attempts) {
+    if (!attempt.evidence || typeof attempt.evidence !== "object" || Array.isArray(attempt.evidence)) {
+      continue;
+    }
+
+    const providerStatus = (attempt.evidence as Record<string, unknown>).providerStatus;
+
+    if (typeof providerStatus === "string" && providerStatus.trim().length > 0) {
+      return providerStatus;
+    }
+  }
+
+  return null;
+}
+
 function createRelatedItem(
   id: string,
   title: string,
@@ -201,6 +224,18 @@ function canAccessAuditEvent(actor: AtlasActorContext, event: { organizationId: 
 
   if (actor.workspace === "SELLER") {
     return event.request?.sellerOrganizationId === actor.organization.id;
+  }
+
+  return true;
+}
+
+function canAccessReceipt(actor: AtlasActorContext, receipt: { organizationId: string; request: { sellerOrganizationId: string | null } | null }) {
+  if (actor.workspace === "BUYER") {
+    return receipt.organizationId === actor.organization.id;
+  }
+
+  if (actor.workspace === "SELLER") {
+    return receipt.request?.sellerOrganizationId === actor.organization.id;
   }
 
   return true;
@@ -246,6 +281,12 @@ async function loadRequestDetailModel(
       : null;
   const evaluationResult = parseAtlasPolicyEvaluationResult(request.evaluationResult);
   const sellerFulfillment = extractSellerFulfillment(metadata);
+  const requestReconciliationState = deriveAtlasPaymentReconciliationState({
+    requestStatus: request.status,
+    paymentStatus: request.payment?.status ?? null,
+    receiptStatus: request.receipt?.status ?? null,
+    sellerFulfillmentStatus: sellerFulfillment?.fulfillmentStatus ?? null
+  });
   const policyEvaluatedEvent = request.auditEvents.find((event) => event.eventType === "policy_evaluated");
   const matchedSellerService =
     request.sellerOrganizationId && request.serviceKey
@@ -366,6 +407,13 @@ async function loadRequestDetailModel(
         detail: request.approval?.decisionReason ?? "Approval remains a distinct lifecycle from the request and payment records."
       },
       {
+        label: "Reconciliation",
+        value: formatAtlasPaymentReconciliationStateLabel(requestReconciliationState),
+        detail: request.payment
+          ? `${formatAtlasPaymentStatusLabel(request.payment.status)} payment · ${request.receipt ? formatAtlasReceiptStatusLabel(request.receipt.status) : "No receipt"}`
+          : "No payment record has been created yet."
+      },
+      {
         label: "Seller fulfillment",
         value: sellerFulfillment ? formatAtlasSellerFulfillmentStatusLabel(sellerFulfillment.fulfillmentStatus) : "Not recorded",
         detail: sellerFulfillment?.note ?? "Seller-side delivery posture has not been recorded yet."
@@ -484,6 +532,11 @@ async function loadRequestDetailModel(
           detail: request.receipt?.storageKey ?? "Receipt preview appears once a receipt record exists"
         },
         {
+          label: "Reconciliation",
+          value: formatAtlasPaymentReconciliationStateLabel(requestReconciliationState),
+          detail: request.payment?.reference ?? "No payment reference captured yet"
+        },
+        {
           label: "Payment reference",
           value: request.payment?.reference ?? "Not issued",
           detail: request.payment?.provider ?? "No payment rail attached yet"
@@ -572,7 +625,12 @@ async function loadRequestDetailModel(
               request.receipt.contentType ?? "Receipt content type not captured",
               request.receipt.storageKey ?? "Storage key not captured",
               formatTokenLabel(request.receipt.status),
-              resolveStatusTone(request.receipt.status)
+              resolveStatusTone(request.receipt.status),
+              actor.workspace === "BUYER"
+                ? getAtlasWorkspaceDetailHref("BUYER", "receipts", request.receipt.id)
+                : actor.workspace === "OPERATOR"
+                  ? getAtlasWorkspaceDetailHref("OPERATOR", "receipts", request.receipt.id)
+                  : null
             )
           : null
       ].filter(Boolean) as RecordListPanelItem[],
@@ -1139,6 +1197,354 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
   };
 }
 
+async function loadReceiptDetailModel(actor: AtlasActorContext, recordId: string): Promise<WorkspaceDetailModel | null> {
+  const receipt =
+    (await prisma.receipt.findUnique({
+      where: {
+        id: recordId
+      },
+      include: {
+        organization: true,
+        request: {
+          include: {
+            sellerOrganization: true,
+            approval: {
+              include: {
+                approver: true
+              }
+            },
+            payment: {
+              include: {
+                attempts: {
+                  orderBy: {
+                    attemptNumber: "desc"
+                  }
+                }
+              }
+            },
+            auditEvents: {
+              orderBy: {
+                occurredAt: "asc"
+              }
+            }
+          }
+        }
+      }
+    })) ??
+    (await prisma.receipt.findUnique({
+      where: {
+        requestId: recordId
+      },
+      include: {
+        organization: true,
+        request: {
+          include: {
+            sellerOrganization: true,
+            approval: {
+              include: {
+                approver: true
+              }
+            },
+            payment: {
+              include: {
+                attempts: {
+                  orderBy: {
+                    attemptNumber: "desc"
+                  }
+                }
+              }
+            },
+            auditEvents: {
+              orderBy: {
+                occurredAt: "asc"
+              }
+            }
+          }
+        }
+      }
+    }));
+
+  if (!receipt || !canAccessReceipt(actor, receipt)) {
+    return null;
+  }
+
+  const receiptMetadata =
+    receipt.metadata && typeof receipt.metadata === "object" && !Array.isArray(receipt.metadata)
+      ? (receipt.metadata as Record<string, unknown>)
+      : null;
+  const paymentMetadata =
+    receipt.request.payment?.metadata &&
+    typeof receipt.request.payment.metadata === "object" &&
+    !Array.isArray(receipt.request.payment.metadata)
+      ? (receipt.request.payment.metadata as Record<string, unknown>)
+      : null;
+  const sellerFulfillment = extractSellerFulfillment(
+    receipt.request.metadata && typeof receipt.request.metadata === "object" && !Array.isArray(receipt.request.metadata)
+      ? (receipt.request.metadata as Record<string, unknown>)
+      : null
+  );
+  const providerStatus =
+    (typeof receiptMetadata?.providerStatus === "string" && receiptMetadata.providerStatus) ||
+    (typeof paymentMetadata?.latestProviderStatus === "string" && paymentMetadata.latestProviderStatus) ||
+    extractAttemptProviderStatus(receipt.request.payment?.attempts ?? []);
+  const paymentStatus =
+    receipt.request.payment?.status ??
+    (typeof receiptMetadata?.paymentStatus === "string" && isAtlasPaymentStatus(receiptMetadata.paymentStatus)
+      ? receiptMetadata.paymentStatus
+      : null);
+  const paymentReference =
+    receipt.request.payment?.reference ??
+    (typeof receiptMetadata?.paymentReference === "string" ? receiptMetadata.paymentReference : null);
+  const rail = receipt.request.payment?.rail ?? (receiptMetadata?.rail === "INTERNAL_SIMULATED" || receiptMetadata?.rail === "STRIPE" ? receiptMetadata.rail : null);
+  const reconciliationState = deriveAtlasPaymentReconciliationState({
+    requestStatus: receipt.request.status,
+    paymentStatus,
+    receiptStatus: receipt.status,
+    sellerFulfillmentStatus: sellerFulfillment?.fulfillmentStatus ?? null
+  });
+  const evidenceSummary = summarizeAtlasReceiptEvidence({
+    reconciliationState,
+    paymentReference,
+    providerStatus,
+    paymentStatus,
+    sellerFulfillmentStatus: sellerFulfillment?.fulfillmentStatus ?? null,
+    storageKey: receipt.storageKey,
+    attemptCount: receipt.request.payment?.attempts.length ?? 0
+  });
+  const timeline = buildAtlasLifecycleTimeline({
+    request: {
+      id: receipt.request.id,
+      title: receipt.request.title,
+      status: receipt.request.status,
+      amountMinor: receipt.request.amountMinor,
+      currency: receipt.request.currency,
+      serviceCategory: receipt.request.serviceCategory,
+      createdAt: receipt.request.createdAt,
+      updatedAt: receipt.request.updatedAt
+    },
+    approval: receipt.request.approval
+      ? {
+          id: receipt.request.approval.id,
+          status: receipt.request.approval.status,
+          decisionReason: receipt.request.approval.decisionReason,
+          approverLabel: receipt.request.approval.approver?.name ?? receipt.request.approval.approver?.email ?? null,
+          updatedAt: receipt.request.approval.updatedAt
+        }
+      : null,
+    fulfillment: sellerFulfillment
+      ? {
+          fulfillmentStatus: sellerFulfillment.fulfillmentStatus,
+          note: sellerFulfillment.note,
+          recordedAt: sellerFulfillment.recordedAt
+        }
+      : null,
+    payment: receipt.request.payment
+      ? {
+          id: receipt.request.payment.id,
+          status: receipt.request.payment.status,
+          provider: receipt.request.payment.provider,
+          reference: receipt.request.payment.reference,
+          amountMinor: receipt.request.payment.amountMinor,
+          currency: receipt.request.payment.currency,
+          updatedAt: receipt.request.payment.updatedAt
+        }
+      : null,
+    receipt: {
+      id: receipt.id,
+      status: receipt.status,
+      storageKey: receipt.storageKey,
+      contentType: receipt.contentType,
+      updatedAt: receipt.updatedAt
+    },
+    auditEvents: receipt.request.auditEvents.map((event) => ({
+      id: event.id,
+      eventType: event.eventType,
+      actorType: event.actorType,
+      targetType: event.targetType,
+      targetId: event.targetId,
+      occurredAt: event.occurredAt
+    }))
+  });
+
+  return {
+    eyebrow: "Receipt detail",
+    title: `${receipt.request.title} receipt`,
+    description: `${receipt.organization.name} → ${receipt.request.sellerOrganization?.name ?? "No seller linked"} · ${formatAtlasReceiptStatusLabel(receipt.status)}`,
+    statusLabel: formatAtlasReceiptStatusLabel(receipt.status),
+    statusTone: resolveStatusTone(receipt.status),
+    metrics: [
+      {
+        label: "Receipt status",
+        value: formatAtlasReceiptStatusLabel(receipt.status),
+        detail: receipt.storageKey ?? "Receipt artifact is not stored yet."
+      },
+      {
+        label: "Reconciliation",
+        value: formatAtlasPaymentReconciliationStateLabel(reconciliationState),
+        detail: paymentStatus ? `Payment ${formatAtlasPaymentStatusLabel(paymentStatus)}` : "Payment has not been executed yet"
+      },
+      {
+        label: "Amount",
+        value: formatCurrencyMinor(receipt.request.amountMinor, receipt.request.currency),
+        detail: `${receipt.request.serviceCategory} request`
+      },
+      {
+        label: "Provider",
+        value: providerStatus ?? "Not captured",
+        detail: paymentReference ?? "No payment reference captured"
+      },
+      {
+        label: "Attempts",
+        value: String(receipt.request.payment?.attempts.length ?? 0),
+        detail: "Receipt evidence remains tied to immutable payment attempts."
+      }
+    ],
+    facts: [
+      {
+        label: "Buyer organization",
+        value: receipt.organization.name,
+        detail: receipt.organization.slug
+      },
+      {
+        label: "Seller organization",
+        value: receipt.request.sellerOrganization?.name ?? "Not assigned",
+        detail: receipt.request.sellerOrganization?.slug ?? "Seller relationship not attached"
+      },
+      {
+        label: "Request status",
+        value: formatTokenLabel(receipt.request.status),
+        detail: "Request, payment, and receipt states remain intentionally separate."
+      },
+      {
+        label: "Rail",
+        value: rail ? formatAtlasPaymentRailLabel(rail) : "Not captured",
+        detail: receipt.request.payment?.provider ?? "No payment provider attached"
+      },
+      {
+        label: "Content type",
+        value: receipt.contentType ?? "Not recorded",
+        detail: receipt.storageKey ?? "Receipt artifact not stored"
+      },
+      {
+        label: "Updated",
+        value: formatDateTime(receipt.updatedAt),
+        detail: `Created ${formatDateTime(receipt.createdAt)}`
+      }
+    ],
+    preview: {
+      eyebrow: "Evidence bundle",
+      title: "Receipt evidence summary",
+      description: "Receipt detail keeps normalized payment, provider, artifact, and fulfillment evidence together without collapsing the underlying lifecycle records.",
+      items: evidenceSummary.map((item, index) => ({
+        label: `Evidence ${index + 1}`,
+        value: item,
+        detail: index === 0 ? "Current reconciliation posture" : "Persisted receipt evidence summary"
+      })),
+      emptyTitle: "No receipt evidence available",
+      emptyDescription: "Atlas will surface normalized evidence here once receipt state is available."
+    },
+    analysis: {
+      eyebrow: "Payment and fulfillment continuity",
+      title: "Receipt dependencies",
+      description: "Receipts are only trustworthy when payment attempts, seller fulfillment posture, and artifact storage remain legible together.",
+      items: [
+        {
+          label: "Payment reference",
+          value: paymentReference ?? "Not captured",
+          detail: providerStatus ?? "Provider-native status not captured"
+        },
+        {
+          label: "Seller fulfillment",
+          value: sellerFulfillment ? formatAtlasSellerFulfillmentStatusLabel(sellerFulfillment.fulfillmentStatus) : "Not recorded",
+          detail: sellerFulfillment?.note ?? "Seller fulfillment note has not been recorded yet."
+        },
+        {
+          label: "Artifact storage",
+          value: receipt.storageKey ?? "Pending",
+          detail: receipt.contentType ?? "Content type not captured"
+        },
+        {
+          label: "Attempt history",
+          value: receipt.request.payment?.attempts[0] ? `Attempt ${receipt.request.payment.attempts[0].attemptNumber}` : "No attempts recorded",
+          detail:
+            receipt.request.payment?.attempts[0]?.errorMessage ??
+            paymentReference ??
+            "Payment attempt evidence not captured yet"
+        }
+      ],
+      emptyTitle: "No receipt dependency data available",
+      emptyDescription: "Receipt dependency detail will appear once payment and fulfillment state exist."
+    },
+    timeline: {
+      eyebrow: "Lifecycle timeline",
+      title: "Request to receipt continuity",
+      description: "The receipt view keeps request, approval, payment, fulfillment, and final artifact timing in one investigation-friendly sequence.",
+      items: timeline,
+      emptyTitle: "No lifecycle timeline available",
+      emptyDescription: "Atlas will render request-to-receipt timing here once the lifecycle begins."
+    },
+    related: {
+      eyebrow: "Cross-linked records",
+      title: "Related lifecycle records",
+      description: "Atlas keeps the request, payment, and audit trail directly reachable from the receipt record.",
+      items: [
+        createRelatedItem(
+          receipt.request.id,
+          "Request record",
+          receipt.organization.name,
+          formatTokenLabel(receipt.request.status),
+          "request",
+          resolveStatusTone(receipt.request.status),
+          actor.workspace === "BUYER"
+            ? getAtlasWorkspaceDetailHref("BUYER", "requests", receipt.request.id)
+            : actor.workspace === "OPERATOR"
+              ? getAtlasWorkspaceDetailHref("OPERATOR", "transactions", receipt.request.id)
+              : null
+        ),
+        receipt.request.payment
+          ? createRelatedItem(
+              receipt.request.payment.id,
+              "Payment record",
+              receipt.request.payment.provider,
+              receipt.request.payment.reference ?? "No payment reference captured",
+              formatAtlasPaymentStatusLabel(receipt.request.payment.status),
+              resolveStatusTone(receipt.request.payment.status)
+            )
+          : null,
+        createRelatedItem(
+          receipt.id,
+          "Receipt artifact",
+          receipt.contentType ?? "Receipt content type not captured",
+          receipt.storageKey ?? "Storage key not captured",
+          formatAtlasReceiptStatusLabel(receipt.status),
+          resolveStatusTone(receipt.status)
+        ),
+        receipt.request.auditEvents[receipt.request.auditEvents.length - 1]
+          ? createRelatedItem(
+              receipt.request.auditEvents[receipt.request.auditEvents.length - 1].id,
+              "Latest audit event",
+              receipt.request.auditEvents[receipt.request.auditEvents.length - 1].eventType,
+              formatDateTime(receipt.request.auditEvents[receipt.request.auditEvents.length - 1].occurredAt),
+              "event",
+              "default",
+              actor.workspace === "OPERATOR"
+                ? getAtlasWorkspaceDetailHref("OPERATOR", "audit", receipt.request.auditEvents[receipt.request.auditEvents.length - 1].id)
+                : null
+            )
+          : null
+      ].filter(Boolean) as RecordListPanelItem[],
+      emptyTitle: "No related records available",
+      emptyDescription: "Linked request, payment, and audit records will appear here as the lifecycle deepens."
+    },
+    demoJourney: {
+      eyebrow: "Replayable demo flow",
+      title: "Related seeded scenarios",
+      description: "Atlas keeps the receipt walkthrough tied to the same seeded lifecycle story visible in buyer, seller, and operator flows.",
+      items: createAtlasFocusedDemoScenarioCards(receipt.request.id)
+    }
+  };
+}
+
 async function loadAuditDetailModel(
   actor: AtlasActorContext,
   surfaceKey: Extract<AtlasWorkspaceSurfaceKey, "activity" | "audit">,
@@ -1381,6 +1787,10 @@ export async function loadWorkspaceDetailModel(
 
   if (surfaceKey === "payments") {
     return loadPaymentDetailModel(actor, recordId);
+  }
+
+  if (surfaceKey === "receipts") {
+    return loadReceiptDetailModel(actor, recordId);
   }
 
   if (surfaceKey === "activity" || surfaceKey === "audit") {

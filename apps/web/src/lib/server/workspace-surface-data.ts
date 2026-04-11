@@ -1,11 +1,12 @@
 import {
+  deriveAtlasPaymentReconciliationState,
   formatAtlasPaymentReconciliationStateLabel,
   getAtlasWorkspaceSurfaceByKey,
   listAtlasApiDomainDefinitionsForWorkspace,
   listAtlasQueueDefinitionsForFamily,
   type AtlasWorkspaceSurfaceKey
 } from "@atlas/domain";
-import { prisma } from "@atlas/database";
+import { listReceiptRecords, prisma } from "@atlas/database";
 import type { AtlasActorContext } from "@atlas/auth";
 import type { OrganizationKind, PaymentStatus, SpendRequestStatus } from "@atlas/types";
 import type { RecordListPanelItem } from "@atlas/ui";
@@ -84,6 +85,18 @@ function resolvePaymentStatusTone(status: PaymentStatus): RecordListPanelItem["s
   return "default";
 }
 
+function resolveReceiptStatusTone(status: "PENDING" | "AVAILABLE" | "FAILED"): RecordListPanelItem["statusTone"] {
+  if (status === "AVAILABLE") {
+    return "success";
+  }
+
+  if (status === "FAILED") {
+    return "critical";
+  }
+
+  return "warning";
+}
+
 function extractSellerFulfillmentStatus(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
@@ -106,19 +119,12 @@ function derivePaymentReconciliationLabel(input: {
   sellerFulfillmentStatus: "DELIVERED" | "FAILED" | null;
 }) {
   const reconciliationState =
-    input.paymentStatus === "CAPTURED" && input.receiptStatus === "AVAILABLE"
-      ? "RECEIPT_AVAILABLE"
-      : input.paymentStatus === "CAPTURED" && input.sellerFulfillmentStatus !== "DELIVERED"
-        ? "AWAITING_SELLER_CONFIRMATION"
-        : input.paymentStatus === "AUTHORIZED"
-          ? "AWAITING_SETTLEMENT"
-          : input.paymentStatus === "FAILED"
-            ? "FAILED"
-            : input.paymentStatus === "VOIDED"
-              ? "CANCELED"
-              : input.requestStatus === "APPROVED"
-                ? "READY_TO_EXECUTE"
-                : "AWAITING_PAYMENT_METHOD";
+    deriveAtlasPaymentReconciliationState({
+      requestStatus: input.requestStatus,
+      paymentStatus: input.paymentStatus,
+      receiptStatus: input.receiptStatus as "PENDING" | "AVAILABLE" | "FAILED" | null,
+      sellerFulfillmentStatus: input.sellerFulfillmentStatus
+    });
 
   return formatAtlasPaymentReconciliationStateLabel(reconciliationState);
 }
@@ -317,6 +323,20 @@ async function loadBuyerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atlas
       href: getAtlasWorkspaceDetailHref("BUYER", "approvals", approval.id) ?? undefined,
       statusLabel: approval.status,
       statusTone: approval.status === "APPROVED" ? "success" : approval.status === "PENDING" ? "warning" : "critical"
+    }));
+  }
+
+  if (surfaceKey === "receipts") {
+    const receipts = await listReceiptRecords(actor);
+
+    return receipts.slice(0, 8).map((receipt) => ({
+      id: receipt.id,
+      title: receipt.requestTitle,
+      description: `${formatCurrencyMinor(receipt.amountMinor, receipt.currency)} · ${receipt.serviceCategory}`,
+      detail: `${formatAtlasPaymentReconciliationStateLabel(receipt.reconciliationState)} · ${receipt.paymentReference ?? "No payment reference"}`,
+      href: getAtlasWorkspaceDetailHref("BUYER", "receipts", receipt.id) ?? undefined,
+      statusLabel: receipt.status,
+      statusTone: resolveReceiptStatusTone(receipt.status)
     }));
   }
 
@@ -665,6 +685,20 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
     }));
   }
 
+  if (surfaceKey === "receipts") {
+    const receipts = await listReceiptRecords(actor);
+
+    return receipts.slice(0, 8).map((receipt) => ({
+      id: receipt.id,
+      title: receipt.requestTitle,
+      description: `${receipt.buyerOrganizationName} → ${receipt.sellerOrganizationName ?? "No seller"}`,
+      detail: `${formatAtlasPaymentReconciliationStateLabel(receipt.reconciliationState)} · ${receipt.paymentStatus ?? "No payment status"}`,
+      href: getAtlasWorkspaceDetailHref("OPERATOR", "receipts", receipt.id) ?? undefined,
+      statusLabel: receipt.status,
+      statusTone: resolveReceiptStatusTone(receipt.status)
+    }));
+  }
+
   if (surfaceKey === "approvals") {
     const approvals = await prisma.approval.findMany({
       include: {
@@ -747,7 +781,9 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
         description:
           surfaceKey === "overview"
             ? "The buyer overview now reads like a real control center: active agents, sellers, pending decisions, and seeded lifecycle pressure in one place."
-            : "This shell uses current seeded buyer data and the durable route structure that later buyer workflows will inherit.",
+            : surfaceKey === "receipts"
+              ? "The buyer receipt surface now keeps durable evidence, payment posture, and receipt availability legible without collapsing the underlying lifecycle."
+              : "This shell uses current seeded buyer data and the durable route structure that later buyer workflows will inherit.",
         emptyTitle: "No buyer records available",
         emptyDescription: getWorkspaceEmptyStateDescription("BUYER")
       },
@@ -824,10 +860,12 @@ function createSurfaceDescriptions(workspace: OrganizationKind, surfaceKey: Atla
     activity: {
       eyebrow: surfaceKey === "exceptions" ? "Exception posture" : "Recent lifecycle",
       title: surfaceKey === "audit" ? "Audit-heavy activity" : "Recent operator activity",
-      description:
-        surfaceKey === "overview"
-          ? "Operator activity keeps the demo grounded in real failures, pending decisions, and cross-entity oversight."
-          : "The operator shell is now anchored to real route boundaries for later exception handling and audit exploration.",
+        description:
+          surfaceKey === "overview"
+            ? "Operator activity keeps the demo grounded in real failures, pending decisions, and cross-entity oversight."
+          : surfaceKey === "receipts"
+            ? "The operator receipt surface keeps payment evidence and receipt availability visible across organizations for later investigation flows."
+            : "The operator shell is now anchored to real route boundaries for later exception handling and audit exploration.",
       emptyTitle: "No operator activity yet",
       emptyDescription: getWorkspaceEmptyStateDescription("OPERATOR")
     }

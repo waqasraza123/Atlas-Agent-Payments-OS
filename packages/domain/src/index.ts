@@ -53,6 +53,7 @@ export {
   isAtlasStripePaymentIntentStatus,
   normalizeAtlasStripePaymentStatus,
   resolveAtlasReceiptStatus,
+  summarizeAtlasReceiptEvidence,
   type AtlasPaymentAttemptRecord,
   type AtlasPaymentExecutionInput,
   type AtlasPaymentIntentRecord,
@@ -97,6 +98,7 @@ export type AtlasWorkspaceSurfaceKey =
   | "policies"
   | "requests"
   | "approvals"
+  | "receipts"
   | "activity"
   | "services"
   | "payments"
@@ -233,6 +235,15 @@ const buyerWorkspaceDefinition: AtlasWorkspaceDefinition = {
       status: "available"
     },
     {
+      key: "receipts",
+      label: "Receipts",
+      title: "Receipt records",
+      description: "Inspect the durable evidence records that tie request, payment, and seller delivery into one buyer-facing artifact.",
+      detail: "Phase 4 turns this into the buyer evidence surface.",
+      href: "/buyer/receipts",
+      status: "available"
+    },
+    {
       key: "activity",
       label: "Activity",
       title: "Buyer activity",
@@ -342,6 +353,15 @@ const operatorWorkspaceDefinition: AtlasWorkspaceDefinition = {
       description: "Inspect the shell that will later unify requests, approvals, payments, and receipts for operator review.",
       detail: "The current shell keeps the route and content structure durable.",
       href: "/operator/transactions",
+      status: "available"
+    },
+    {
+      key: "receipts",
+      label: "Receipts",
+      title: "Receipt review",
+      description: "Inspect durable evidence records across organizations so operator review can move from request posture into receipt truth.",
+      detail: "This becomes the operator receipt investigation surface in Phase 4.",
+      href: "/operator/receipts",
       status: "available"
     },
     {

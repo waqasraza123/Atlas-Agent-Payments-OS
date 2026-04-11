@@ -14,6 +14,10 @@ export function getAtlasWorkspaceDetailHref(
     return `/buyer/approvals/${recordId}`;
   }
 
+  if (workspace === "BUYER" && surfaceKey === "receipts") {
+    return `/buyer/receipts/${recordId}`;
+  }
+
   if (workspace === "BUYER" && surfaceKey === "activity") {
     return `/buyer/activity/${recordId}`;
   }
@@ -32,6 +36,10 @@ export function getAtlasWorkspaceDetailHref(
 
   if (workspace === "OPERATOR" && surfaceKey === "transactions") {
     return `/operator/transactions/${recordId}`;
+  }
+
+  if (workspace === "OPERATOR" && surfaceKey === "receipts") {
+    return `/operator/receipts/${recordId}`;
   }
 
   if (workspace === "OPERATOR" && surfaceKey === "audit") {

@@ -369,13 +369,32 @@ const databaseMock = vi.hoisted(() => ({
       requestId: "request-created",
       buyerOrganizationId: "org-buyer",
       buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      requestTitle: "Created Request",
+      requestStatus: "COMPLETED",
+      serviceCategory: "api-access",
       status: "AVAILABLE",
+      amountMinor: 2400,
+      currency: "USD",
       storageKey: "receipts/request-created.json",
       contentType: "application/json",
       paymentReference: "sim-request-created-captured-01",
       paymentStatus: "CAPTURED",
       sellerFulfillmentStatus: "DELIVERED",
       rail: "INTERNAL_SIMULATED",
+      providerStatus: "captured",
+      attemptCount: 1,
+      reconciliationState: "RECEIPT_AVAILABLE",
+      evidenceSummary: [
+        "Reconciliation Receipt Available",
+        "Payment Captured",
+        "Provider captured",
+        "Reference sim-request-created-captured-01",
+        "Artifact receipts/request-created.json",
+        "Attempts 1",
+        "Seller Delivered"
+      ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -385,13 +404,32 @@ const databaseMock = vi.hoisted(() => ({
     requestId: "request-created",
     buyerOrganizationId: "org-buyer",
     buyerOrganizationName: "Atlas Demo Buyer",
+    sellerOrganizationId: "org-seller",
+    sellerOrganizationName: "Atlas Demo Seller",
+    requestTitle: "Created Request",
+    requestStatus: "COMPLETED",
+    serviceCategory: "api-access",
     status: "AVAILABLE",
+    amountMinor: 2400,
+    currency: "USD",
     storageKey: "receipts/request-created.json",
     contentType: "application/json",
     paymentReference: "sim-request-created-captured-01",
     paymentStatus: "CAPTURED",
     sellerFulfillmentStatus: "DELIVERED",
     rail: "INTERNAL_SIMULATED",
+    providerStatus: "captured",
+    attemptCount: 1,
+    reconciliationState: "RECEIPT_AVAILABLE",
+    evidenceSummary: [
+      "Reconciliation Receipt Available",
+      "Payment Captured",
+      "Provider captured",
+      "Reference sim-request-created-captured-01",
+      "Artifact receipts/request-created.json",
+      "Attempts 1",
+      "Seller Delivered"
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }))
@@ -844,7 +882,9 @@ describe("atlas api e2e", () => {
     expect(listResponse.body.items).toEqual([
       expect.objectContaining({
         id: "receipt-1",
-        status: "AVAILABLE"
+        status: "AVAILABLE",
+        reconciliationState: "RECEIPT_AVAILABLE",
+        providerStatus: "captured"
       })
     ]);
 
@@ -853,7 +893,9 @@ describe("atlas api e2e", () => {
       id: "receipt-1",
       paymentReference: "sim-request-created-captured-01",
       paymentStatus: "CAPTURED",
-      rail: "INTERNAL_SIMULATED"
+      rail: "INTERNAL_SIMULATED",
+      sellerOrganizationName: "Atlas Demo Seller",
+      evidenceSummary: expect.arrayContaining(["Reconciliation Receipt Available", "Seller Delivered"])
     });
   });
 

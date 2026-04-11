@@ -77,13 +77,24 @@ export type AtlasReceiptRecord = {
   requestId: string;
   buyerOrganizationId: string;
   buyerOrganizationName: string;
+  sellerOrganizationId: string | null;
+  sellerOrganizationName: string | null;
+  requestTitle: string;
+  requestStatus: string;
+  serviceCategory: string;
   status: ReceiptStatus;
+  amountMinor: number;
+  currency: string;
   storageKey: string | null;
   contentType: string | null;
   paymentReference: string | null;
   paymentStatus: PaymentStatus | null;
   sellerFulfillmentStatus: AtlasPaymentSellerFulfillmentStatus;
   rail: PaymentRail | null;
+  providerStatus: string | null;
+  attemptCount: number;
+  reconciliationState: AtlasPaymentReconciliationState;
+  evidenceSummary: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -111,6 +122,14 @@ export function formatAtlasReceiptStatusLabel(status: ReceiptStatus) {
 
 export function formatAtlasPaymentReconciliationStateLabel(state: AtlasPaymentReconciliationState) {
   return state.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\w/g, (character) => character.toUpperCase());
+}
+
+function formatAtlasPaymentSellerFulfillmentLabel(status: AtlasPaymentSellerFulfillmentStatus) {
+  if (!status) {
+    return "Not recorded";
+  }
+
+  return status === "DELIVERED" ? "Delivered" : "Failed";
 }
 
 export function isAtlasPaymentExecutionEligible(requestStatus: string) {
@@ -256,6 +275,28 @@ export function isAtlasPaymentStatus(value: string): value is PaymentStatus {
 
 export function isAtlasReceiptStatus(value: string): value is ReceiptStatus {
   return receiptStatuses.includes(value as ReceiptStatus);
+}
+
+export function summarizeAtlasReceiptEvidence(input: {
+  reconciliationState: AtlasPaymentReconciliationState;
+  paymentReference: string | null;
+  providerStatus: string | null;
+  paymentStatus: PaymentStatus | null;
+  sellerFulfillmentStatus: AtlasPaymentSellerFulfillmentStatus;
+  storageKey: string | null;
+  attemptCount: number;
+}) {
+  const summary = [
+    `Reconciliation ${formatAtlasPaymentReconciliationStateLabel(input.reconciliationState)}`,
+    input.paymentStatus ? `Payment ${formatAtlasPaymentStatusLabel(input.paymentStatus)}` : null,
+    input.providerStatus ? `Provider ${input.providerStatus}` : null,
+    input.paymentReference ? `Reference ${input.paymentReference}` : null,
+    input.storageKey ? `Artifact ${input.storageKey}` : null,
+    input.attemptCount > 0 ? `Attempts ${input.attemptCount}` : null,
+    input.sellerFulfillmentStatus ? `Seller ${formatAtlasPaymentSellerFulfillmentLabel(input.sellerFulfillmentStatus)}` : null
+  ];
+
+  return summary.filter((value): value is string => Boolean(value));
 }
 
 export function isAtlasStripePaymentIntentStatus(value: string): value is AtlasStripePaymentIntentStatus {
