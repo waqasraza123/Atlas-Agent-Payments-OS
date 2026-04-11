@@ -10,6 +10,10 @@ describe("getAtlasWorkspaceDetailHref", () => {
     expect(getAtlasWorkspaceDetailHref("SELLER", "payments", "payment-1")).toBe("/seller/payments/payment-1");
   });
 
+  it("returns the correct seller service detail href", () => {
+    expect(getAtlasWorkspaceDetailHref("SELLER", "services", "service-1")).toBe("/seller/services/service-1");
+  });
+
   it("returns null for surfaces without detail routes", () => {
     expect(getAtlasWorkspaceDetailHref("BUYER", "policies", "policy-1")).toBeNull();
   });

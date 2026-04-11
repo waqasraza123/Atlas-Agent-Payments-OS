@@ -66,6 +66,7 @@ export type AtlasBuyerRequestRecord = {
   amountMinor: number;
   currency: string;
   serviceCategory: string;
+  serviceKey: string | null;
   status: string;
   approvalStatus: string | null;
   evaluationOutcome: string | null;
@@ -157,6 +158,7 @@ function mapRequestRecord(
     amountMinor: number;
     currency: string;
     serviceCategory: string;
+    serviceKey: string | null;
     status: string;
     createdAt: Date;
     evaluationResult: Prisma.JsonValue | null;
@@ -182,6 +184,7 @@ function mapRequestRecord(
     amountMinor: request.amountMinor,
     currency: request.currency,
     serviceCategory: request.serviceCategory,
+    serviceKey: request.serviceKey,
     status: request.status,
     approvalStatus: request.approval?.status ?? null,
     evaluationOutcome,
@@ -717,6 +720,7 @@ export async function createBuyerRequest(actor: AtlasActorContext, rawInput: unk
           agentId: agent.id,
           policyId: policy.id,
           sellerOrganizationId: sellerOrganization.id,
+          serviceKey: input.serviceKey ?? null,
           idempotencyKey: normalizedIdempotencyKey,
           title: input.title,
           purpose: input.purpose,

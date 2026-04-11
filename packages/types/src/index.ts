@@ -22,6 +22,15 @@ export type AgentStatus = (typeof agentStatuses)[number];
 export const policyStatuses = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
 export type PolicyStatus = (typeof policyStatuses)[number];
 
+export const serviceStatuses = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
+export type ServiceStatus = (typeof serviceStatuses)[number];
+
+export const serviceVisibilityModes = ["PRIVATE", "TRUSTED_BUYERS", "PUBLIC"] as const;
+export type ServiceVisibilityMode = (typeof serviceVisibilityModes)[number];
+
+export const servicePricingModels = ["FIXED"] as const;
+export type ServicePricingModel = (typeof servicePricingModels)[number];
+
 export const spendRequestStatuses = [
   "DRAFT",
   "SUBMITTED",
@@ -56,6 +65,18 @@ export function isMembershipRole(value: string): value is MembershipRole {
 
 export function isSpendRequestStatus(value: string): value is SpendRequestStatus {
   return spendRequestStatuses.includes(value as SpendRequestStatus);
+}
+
+export function isServiceStatus(value: string): value is ServiceStatus {
+  return serviceStatuses.includes(value as ServiceStatus);
+}
+
+export function isServiceVisibilityMode(value: string): value is ServiceVisibilityMode {
+  return serviceVisibilityModes.includes(value as ServiceVisibilityMode);
+}
+
+export function isServicePricingModel(value: string): value is ServicePricingModel {
+  return servicePricingModels.includes(value as ServicePricingModel);
 }
 
 export function isApprovalStatus(value: string): value is ApprovalStatus {

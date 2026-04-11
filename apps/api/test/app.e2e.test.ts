@@ -96,7 +96,100 @@ const databaseMock = vi.hoisted(() => ({
     decisionReason: "Within delegated approval threshold",
     createdAt: new Date().toISOString()
   })),
-  getBuyerApprovalRoleGuard: vi.fn(async () => undefined)
+  getBuyerApprovalRoleGuard: vi.fn(async () => undefined),
+  getSellerProfile: vi.fn(async () => ({
+    organizationId: "org-seller",
+    organizationSlug: "atlas-demo-seller",
+    organizationName: "Atlas Demo Seller",
+    serviceCount: 3,
+    publishedServiceCount: 2,
+    requestCount: 4,
+    activeBuyerCount: 2
+  })),
+  listSellerTeamMembers: vi.fn(async () => [
+    {
+      membershipId: "membership-seller",
+      userId: "user-seller",
+      userEmail: "seller@atlas.local",
+      userName: "Seller Admin",
+      role: "ADMIN"
+    }
+  ]),
+  listSellerRequests: vi.fn(async () => [
+    {
+      id: "seller-request-1",
+      buyerOrganizationId: "buyer-1",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      title: "Premium dataset unlock",
+      purpose: "Unlock a premium dataset.",
+      amountMinor: 8900,
+      currency: "USD",
+      serviceCategory: "digital-service",
+      serviceKey: "global-dataset-access",
+      matchedServiceId: "service-1",
+      matchedServiceName: "Global Dataset Access",
+      status: "SUBMITTED",
+      createdAt: new Date().toISOString()
+    }
+  ]),
+  listSellerServices: vi.fn(async () => [
+    {
+      id: "service-1",
+      organizationId: "org-seller",
+      key: "global-dataset-access",
+      name: "Global Dataset Access",
+      description: "Premium dataset service.",
+      category: "digital-service",
+      status: "PUBLISHED",
+      visibility: "TRUSTED_BUYERS",
+      pricingModel: "FIXED",
+      priceMinor: 8900,
+      currency: "USD",
+      linkedRequestCount: 2
+    }
+  ]),
+  getSellerService: vi.fn(async () => ({
+    id: "service-1",
+    organizationId: "org-seller",
+    key: "global-dataset-access",
+    name: "Global Dataset Access",
+    description: "Premium dataset service.",
+    category: "digital-service",
+    status: "PUBLISHED",
+    visibility: "TRUSTED_BUYERS",
+    pricingModel: "FIXED",
+    priceMinor: 8900,
+    currency: "USD",
+    linkedRequestCount: 2
+  })),
+  createSellerService: vi.fn(async () => ({
+    id: "service-created",
+    organizationId: "org-seller",
+    key: "seller-created-service",
+    name: "Created Seller Service",
+    description: "Created seller service description for API coverage.",
+    category: "api-access",
+    status: "DRAFT",
+    visibility: "PRIVATE",
+    pricingModel: "FIXED",
+    priceMinor: 1900,
+    currency: "USD",
+    linkedRequestCount: 0
+  })),
+  updateSellerService: vi.fn(async () => ({
+    id: "service-updated",
+    organizationId: "org-seller",
+    key: "seller-updated-service",
+    name: "Updated Seller Service",
+    description: "Updated seller service description for API coverage.",
+    category: "api-access",
+    status: "PUBLISHED",
+    visibility: "PUBLIC",
+    pricingModel: "FIXED",
+    priceMinor: 2400,
+    currency: "USD",
+    linkedRequestCount: 3
+  }))
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -114,7 +207,14 @@ vi.mock("@atlas/database", async () => {
     createBuyerRequest: databaseMock.createBuyerRequest,
     listBuyerApprovals: databaseMock.listBuyerApprovals,
     decideBuyerApproval: databaseMock.decideBuyerApproval,
-    getBuyerApprovalRoleGuard: databaseMock.getBuyerApprovalRoleGuard
+    getBuyerApprovalRoleGuard: databaseMock.getBuyerApprovalRoleGuard,
+    getSellerProfile: databaseMock.getSellerProfile,
+    listSellerTeamMembers: databaseMock.listSellerTeamMembers,
+    listSellerRequests: databaseMock.listSellerRequests,
+    listSellerServices: databaseMock.listSellerServices,
+    getSellerService: databaseMock.getSellerService,
+    createSellerService: databaseMock.createSellerService,
+    updateSellerService: databaseMock.updateSellerService
   };
 });
 
@@ -434,6 +534,110 @@ describe("atlas api e2e", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.message).toBe("The provided idempotency key is already in use.");
+  });
+
+  it("serves seller profile and team data for seller actors", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const [profileResponse, teamResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/sellers/profile").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer()).get("/sellers/team").set("x-atlas-local-session", "local-token")
+    ]);
+
+    expect(profileResponse.status).toBe(200);
+    expect(profileResponse.body.item).toMatchObject({
+      organizationSlug: "atlas-demo-seller",
+      publishedServiceCount: 2
+    });
+    expect(teamResponse.status).toBe(200);
+    expect(teamResponse.body.items).toEqual([
+      expect.objectContaining({
+        userEmail: "seller@atlas.local",
+        role: "ADMIN"
+      })
+    ]);
+  });
+
+  it("lists and creates seller services through protected seller routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const listResponse = await request(app.getHttpServer()).get("/services").set("x-atlas-local-session", "local-token");
+    const createResponse = await request(app.getHttpServer())
+      .post("/services")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        key: "seller-created-service",
+        name: "Created Seller Service",
+        description: "Created seller service description for API coverage and seller catalog management.",
+        category: "api-access",
+        status: "DRAFT",
+        visibility: "PRIVATE",
+        pricingModel: "FIXED",
+        priceMinor: 1900,
+        currency: "USD"
+      });
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "service-1",
+        key: "global-dataset-access"
+      })
+    ]);
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.item).toMatchObject({
+      id: "service-created",
+      key: "seller-created-service"
+    });
+  });
+
+  it("lists seller inbound requests through protected seller routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/sellers/requests")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        id: "seller-request-1",
+        matchedServiceName: "Global Dataset Access"
+      })
+    ]);
   });
 
   it("enforces operator role boundaries on actor routes", async () => {

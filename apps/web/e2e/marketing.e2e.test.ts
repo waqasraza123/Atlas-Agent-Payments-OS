@@ -1,7 +1,11 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const requestedPort = 3401 + Math.floor(Math.random() * 200);
+const webAppRoot = fileURLToPath(new URL("..", import.meta.url));
+const envFilePath = resolve(webAppRoot, "../../.env");
 
 async function waitForHttp(url: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -20,9 +24,21 @@ async function waitForHttp(url: string, timeoutMs: number) {
   return false;
 }
 
-function parseExistingServerUrl(logs: string) {
-  const match = logs.match(/Another next dev server is already running\.[\s\S]*?- Local:\s+(http:\/\/(?:localhost|127\.0\.0\.1):\d+)/);
-  return match?.[1] ?? null;
+function buildWebApp() {
+  const result = spawnSync(
+    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    ["exec", "dotenv", "-e", envFilePath, "--", "env", "NODE_ENV=production", "next", "build"],
+    {
+      cwd: webAppRoot,
+      encoding: "utf8"
+    }
+  );
+
+  if (result.status === 0) {
+    return;
+  }
+
+  throw new Error(`Could not build the web app for e2e.\n${result.stdout}\n${result.stderr}`);
 }
 
 describe("marketing e2e", () => {
@@ -31,11 +47,27 @@ describe("marketing e2e", () => {
   let activeWebUrl = `http://127.0.0.1:${requestedPort}`;
 
   beforeAll(async () => {
+    buildWebApp();
+
     serverProcess = spawn(
       process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-      ["exec", "next", "dev", "--hostname", "127.0.0.1", "--port", String(requestedPort)],
+      [
+        "exec",
+        "dotenv",
+        "-e",
+        envFilePath,
+        "--",
+        "env",
+        "NODE_ENV=production",
+        "next",
+        "start",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        String(requestedPort)
+      ],
       {
-        cwd: process.cwd(),
+        cwd: webAppRoot,
         stdio: "pipe"
       }
     );
@@ -47,21 +79,10 @@ describe("marketing e2e", () => {
       serverLogs += chunk.toString();
     });
 
-    const requestedStarted = await waitForHttp(activeWebUrl, 15000);
+    const requestedStarted = await waitForHttp(activeWebUrl, 30000);
 
     if (requestedStarted) {
       return;
-    }
-
-    const existingServerUrl = parseExistingServerUrl(serverLogs);
-
-    if (existingServerUrl) {
-      activeWebUrl = existingServerUrl.replace("localhost", "127.0.0.1");
-      const existingStarted = await waitForHttp(activeWebUrl, 30000);
-
-      if (existingStarted) {
-        return;
-      }
     }
 
     throw new Error(`Could not start or discover a usable web server.\n${serverLogs}`);
@@ -155,7 +176,44 @@ describe("marketing e2e", () => {
     expect(
       html.includes("Choose a seller session to continue") ||
         html.includes("Seller context could not be resolved") ||
-        html.includes("Seller workspace")
+        html.includes("Seller workflow baseline")
+    ).toBe(true);
+  });
+
+  it("serves the seller services route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/services`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Service catalog and pricing baseline") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the seller requests route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/requests`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Inbound request monitoring baseline") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the seller service detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/services/seller-service-demo-api`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Service detail") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Seller context could not be resolved")
     ).toBe(true);
   });
 

@@ -35,6 +35,22 @@ enum PolicyStatus {
   ARCHIVED
 }
 
+enum ServiceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ServiceVisibilityMode {
+  PRIVATE
+  TRUSTED_BUYERS
+  PUBLIC
+}
+
+enum ServicePricingModel {
+  FIXED
+}
+
 enum SpendRequestStatus {
   DRAFT
   SUBMITTED
@@ -92,6 +108,7 @@ model Organization {
   memberships    Membership[]
   agents         Agent[]
   policies       Policy[]
+  services       Service[]
   buyerRequests  SpendRequest[] @relation("BuyerOrganizationRequests")
   sellerRequests SpendRequest[] @relation("SellerOrganizationRequests")
   payments       Payment[]      @relation("BuyerOrganizationPayments")
@@ -150,6 +167,7 @@ model SpendRequest {
   agentId              String
   policyId             String?
   sellerOrganizationId String?
+  serviceKey           String?
   idempotencyKey       String?
   title                String
   purpose              String
@@ -172,7 +190,29 @@ model SpendRequest {
   updatedAt            DateTime           @updatedAt
 
   @@index([organizationId, status])
+  @@index([sellerOrganizationId, serviceKey])
   @@unique([organizationId, idempotencyKey])
+}
+
+model Service {
+  id              String                @id @default(cuid())
+  organizationId  String
+  key             String
+  name            String
+  description     String
+  category        String
+  status          ServiceStatus         @default(DRAFT)
+  visibility      ServiceVisibilityMode @default(PRIVATE)
+  pricingModel    ServicePricingModel   @default(FIXED)
+  priceMinor      Int
+  currency        String                @default("USD")
+  metadata        Json?
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId, status])
 }
 
 model Approval {

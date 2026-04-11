@@ -2,6 +2,9 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
   formatAtlasPolicyEvaluationOutcomeLabel,
+  formatAtlasServicePricingModelLabel,
+  formatAtlasServiceStatusLabel,
+  formatAtlasServiceVisibilityLabel,
   parseAtlasPolicyEvaluationResult,
   summarizeAtlasPolicyEvaluation,
   type AtlasWorkspaceSurfaceKey
@@ -88,11 +91,11 @@ function formatTokenLabel(value: string) {
 function resolveStatusTone(value: string): WorkspaceDetailModel["statusTone"] {
   const normalized = value.toUpperCase();
 
-  if (["COMPLETED", "APPROVED", "CAPTURED", "AVAILABLE", "ACTIVE"].includes(normalized)) {
+  if (["COMPLETED", "APPROVED", "CAPTURED", "AVAILABLE", "ACTIVE", "PUBLISHED"].includes(normalized)) {
     return "success";
   }
 
-  if (["FAILED", "REJECTED", "VOIDED", "CANCELED", "EXPIRED", "DISABLED"].includes(normalized)) {
+  if (["FAILED", "REJECTED", "VOIDED", "CANCELED", "EXPIRED", "DISABLED", "ARCHIVED"].includes(normalized)) {
     return "critical";
   }
 
@@ -204,6 +207,15 @@ async function loadRequestDetailModel(
   const metadata = typeof request.metadata === "object" && request.metadata !== null ? request.metadata : null;
   const evaluationResult = parseAtlasPolicyEvaluationResult(request.evaluationResult);
   const policyEvaluatedEvent = request.auditEvents.find((event) => event.eventType === "policy_evaluated");
+  const matchedSellerService =
+    request.sellerOrganizationId && request.serviceKey
+      ? await prisma.service.findFirst({
+          where: {
+            organizationId: request.sellerOrganizationId,
+            key: request.serviceKey
+          }
+        })
+      : null;
   const scenarioLabel =
     metadata && "scenarioLabel" in metadata && typeof metadata.scenarioLabel === "string"
       ? metadata.scenarioLabel
@@ -336,6 +348,11 @@ async function loadRequestDetailModel(
           : "Policy linkage arrives in later phases"
       },
       {
+        label: "Service key",
+        value: formatOptionalValue(request.serviceKey, "Not attached"),
+        detail: matchedSellerService?.name ?? "No seller service is currently matched to this request."
+      },
+      {
         label: "Created",
         value: formatDateTime(request.createdAt),
         detail: `Updated ${formatDateTime(request.updatedAt)}`
@@ -344,6 +361,11 @@ async function loadRequestDetailModel(
         label: "Idempotency key",
         value: formatOptionalValue(request.idempotencyKey, "Not provided"),
         detail: "Repeat-safe request creation remains explicit in the persisted request record."
+      },
+      {
+        label: "Scenario",
+        value: scenarioLabel,
+        detail: metadata && "scenarioKey" in metadata ? formatJsonMetadataValue(metadata.scenarioKey) : "Phase 1 demo seed"
       }
     ],
     analysis: {
@@ -393,10 +415,9 @@ async function loadRequestDetailModel(
       items: [
         {
           label: "Service",
-          value:
-            payload && "service" in payload && typeof payload.service === "string" ? payload.service : request.title,
+          value: matchedSellerService?.name ?? (payload && "service" in payload && typeof payload.service === "string" ? payload.service : request.title),
           detail: formatOptionalValue(
-            payload && "serviceKey" in payload && typeof payload.serviceKey === "string" ? payload.serviceKey : null,
+            request.serviceKey ?? (payload && "serviceKey" in payload && typeof payload.serviceKey === "string" ? payload.serviceKey : null),
             "Requested service or endpoint name from the request payload."
           )
         },
@@ -454,6 +475,19 @@ async function loadRequestDetailModel(
                 : null
             )
           : null,
+        matchedSellerService
+          ? createRelatedItem(
+              matchedSellerService.id,
+              "Matched seller service",
+              matchedSellerService.name,
+              matchedSellerService.key,
+              formatAtlasServiceStatusLabel(matchedSellerService.status),
+              resolveStatusTone(matchedSellerService.status),
+              actor.workspace === "SELLER"
+                ? getAtlasWorkspaceDetailHref("SELLER", "services", matchedSellerService.id)
+                : null
+            )
+          : null,
         request.payment
           ? createRelatedItem(
               request.payment.id,
@@ -487,6 +521,233 @@ async function loadRequestDetailModel(
       description:
         "Atlas now keeps the seeded walkthrough coherent by linking this detail view to the surrounding lifecycle scenarios in the buyer journey.",
       items: createAtlasFocusedDemoScenarioCards(request.id)
+    }
+  };
+}
+
+async function loadServiceDetailModel(actor: AtlasActorContext, recordId: string): Promise<WorkspaceDetailModel | null> {
+  if (actor.workspace !== "SELLER") {
+    return null;
+  }
+
+  const service = await prisma.service.findFirst({
+    where: {
+      id: recordId,
+      organizationId: actor.organization.id
+    }
+  });
+
+  if (!service) {
+    return null;
+  }
+
+  const [requests, auditEvents] = await Promise.all([
+    prisma.spendRequest.findMany({
+      where: {
+        sellerOrganizationId: actor.organization.id,
+        serviceKey: service.key
+      },
+      include: {
+        organization: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 8
+    }),
+    prisma.auditEvent.findMany({
+      where: {
+        organizationId: actor.organization.id,
+        targetType: "Service",
+        targetId: service.id
+      },
+      orderBy: {
+        occurredAt: "asc"
+      }
+    })
+  ]);
+
+  const distinctBuyerCount = new Set(requests.map((request) => request.organizationId)).size;
+
+  return {
+    eyebrow: "Service detail",
+    title: service.name,
+    description: `${actor.organization.name} service catalog · ${service.key}`,
+    statusLabel: formatAtlasServiceStatusLabel(service.status),
+    statusTone: resolveStatusTone(service.status),
+    metrics: [
+      {
+        label: "Price",
+        value: formatCurrencyMinor(service.priceMinor, service.currency),
+        detail: `${formatAtlasServicePricingModelLabel(service.pricingModel)} pricing baseline`
+      },
+      {
+        label: "Visibility",
+        value: formatAtlasServiceVisibilityLabel(service.visibility),
+        detail: "Current seller publication boundary for buyer access."
+      },
+      {
+        label: "Inbound requests",
+        value: String(requests.length),
+        detail: "Buyer requests currently aligned to this seller service key."
+      },
+      {
+        label: "Buyer organizations",
+        value: String(distinctBuyerCount),
+        detail: "Distinct buyer organizations already visible on this service."
+      }
+    ],
+    facts: [
+      {
+        label: "Service key",
+        value: service.key,
+        detail: "Stable service identifier used across seller routing and buyer request targeting."
+      },
+      {
+        label: "Category",
+        value: service.category,
+        detail: "Seller-defined service class used for cataloging and matching."
+      },
+      {
+        label: "Pricing model",
+        value: formatAtlasServicePricingModelLabel(service.pricingModel),
+        detail: `${formatCurrencyMinor(service.priceMinor, service.currency)} fixed price baseline`
+      },
+      {
+        label: "Visibility",
+        value: formatAtlasServiceVisibilityLabel(service.visibility),
+        detail: formatAtlasServiceStatusLabel(service.status)
+      },
+      {
+        label: "Created",
+        value: formatDateTime(service.createdAt),
+        detail: `Updated ${formatDateTime(service.updatedAt)}`
+      },
+      {
+        label: "Seller organization",
+        value: actor.organization.name,
+        detail: actor.organization.slug
+      }
+    ],
+    analysis: {
+      eyebrow: "Service publication posture",
+      title: "Catalog and demand posture",
+      description:
+        "Seller services need explicit publication, pricing, and buyer-demand context so the seller workflow can become operational before payout and webhook depth arrive.",
+      items: [
+        {
+          label: "Status",
+          value: formatAtlasServiceStatusLabel(service.status),
+          detail: "Publication state drives whether buyers should treat the service as live, draft, or archived."
+        },
+        {
+          label: "Description",
+          value: service.description,
+          detail: "Seller-defined service narrative used for catalog understanding and later API productization."
+        },
+        {
+          label: "Recent demand",
+          value: requests[0]?.title ?? "No inbound requests yet",
+          detail: requests[0]?.organization.name ?? "The service has not been targeted by buyer traffic yet."
+        },
+        {
+          label: "Request coverage",
+          value: `${requests.length} linked requests`,
+          detail: `${distinctBuyerCount} distinct buyer organizations currently reference this service key.`
+        }
+      ],
+      emptyTitle: "No service posture available",
+      emptyDescription: "Atlas will render seller catalog posture here once the service exists."
+    },
+    preview: {
+      eyebrow: "Request preview",
+      title: "Buyer demand linked to this service",
+      description:
+        "This preview keeps the service record connected to the buyer-side demand already flowing through the current seller organization.",
+      items: [
+        {
+          label: "Latest request",
+          value: requests[0]?.title ?? "No linked request yet",
+          detail: requests[0]?.organization.name ?? "No buyer organization has targeted this service yet."
+        },
+        {
+          label: "Latest amount",
+          value: requests[0] ? formatCurrencyMinor(requests[0].amountMinor, requests[0].currency) : "No demand yet",
+          detail: requests[0]?.serviceCategory ?? "No service category linked yet"
+        },
+        {
+          label: "Current status",
+          value: requests[0] ? formatTokenLabel(requests[0].status) : "No request lifecycle yet",
+          detail: requests[0]?.purpose ?? "Buyer request purpose will appear here when available."
+        },
+        {
+          label: "Pricing posture",
+          value: formatCurrencyMinor(service.priceMinor, service.currency),
+          detail: `${formatAtlasServiceVisibilityLabel(service.visibility)} · ${formatAtlasServiceStatusLabel(service.status)}`
+        }
+      ],
+      emptyTitle: "No service preview available",
+      emptyDescription: "Atlas will render linked buyer-demand context here once requests exist."
+    },
+    timeline: {
+      eyebrow: "Service timeline",
+      title: "Service and request activity",
+      description: "Seller services stay legible by keeping catalog updates and inbound buyer demand visible in one timeline.",
+      items: [
+        {
+          id: `${service.id}:created`,
+          label: "Service",
+          title: service.name,
+          description: service.description,
+          detail: formatDateTime(service.createdAt),
+          statusLabel: formatAtlasServiceStatusLabel(service.status),
+          tone: resolveStatusTone(service.status)
+        },
+        ...auditEvents.map((event) => ({
+          id: event.id,
+          label: "Audit",
+          title: formatTokenLabel(event.eventType),
+          description: `${event.targetType} · ${event.targetId}`,
+          detail: formatDateTime(event.occurredAt),
+          statusLabel: formatTokenLabel(event.actorType),
+          tone: "default" as const
+        })),
+        ...requests.map((request) => ({
+          id: `${request.id}:request`,
+          label: "Request",
+          title: request.title,
+          description: `${request.organization.name} · ${formatCurrencyMinor(request.amountMinor, request.currency)}`,
+          detail: formatDateTime(request.createdAt),
+          statusLabel: formatTokenLabel(request.status),
+          tone: resolveStatusTone(request.status)
+        }))
+      ],
+      emptyTitle: "No service activity available",
+      emptyDescription: "Atlas will render service and request activity here once linked records exist."
+    },
+    related: {
+      eyebrow: "Related records",
+      title: "Linked buyer demand",
+      description: "Seller services stay actionable when linked buyer requests remain directly reachable.",
+      items: requests.map((request) =>
+        createRelatedItem(
+          request.id,
+          request.title,
+          request.organization.name,
+          request.purpose,
+          formatTokenLabel(request.status),
+          resolveStatusTone(request.status),
+          getAtlasWorkspaceDetailHref("SELLER", "requests", request.id)
+        )
+      ),
+      emptyTitle: "No linked requests available",
+      emptyDescription: "Buyer requests that target this service will appear here."
+    },
+    demoJourney: {
+      eyebrow: "Replayable demo flow",
+      title: "Related seeded scenarios",
+      description: "Seller service detail stays connected to the broader seeded demo flow so two-sided lifecycle storytelling remains coherent.",
+      items: createAtlasFocusedDemoScenarioCards(requests[0]?.id ?? null)
     }
   };
 }
@@ -974,6 +1235,10 @@ export async function loadWorkspaceDetailModel(
 
   if (surfaceKey === "approvals") {
     return loadApprovalDetailModel(actor, recordId);
+  }
+
+  if (surfaceKey === "services") {
+    return loadServiceDetailModel(actor, recordId);
   }
 
   if (surfaceKey === "payments") {

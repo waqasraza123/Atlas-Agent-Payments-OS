@@ -8,6 +8,7 @@ import {
   atlasSeedPayments,
   atlasSeedPolicies,
   atlasSeedReceipts,
+  atlasSeedServices,
   atlasSeedSpendRequests,
   atlasSeedUsers,
   createAtlasSeedManifest
@@ -189,6 +190,7 @@ async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
         agentId: request.agentId,
         policyId: request.policyId,
         sellerOrganizationId,
+        serviceKey: request.serviceKey,
         idempotencyKey: request.idempotencyKey,
         title: request.title,
         purpose: request.purpose,
@@ -206,6 +208,7 @@ async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
         agentId: request.agentId,
         policyId: request.policyId,
         sellerOrganizationId,
+        serviceKey: request.serviceKey,
         idempotencyKey: request.idempotencyKey,
         title: request.title,
         purpose: request.purpose,
@@ -216,6 +219,49 @@ async function ensureSpendRequests(organizationIdsBySlug: Map<string, string>) {
         evaluationResult: request.evaluationResult ?? Prisma.JsonNull,
         requestPayload: request.requestPayload,
         metadata: request.metadata
+      }
+    });
+  }
+}
+
+async function ensureServices(organizationIdsBySlug: Map<string, string>) {
+  for (const service of atlasSeedServices) {
+    const organizationId = organizationIdsBySlug.get(service.organizationSlug);
+
+    if (!organizationId) {
+      throw new Error(`Missing seller organization for service ${service.id}`);
+    }
+
+    await prisma.service.upsert({
+      where: {
+        id: service.id
+      },
+      update: {
+        organizationId,
+        key: service.key,
+        name: service.name,
+        description: service.description,
+        category: service.category,
+        status: service.status,
+        visibility: service.visibility,
+        pricingModel: service.pricingModel,
+        priceMinor: service.priceMinor,
+        currency: service.currency,
+        metadata: service.metadata ?? Prisma.JsonNull
+      },
+      create: {
+        id: service.id,
+        organizationId,
+        key: service.key,
+        name: service.name,
+        description: service.description,
+        category: service.category,
+        status: service.status,
+        visibility: service.visibility,
+        pricingModel: service.pricingModel,
+        priceMinor: service.priceMinor,
+        currency: service.currency,
+        metadata: service.metadata ?? Prisma.JsonNull
       }
     });
   }
@@ -366,6 +412,7 @@ async function main() {
   await ensureMemberships(lookups);
   await ensurePolicies(lookups.organizationIdsBySlug);
   await ensureAgents(lookups.organizationIdsBySlug);
+  await ensureServices(lookups.organizationIdsBySlug);
   await ensureSpendRequests(lookups.organizationIdsBySlug);
   await ensureApprovals(lookups.userIdsByEmail);
   await ensurePayments(lookups.organizationIdsBySlug);

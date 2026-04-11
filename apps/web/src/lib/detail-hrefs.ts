@@ -22,6 +22,10 @@ export function getAtlasWorkspaceDetailHref(
     return `/seller/requests/${recordId}`;
   }
 
+  if (workspace === "SELLER" && surfaceKey === "services") {
+    return `/seller/services/${recordId}`;
+  }
+
   if (workspace === "SELLER" && surfaceKey === "payments") {
     return `/seller/payments/${recordId}`;
   }
