@@ -17,6 +17,7 @@
     "test": "node -e \"process.stdout.write('Database tests not added in phase 0\\n')\""
   },
   "dependencies": {
+    "@atlas/auth": "workspace:*",
     "@prisma/client": "^6.0.0"
   },
   "devDependencies": {

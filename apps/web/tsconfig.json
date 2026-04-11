@@ -1,6 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@atlas/auth": ["../../packages/auth/src/index.ts"],
+      "@atlas/config": ["../../packages/config/src/index.ts"],
+      "@atlas/database": ["../../packages/database/src/index.ts"],
+      "@atlas/domain": ["../../packages/domain/src/index.ts"],
+      "@atlas/types": ["../../packages/types/src/index.ts"],
+      "@atlas/ui": ["../../packages/ui/src/index.ts"],
+      "@/*": ["./src/*"]
+    },
     "plugins": [
       {
         "name": "next"

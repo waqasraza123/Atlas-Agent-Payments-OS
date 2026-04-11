@@ -12,7 +12,10 @@
     "test": "node -e \"process.stdout.write('Web tests not added in phase 0\\n')\""
   },
   "dependencies": {
+    "@atlas/auth": "workspace:*",
     "@atlas/config": "workspace:*",
+    "@atlas/database": "workspace:*",
+    "@atlas/types": "workspace:*",
     "@atlas/ui": "workspace:*",
     "next": "^16.2.3",
     "react": "^19.2.0",

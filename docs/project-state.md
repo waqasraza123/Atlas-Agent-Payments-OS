@@ -13,6 +13,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `packages/config`, `types`, `ui`, `database`, `auth`, and `domain` as shared internal packages
 - PostgreSQL, Redis, MinIO, and MailHog defined in Docker Compose for local infra only
 - Prisma schema and committed initial migration under `packages/database/prisma`
+- Local-first session selection now exists through a shared auth contract, HTTP cookie in the web app, and a shared request header contract in the API
+- Buyer, seller, and operator routes now use actor-aware workspace shells instead of placeholder-only panels
 - Durable planning now covers both the focused v1 execution track and the longer-term platform blueprint through `docs/product/master-product-spec.md`, `docs/architecture/master-execution-plan.md`, the blueprint docs under `docs/architecture`, and the detailed phase docs under `docs/backlog`
 
 ## Non-Negotiable Rules
@@ -52,6 +54,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - NestJS API bootstrap with `GET /health`
 - BullMQ worker bootstrap and placeholder queue
 - Prisma schema, generated client path, initial migration, and seed script
+- Shared local-first auth and actor-context contract in `@atlas/auth`
+- Role-aware web workspace gating and shared workspace shell primitives
+- API actor extraction baseline with protected actor routes
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -64,12 +69,13 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Git pre-push verification is repo-versioned under `.githooks/pre-push`
 - Repository license is Apache-2.0
 - Legacy summary planning docs remain only as companions and point back to the master planning system
-- The current active execution slice after planning is Phase 0.2 auth and actor-context baseline
+- The current active execution slice after planning is Phase 0.3 shared workspace shell hardening and Phase 0.4 API domain skeletons
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
+- Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 
 ## Deferred / Not Yet Implemented
 
-- Real auth provider and organization session flows
+- Real auth provider and organization session flows beyond the local-first baseline
 - Policy versioning and policy evaluation engine
 - Request and approval lifecycle endpoints
 - Seller service management workflows
@@ -81,7 +87,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 ## Risks / Watchouts
 
 - The repo is still in Phase 0, so domain modules exist more in docs and schema than in working API features
-- Local verification depends on Docker Desktop being up and the repo-owned Postgres instance owning port `5432`
+- Local actor resolution and seeding depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for seed and protected actor lookups
 - `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
@@ -95,7 +101,10 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
+- `pnpm db:seed`
 - `pnpm verify:push`
 - `pnpm dev:api`
 - `curl -s http://localhost:4000/health`
+- `curl -i -H "x-atlas-local-session: <token>" http://localhost:4000/actor/context`
+- `pnpm --filter @atlas/web exec dotenv -e ../../.env -- next dev --port 3101`
 - `pnpm dev:worker`

@@ -11,7 +11,10 @@
     "test": "node -e \"process.stdout.write('API tests not added in phase 0\\n')\""
   },
   "dependencies": {
+    "@atlas/auth": "workspace:*",
     "@atlas/config": "workspace:*",
+    "@atlas/database": "workspace:*",
+    "@atlas/types": "workspace:*",
     "@nestjs/common": "^11.1.18",
     "@nestjs/core": "^11.1.18",
     "@nestjs/platform-express": "^11.1.18",

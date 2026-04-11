@@ -92,6 +92,8 @@ Expected outputs:
 - actor context helpers
 - role and workspace guard utilities
 - API request actor extraction baseline
+- shared local session transport through the web cookie and API request header
+- seeded memberships that back the local-first actor profiles
 
 ### Phase 0.3 — real product shell
 
