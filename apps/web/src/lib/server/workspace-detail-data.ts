@@ -1,7 +1,10 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
+  formatAtlasPaymentRailLabel,
+  formatAtlasPaymentStatusLabel,
   formatAtlasPolicyEvaluationOutcomeLabel,
+  formatAtlasReceiptStatusLabel,
   formatAtlasSellerFulfillmentStatusLabel,
   formatAtlasServicePricingModelLabel,
   formatAtlasServiceStatusLabel,
@@ -951,6 +954,11 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
   const include = {
     organization: true,
     sellerOrganization: true,
+    attempts: {
+      orderBy: {
+        attemptNumber: "desc" as const
+      }
+    },
     request: {
       include: {
         organization: true,
@@ -1003,18 +1011,18 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
     ...requestDetail,
     eyebrow: "Payment detail",
     title: `${payment.request.title} payment`,
-    description: `${payment.organization.name} → ${payment.sellerOrganization?.name ?? "No seller linked"} · ${payment.provider}`,
-    statusLabel: formatTokenLabel(payment.status),
+    description: `${payment.organization.name} → ${payment.sellerOrganization?.name ?? "No seller linked"} · ${formatAtlasPaymentRailLabel(payment.rail)}`,
+    statusLabel: formatAtlasPaymentStatusLabel(payment.status),
     statusTone: resolveStatusTone(payment.status),
     metrics: [
       {
         label: "Payment status",
-        value: formatTokenLabel(payment.status),
+        value: formatAtlasPaymentStatusLabel(payment.status),
         detail: "Current seeded settlement posture for the payment record."
       },
       {
         label: "Rail",
-        value: formatTokenLabel(payment.provider),
+        value: formatAtlasPaymentRailLabel(payment.rail),
         detail: payment.reference ?? "No external payment reference recorded"
       },
       {
@@ -1024,7 +1032,7 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       },
       {
         label: "Receipt",
-        value: payment.request.receipt ? formatTokenLabel(payment.request.receipt.status) : "Not generated",
+        value: payment.request.receipt ? formatAtlasReceiptStatusLabel(payment.request.receipt.status) : "Not generated",
         detail: payment.request.receipt?.storageKey ?? "Receipt evidence not attached yet"
       }
     ],
@@ -1037,6 +1045,11 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
           label: "Reference",
           value: payment.reference ?? "No external reference",
           detail: "Current seeded reference used for demo evidence."
+        },
+        {
+          label: "Latest attempt",
+          value: payment.attempts[0] ? `Attempt ${payment.attempts[0].attemptNumber}` : "No attempts recorded",
+          detail: payment.attempts[0]?.reference ?? "Atlas will append immutable attempts here during execution."
         },
         {
           label: "Buyer organization",
@@ -1056,6 +1069,18 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       ],
       emptyTitle: "No payment evidence available",
       emptyDescription: "Atlas will render settlement evidence here when the payment record exists."
+    },
+    analysis: {
+      eyebrow: "Attempt history",
+      title: "Immutable payment attempts",
+      description: "Each payment attempt stays append-only so retries, failures, and later rail evidence remain auditable.",
+      items: payment.attempts.slice(0, 4).map((attempt) => ({
+        label: `Attempt ${attempt.attemptNumber}`,
+        value: formatAtlasPaymentStatusLabel(attempt.status),
+        detail: attempt.errorMessage ?? attempt.reference ?? "No attempt evidence captured"
+      })),
+      emptyTitle: "No payment attempts recorded",
+      emptyDescription: "Atlas will render immutable payment attempts here once execution begins."
     },
     demoJourney: requestDetail.demoJourney
   };

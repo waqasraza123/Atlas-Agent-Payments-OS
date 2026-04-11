@@ -1,3 +1,4 @@
+import { BuyerPaymentExecutionPanel } from "@/components/buyer-payment-execution-panel";
 import { WorkspaceDetailRoute } from "@/components/workspace-detail-route";
 import { readWorkflowFeedback } from "@/lib/workflow-feedback";
 
@@ -17,6 +18,8 @@ export default async function BuyerRequestDetailPage({ params, searchParams }: B
       surfaceKey="requests"
       recordId={requestId}
       feedback={readWorkflowFeedback(resolvedSearchParams)}
-    />
+    >
+      <BuyerPaymentExecutionPanel requestId={requestId} />
+    </WorkspaceDetailRoute>
   );
 }

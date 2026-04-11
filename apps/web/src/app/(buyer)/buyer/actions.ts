@@ -5,9 +5,11 @@ import {
   createBuyerPolicy,
   createBuyerRequest,
   decideBuyerApproval,
+  executeBuyerPayment,
   updateBuyerAgent,
   updateBuyerPolicy,
-  AtlasBuyerWorkflowError
+  AtlasBuyerWorkflowError,
+  AtlasPaymentsWorkflowError
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -58,7 +60,7 @@ async function requireBuyerActor() {
 }
 
 function normalizeActionError(error: unknown) {
-  if (error instanceof AtlasBuyerWorkflowError) {
+  if (error instanceof AtlasBuyerWorkflowError || error instanceof AtlasPaymentsWorkflowError) {
     return error.message;
   }
 
@@ -222,5 +224,33 @@ export async function decideBuyerApprovalAction(approvalId: string, formData: Fo
     );
   } catch (error) {
     redirectWithFeedback("/buyer/approvals", "Approval decision failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function executeBuyerPaymentAction(requestId: string, formData: FormData) {
+  const actor = await requireBuyerActor();
+
+  try {
+    await executeBuyerPayment(actor, requestId, {
+      rail: toTextValue(formData.get("rail")) || "INTERNAL_SIMULATED"
+    });
+    revalidatePath("/buyer");
+    revalidatePath("/buyer/requests");
+    revalidatePath("/seller");
+    revalidatePath("/seller/requests");
+    revalidatePath("/seller/payments");
+    redirectWithFeedback(
+      getAtlasWorkspaceDetailHref("BUYER", "requests", requestId) ?? "/buyer/requests",
+      "Payment executed",
+      "Atlas recorded a new immutable payment attempt and refreshed receipt truth from the latest lifecycle state.",
+      "default"
+    );
+  } catch (error) {
+    redirectWithFeedback(
+      getAtlasWorkspaceDetailHref("BUYER", "requests", requestId) ?? "/buyer/requests",
+      "Payment execution failed",
+      normalizeActionError(error),
+      "error"
+    );
   }
 }

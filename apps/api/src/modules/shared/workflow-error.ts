@@ -1,4 +1,4 @@
-import { AtlasBuyerWorkflowError, AtlasSellerWorkflowError } from "@atlas/database";
+import { AtlasBuyerWorkflowError, AtlasPaymentsWorkflowError, AtlasSellerWorkflowError } from "@atlas/database";
 import {
   BadRequestException,
   ConflictException,
@@ -22,7 +22,15 @@ export function rethrowSellerWorkflowError(error: unknown): never {
   rethrowAtlasWorkflowError(error);
 }
 
-function rethrowAtlasWorkflowError(error: AtlasBuyerWorkflowError | AtlasSellerWorkflowError): never {
+export function rethrowPaymentsWorkflowError(error: unknown): never {
+  if (!(error instanceof AtlasPaymentsWorkflowError)) {
+    throw error;
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
+function rethrowAtlasWorkflowError(error: AtlasBuyerWorkflowError | AtlasSellerWorkflowError | AtlasPaymentsWorkflowError): never {
   if (error.code === "bad_request") {
     throw new BadRequestException(error.message);
   }

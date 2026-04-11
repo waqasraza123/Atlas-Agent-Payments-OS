@@ -49,6 +49,9 @@ export type ApprovalStatus = (typeof approvalStatuses)[number];
 export const paymentStatuses = ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED"] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
+export const paymentRails = ["INTERNAL_SIMULATED", "STRIPE"] as const;
+export type PaymentRail = (typeof paymentRails)[number];
+
 export const receiptStatuses = ["PENDING", "AVAILABLE", "FAILED"] as const;
 export type ReceiptStatus = (typeof receiptStatuses)[number];
 
@@ -85,6 +88,10 @@ export function isApprovalStatus(value: string): value is ApprovalStatus {
 
 export function isPaymentStatus(value: string): value is PaymentStatus {
   return paymentStatuses.includes(value as PaymentStatus);
+}
+
+export function isPaymentRail(value: string): value is PaymentRail {
+  return paymentRails.includes(value as PaymentRail);
 }
 
 export function isReceiptStatus(value: string): value is ReceiptStatus {

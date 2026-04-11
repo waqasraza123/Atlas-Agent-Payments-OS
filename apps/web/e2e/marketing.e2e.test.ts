@@ -204,6 +204,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the seller payments route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/payments`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Seller-side lifecycle evidence") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller service detail route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller/services/seller-service-demo-api`);
     const html = await response.text();
@@ -225,6 +237,19 @@ describe("marketing e2e", () => {
     expect(
       html.includes("Fulfillment outcome") ||
         html.includes("Request detail") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the seller payment detail route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/payments/phase-0-request-completed`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Payment detail") ||
         html.includes("Choose a seller session to continue") ||
         html.includes("Record not available in this workspace") ||
         html.includes("Seller context could not be resolved")

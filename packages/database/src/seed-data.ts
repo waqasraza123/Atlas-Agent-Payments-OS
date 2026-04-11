@@ -6,6 +6,7 @@ import type {
   AuditActorType,
   MembershipRole,
   OrganizationKind,
+  PaymentRail,
   PaymentStatus,
   PolicyStatus,
   ServicePricingModel,
@@ -100,12 +101,24 @@ export type AtlasSeedPaymentDefinition = {
   requestId: string;
   organizationSlug: string;
   sellerOrganizationSlug: string | null;
+  rail: PaymentRail;
   provider: string;
   reference: string | null;
   status: PaymentStatus;
   amountMinor: number;
   currency: string;
   metadata: AtlasSeedJsonValue;
+};
+
+export type AtlasSeedPaymentAttemptDefinition = {
+  requestId: string;
+  attemptNumber: number;
+  rail: PaymentRail;
+  status: PaymentStatus;
+  reference: string | null;
+  evidence: AtlasSeedJsonValue | null;
+  errorCode: string | null;
+  errorMessage: string | null;
 };
 
 export type AtlasSeedReceiptDefinition = {
@@ -846,6 +859,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-approved",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0001",
     status: "PENDING",
@@ -859,6 +873,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-executing",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0002",
     status: "AUTHORIZED",
@@ -872,6 +887,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-completed",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0003",
     status: "CAPTURED",
@@ -885,6 +901,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-failed",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0004",
     status: "FAILED",
@@ -898,6 +915,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-canceled",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "lighthouse-data",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0005",
     status: "VOIDED",
@@ -911,6 +929,7 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     requestId: "phase-0-request-northstar-completed",
     organizationSlug: "northstar-research",
     sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "INTERNAL_SIMULATED",
     provider: "simulated",
     reference: "sim-pay-0006",
     status: "CAPTURED",
@@ -919,6 +938,87 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     metadata: {
       scenarioKey: "secondary-buyer-success"
     }
+  }
+];
+
+export const atlasSeedPaymentAttempts: AtlasSeedPaymentAttemptDefinition[] = [
+  {
+    requestId: "phase-0-request-approved",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "PENDING",
+    reference: "sim-pay-0001",
+    evidence: {
+      scenarioKey: "approved-awaiting-execution",
+      note: "Seeded payment intent exists and is awaiting execution."
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
+    requestId: "phase-0-request-executing",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "AUTHORIZED",
+    reference: "sim-pay-0002",
+    evidence: {
+      scenarioKey: "executing-with-seller-confirmation-pending",
+      note: "Seeded payment authorized while seller confirmation remains pending."
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
+    requestId: "phase-0-request-completed",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "CAPTURED",
+    reference: "sim-pay-0003",
+    evidence: {
+      scenarioKey: "completed-success",
+      note: "Seeded payment captured successfully."
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
+    requestId: "phase-0-request-failed",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "FAILED",
+    reference: "sim-pay-0004",
+    evidence: {
+      scenarioKey: "payment-failed",
+      failureReason: "Seeded simulated payment failure"
+    },
+    errorCode: "SIMULATED_SETTLEMENT_FAILURE",
+    errorMessage: "Seeded simulated rail rejected the payment attempt."
+  },
+  {
+    requestId: "phase-0-request-canceled",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "VOIDED",
+    reference: "sim-pay-0005",
+    evidence: {
+      scenarioKey: "approval-expired",
+      note: "Seeded approval expired before payment completion."
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
+    requestId: "phase-0-request-northstar-completed",
+    attemptNumber: 1,
+    rail: "INTERNAL_SIMULATED",
+    status: "CAPTURED",
+    reference: "sim-pay-0006",
+    evidence: {
+      scenarioKey: "secondary-buyer-success",
+      note: "Seeded secondary buyer payment captured successfully."
+    },
+    errorCode: null,
+    errorMessage: null
   }
 ];
 
@@ -1182,11 +1282,13 @@ export function createAtlasSeedManifest() {
     requests: atlasSeedSpendRequests.length,
     approvals: atlasSeedApprovals.length,
     payments: atlasSeedPayments.length,
+    paymentAttempts: atlasSeedPaymentAttempts.length,
     receipts: atlasSeedReceipts.length,
     auditEvents: atlasSeedAuditEvents.length,
     requestStatusesCovered: createSortedUniqueValues(atlasSeedSpendRequests.map((request) => request.status)),
     approvalStatusesCovered: createSortedUniqueValues(atlasSeedApprovals.map((approval) => approval.status)),
     paymentStatusesCovered: createSortedUniqueValues(atlasSeedPayments.map((payment) => payment.status)),
+    paymentAttemptStatusesCovered: createSortedUniqueValues(atlasSeedPaymentAttempts.map((attempt) => attempt.status)),
     receiptStatusesCovered: createSortedUniqueValues(atlasSeedReceipts.map((receipt) => receipt.status)),
     localSessionProfileCoverage: atlasLocalSessionProfileList.map((profile) => ({
       profileKey: profile.key,

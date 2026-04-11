@@ -5,6 +5,7 @@ import {
   atlasSeedApprovals,
   atlasSeedAuditEvents,
   atlasSeedMemberships,
+  atlasSeedPaymentAttempts,
   atlasSeedPayments,
   atlasSeedReceipts,
   atlasSeedScenarioKey,
@@ -21,6 +22,7 @@ describe("atlas seed data", () => {
     expect(manifest.requestStatusesCovered).toEqual([...spendRequestStatuses].sort());
     expect(manifest.approvalStatusesCovered).toEqual([...approvalStatuses].sort());
     expect(manifest.paymentStatusesCovered).toEqual([...paymentStatuses].sort());
+    expect(manifest.paymentAttemptStatusesCovered).toEqual([...paymentStatuses].sort());
     expect(manifest.receiptStatusesCovered).toEqual([...receiptStatuses].sort());
   });
 
@@ -47,7 +49,13 @@ describe("atlas seed data", () => {
 
     expect(atlasSeedApprovals.every((approval) => requestIds.has(approval.requestId))).toBe(true);
     expect(atlasSeedPayments.every((payment) => requestIds.has(payment.requestId))).toBe(true);
+    expect(atlasSeedPaymentAttempts.every((attempt) => requestIds.has(attempt.requestId))).toBe(true);
     expect(atlasSeedReceipts.every((receipt) => requestIds.has(receipt.requestId))).toBe(true);
+    expect(
+      atlasSeedPaymentAttempts.every((attempt) =>
+        atlasSeedPayments.some((payment) => payment.requestId === attempt.requestId && payment.rail === attempt.rail)
+      )
+    ).toBe(true);
   });
 
   it("keeps audit history tied to scenario-driven request lifecycles", () => {

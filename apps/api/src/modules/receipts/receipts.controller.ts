@@ -1,5 +1,5 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Param, UseGuards } from "@nestjs/common";
 import { CurrentActor, RequireWorkspaces } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { ReceiptsService } from "./receipts.service";
@@ -15,5 +15,15 @@ export class ReceiptsController {
   @Get("summary")
   summary(@CurrentActor() actor: AtlasActorContext) {
     return this.receiptsService.getSummary(actor);
+  }
+
+  @Get()
+  list(@CurrentActor() actor: AtlasActorContext) {
+    return this.receiptsService.list(actor);
+  }
+
+  @Get(":receiptId")
+  get(@CurrentActor() actor: AtlasActorContext, @Param("receiptId") receiptId: string) {
+    return this.receiptsService.get(actor, receiptId);
   }
 }

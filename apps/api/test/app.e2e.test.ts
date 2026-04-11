@@ -6,7 +6,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { ActorResolutionService } from "../src/modules/actor/actor.service";
-import { AtlasBuyerWorkflowError } from "@atlas/database";
+import { AtlasBuyerWorkflowError, AtlasPaymentsWorkflowError } from "@atlas/database";
 
 const databaseMock = vi.hoisted(() => ({
   listBuyerAgents: vi.fn(async () => []),
@@ -237,6 +237,127 @@ const databaseMock = vi.hoisted(() => ({
       note: "The seller delivered the dataset unlock and recorded the outcome.",
       recordedAt: new Date().toISOString()
     }
+  })),
+  listPaymentIntents: vi.fn(async () => [
+    {
+      id: "payment-1",
+      requestId: "request-created",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      rail: "INTERNAL_SIMULATED",
+      status: "CAPTURED",
+      provider: "simulated",
+      reference: "sim-request-created-captured-01",
+      amountMinor: 2400,
+      currency: "USD",
+      latestAttemptNumber: 1,
+      latestAttemptStatus: "CAPTURED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      attempts: [
+        {
+          id: "attempt-1",
+          paymentId: "payment-1",
+          attemptNumber: 1,
+          rail: "INTERNAL_SIMULATED",
+          status: "CAPTURED",
+          reference: "sim-request-created-captured-01",
+          errorCode: null,
+          errorMessage: null,
+          createdAt: new Date().toISOString()
+        }
+      ]
+    }
+  ]),
+  getPaymentIntent: vi.fn(async () => ({
+    id: "payment-1",
+    requestId: "request-created",
+    buyerOrganizationId: "org-buyer",
+    buyerOrganizationName: "Atlas Demo Buyer",
+    sellerOrganizationId: "org-seller",
+    sellerOrganizationName: "Atlas Demo Seller",
+    rail: "INTERNAL_SIMULATED",
+    status: "CAPTURED",
+    provider: "simulated",
+    reference: "sim-request-created-captured-01",
+    amountMinor: 2400,
+    currency: "USD",
+    latestAttemptNumber: 1,
+    latestAttemptStatus: "CAPTURED",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    attempts: [
+      {
+        id: "attempt-1",
+        paymentId: "payment-1",
+        attemptNumber: 1,
+        rail: "INTERNAL_SIMULATED",
+        status: "CAPTURED",
+        reference: "sim-request-created-captured-01",
+        errorCode: null,
+        errorMessage: null,
+        createdAt: new Date().toISOString()
+      }
+    ]
+  })),
+  executeBuyerPayment: vi.fn(async () => ({
+    id: "payment-executed",
+    requestId: "request-created",
+    buyerOrganizationId: "org-buyer",
+    buyerOrganizationName: "Atlas Demo Buyer",
+    sellerOrganizationId: "org-seller",
+    sellerOrganizationName: "Atlas Demo Seller",
+    rail: "INTERNAL_SIMULATED",
+    status: "CAPTURED",
+    provider: "simulated",
+    reference: "sim-request-created-captured-01",
+    amountMinor: 2400,
+    currency: "USD",
+    latestAttemptNumber: 1,
+    latestAttemptStatus: "CAPTURED",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    attempts: [
+      {
+        id: "attempt-1",
+        paymentId: "payment-executed",
+        attemptNumber: 1,
+        rail: "INTERNAL_SIMULATED",
+        status: "CAPTURED",
+        reference: "sim-request-created-captured-01",
+        errorCode: null,
+        errorMessage: null,
+        createdAt: new Date().toISOString()
+      }
+    ]
+  })),
+  listReceiptRecords: vi.fn(async () => [
+    {
+      id: "receipt-1",
+      requestId: "request-created",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      status: "AVAILABLE",
+      storageKey: "receipts/request-created.json",
+      contentType: "application/json",
+      paymentReference: "sim-request-created-captured-01",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ]),
+  getReceiptRecord: vi.fn(async () => ({
+    id: "receipt-1",
+    requestId: "request-created",
+    buyerOrganizationId: "org-buyer",
+    buyerOrganizationName: "Atlas Demo Buyer",
+    status: "AVAILABLE",
+    storageKey: "receipts/request-created.json",
+    contentType: "application/json",
+    paymentReference: "sim-request-created-captured-01",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   }))
 }));
 
@@ -264,7 +385,12 @@ vi.mock("@atlas/database", async () => {
     getSellerService: databaseMock.getSellerService,
     createSellerService: databaseMock.createSellerService,
     updateSellerService: databaseMock.updateSellerService,
-    recordSellerRequestFulfillment: databaseMock.recordSellerRequestFulfillment
+    recordSellerRequestFulfillment: databaseMock.recordSellerRequestFulfillment,
+    listPaymentIntents: databaseMock.listPaymentIntents,
+    getPaymentIntent: databaseMock.getPaymentIntent,
+    executeBuyerPayment: databaseMock.executeBuyerPayment,
+    listReceiptRecords: databaseMock.listReceiptRecords,
+    getReceiptRecord: databaseMock.getReceiptRecord
   };
 });
 
@@ -443,6 +569,116 @@ describe("atlas api e2e", () => {
     expect(response.body.module).toMatchObject({
       key: "payments",
       workspace: "SELLER"
+    });
+  });
+
+  it("lists buyer-visible payments and executes buyer payment attempts", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+
+    const [listResponse, getResponse, executeResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/payments").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer()).get("/payments/payment-1").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer())
+        .post("/payments/requests/request-created/execute")
+        .set("x-atlas-local-session", "local-token")
+        .send({
+          rail: "INTERNAL_SIMULATED"
+        })
+    ]);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "payment-1",
+        rail: "INTERNAL_SIMULATED",
+        latestAttemptStatus: "CAPTURED"
+      })
+    ]);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.item).toMatchObject({
+      id: "payment-1",
+      status: "CAPTURED"
+    });
+
+    expect(executeResponse.status).toBe(201);
+    expect(executeResponse.body.item).toMatchObject({
+      id: "payment-executed",
+      rail: "INTERNAL_SIMULATED",
+      status: "CAPTURED"
+    });
+  });
+
+  it("returns conflict when buyer payment execution is not retry eligible", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockRejectedValueOnce(
+      new AtlasPaymentsWorkflowError("A payment already exists for this request and is not currently retry eligible.", "conflict")
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "INTERNAL_SIMULATED"
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe("A payment already exists for this request and is not currently retry eligible.");
+  });
+
+  it("lists and fetches receipts through shared protected routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "seller-admin",
+        workspace: "SELLER",
+        userEmail: "seller@atlas.local",
+        organizationSlug: "atlas-demo-seller",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("SELLER", "ADMIN")
+    });
+
+    const [listResponse, getResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/receipts").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer()).get("/receipts/receipt-1").set("x-atlas-local-session", "local-token")
+    ]);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "receipt-1",
+        status: "AVAILABLE"
+      })
+    ]);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.item).toMatchObject({
+      id: "receipt-1",
+      paymentReference: "sim-request-created-captured-01"
     });
   });
 

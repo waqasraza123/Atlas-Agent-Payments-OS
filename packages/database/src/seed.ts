@@ -4,6 +4,7 @@ import {
   atlasSeedApprovals,
   atlasSeedAuditEvents,
   atlasSeedMemberships,
+  atlasSeedPaymentAttempts,
   atlasSeedOrganizations,
   atlasSeedPayments,
   atlasSeedPolicies,
@@ -308,6 +309,7 @@ async function ensurePayments(organizationIdsBySlug: Map<string, string>) {
       update: {
         organizationId,
         sellerOrganizationId,
+        rail: payment.rail,
         provider: payment.provider,
         reference: payment.reference,
         status: payment.status,
@@ -319,12 +321,58 @@ async function ensurePayments(organizationIdsBySlug: Map<string, string>) {
         requestId: payment.requestId,
         organizationId,
         sellerOrganizationId,
+        rail: payment.rail,
         provider: payment.provider,
         reference: payment.reference,
         status: payment.status,
         amountMinor: payment.amountMinor,
         currency: payment.currency,
         metadata: payment.metadata
+      }
+    });
+  }
+}
+
+async function ensurePaymentAttempts() {
+  const payments = await prisma.payment.findMany({
+    select: {
+      id: true,
+      requestId: true
+    }
+  });
+  const paymentIdsByRequestId = new Map(payments.map((payment) => [payment.requestId, payment.id]));
+
+  for (const attempt of atlasSeedPaymentAttempts) {
+    const paymentId = paymentIdsByRequestId.get(attempt.requestId);
+
+    if (!paymentId) {
+      throw new Error(`Missing payment for payment attempt ${attempt.requestId}#${attempt.attemptNumber}`);
+    }
+
+    await prisma.paymentAttempt.upsert({
+      where: {
+        paymentId_attemptNumber: {
+          paymentId,
+          attemptNumber: attempt.attemptNumber
+        }
+      },
+      update: {
+        rail: attempt.rail,
+        status: attempt.status,
+        reference: attempt.reference,
+        evidence: attempt.evidence ?? Prisma.JsonNull,
+        errorCode: attempt.errorCode,
+        errorMessage: attempt.errorMessage
+      },
+      create: {
+        paymentId,
+        attemptNumber: attempt.attemptNumber,
+        rail: attempt.rail,
+        status: attempt.status,
+        reference: attempt.reference,
+        evidence: attempt.evidence ?? Prisma.JsonNull,
+        errorCode: attempt.errorCode,
+        errorMessage: attempt.errorMessage
       }
     });
   }
@@ -416,6 +464,7 @@ async function main() {
   await ensureSpendRequests(lookups.organizationIdsBySlug);
   await ensureApprovals(lookups.userIdsByEmail);
   await ensurePayments(lookups.organizationIdsBySlug);
+  await ensurePaymentAttempts();
   await ensureReceipts(lookups.organizationIdsBySlug);
   await ensureAuditEvents(lookups);
 

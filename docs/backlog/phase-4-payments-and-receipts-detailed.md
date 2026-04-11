@@ -20,6 +20,13 @@ Phases 0 through 3 build trust, structure, and two-sided workflows. Phase 4 turn
 - payment attempts are immutable
 - receipts are finalized from real lifecycle state
 
+## Current Repository Status
+
+- Phase 4.1 payment rail abstraction is now in place in repo scope
+- Phase 4.2 internal simulated settlement is now in place in repo scope
+- Initial receipt truth updates now happen during buyer-triggered payment execution
+- The next active Phase 4 slice is Stripe baseline, retry lifecycle hardening, and reconciliation views
+
 ## Detailed Sub-Steps
 
 ### Phase 4.1 — payment rail abstraction

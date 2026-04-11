@@ -3,12 +3,14 @@ import {
   approvalStatuses,
   isApprovalStatus,
   isMembershipRole,
+  isPaymentRail,
   isOrganizationKind,
   isPaymentStatus,
   isReceiptStatus,
   isSpendRequestStatus,
   membershipRoleLabels,
   organizationKindLabels,
+  paymentRails,
   paymentStatuses,
   receiptStatuses,
   spendRequestStatuses
@@ -26,8 +28,10 @@ describe("atlas shared types", () => {
     expect(spendRequestStatuses.every((status) => isSpendRequestStatus(status))).toBe(true);
     expect(approvalStatuses.every((status) => isApprovalStatus(status))).toBe(true);
     expect(paymentStatuses.every((status) => isPaymentStatus(status))).toBe(true);
+    expect(paymentRails.every((rail) => isPaymentRail(rail))).toBe(true);
     expect(receiptStatuses.every((status) => isReceiptStatus(status))).toBe(true);
     expect(isPaymentStatus("SETTLED")).toBe(false);
+    expect(isPaymentRail("BTC")).toBe(false);
   });
 
   it("keeps display labels aligned to durable kinds and roles", () => {
