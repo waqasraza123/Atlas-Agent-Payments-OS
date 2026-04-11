@@ -3,15 +3,17 @@ import { StatePanel } from "@atlas/ui";
 import type { OrganizationKind } from "@atlas/types";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { loadWorkspaceDetailModel } from "@/lib/server/workspace-detail-data";
+import type { WorkflowFeedback } from "@/lib/workflow-feedback";
 import { WorkspaceDetailPage } from "./workspace-detail-page";
 
 type WorkspaceDetailRouteProps = Readonly<{
   workspace: OrganizationKind;
   surfaceKey: AtlasWorkspaceSurfaceKey;
   recordId: string;
+  feedback?: WorkflowFeedback | null;
 }>;
 
-export async function WorkspaceDetailRoute({ workspace, surfaceKey, recordId }: WorkspaceDetailRouteProps) {
+export async function WorkspaceDetailRoute({ workspace, surfaceKey, recordId, feedback = null }: WorkspaceDetailRouteProps) {
   const resolution = await resolveWorkspaceActor(workspace);
 
   if (resolution.status !== "ready") {
@@ -38,7 +40,7 @@ export async function WorkspaceDetailRoute({ workspace, surfaceKey, recordId }: 
       );
     }
 
-    return <WorkspaceDetailPage model={model} />;
+    return <WorkspaceDetailPage model={model} feedback={feedback} />;
   } catch (error) {
     return (
       <StatePanel

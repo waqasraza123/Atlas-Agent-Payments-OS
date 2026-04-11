@@ -11,9 +11,9 @@ import {
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
-
-type WorkflowFeedbackTone = "default" | "warning" | "error";
+import { buildWorkflowFeedbackHref, type WorkflowFeedbackTone } from "@/lib/workflow-feedback";
 
 function toTextValue(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -39,11 +39,7 @@ function toBooleanValue(value: FormDataEntryValue | null) {
 }
 
 function redirectWithFeedback(path: string, title: string, description: string, tone: WorkflowFeedbackTone = "default"): never {
-  const url = new URL(path, "http://atlas.local");
-  url.searchParams.set("feedbackTitle", title);
-  url.searchParams.set("feedbackDescription", description);
-  url.searchParams.set("feedbackTone", tone);
-  redirect(`${url.pathname}?${url.searchParams.toString()}`);
+  redirect(buildWorkflowFeedbackHref(path, title, description, tone));
 }
 
 async function requireBuyerActor() {
@@ -183,7 +179,7 @@ export async function createBuyerRequestAction(formData: FormData) {
   const actor = await requireBuyerActor();
 
   try {
-    await createBuyerRequest(actor, {
+    const request = await createBuyerRequest(actor, {
       agentId: toTextValue(formData.get("agentId")),
       policyId: toNullableTextValue(formData.get("policyId")),
       sellerOrganizationId: toNullableTextValue(formData.get("sellerOrganizationId")),
@@ -198,7 +194,11 @@ export async function createBuyerRequestAction(formData: FormData) {
     revalidatePath("/buyer");
     revalidatePath("/buyer/requests");
     revalidatePath("/buyer/approvals");
-    redirectWithFeedback("/buyer/requests", "Request submitted", "Atlas evaluated the request and recorded the next lifecycle state.");
+    redirectWithFeedback(
+      getAtlasWorkspaceDetailHref("BUYER", "requests", request.id) ?? "/buyer/requests",
+      "Request submitted",
+      "Atlas evaluated the request and recorded the next lifecycle state."
+    );
   } catch (error) {
     redirectWithFeedback("/buyer/requests", "Request submission failed", normalizeActionError(error), "error");
   }
@@ -208,14 +208,18 @@ export async function decideBuyerApprovalAction(approvalId: string, formData: Fo
   const actor = await requireBuyerActor();
 
   try {
-    await decideBuyerApproval(actor, approvalId, {
+    const approval = await decideBuyerApproval(actor, approvalId, {
       decision: toTextValue(formData.get("decision")),
       decisionReason: toTextValue(formData.get("decisionReason"))
     });
     revalidatePath("/buyer");
     revalidatePath("/buyer/requests");
     revalidatePath("/buyer/approvals");
-    redirectWithFeedback("/buyer/approvals", "Approval decision recorded", "The request lifecycle has advanced to its next state.");
+    redirectWithFeedback(
+      getAtlasWorkspaceDetailHref("BUYER", "requests", approval.requestId) ?? "/buyer/requests",
+      "Approval decision recorded",
+      "The request lifecycle has advanced to its next state."
+    );
   } catch (error) {
     redirectWithFeedback("/buyer/approvals", "Approval decision failed", normalizeActionError(error), "error");
   }

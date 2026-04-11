@@ -15,7 +15,7 @@ Phase 1 makes Atlas believable. Phase 2 makes the buyer-side control loop operat
 
 ## Current Status
 
-Phase 2.1 through 2.5 now have a baseline in repo scope. Buyer agents and policies can be created and updated, spend requests can be submitted through real schema-backed write paths, policy evaluation now persists structured outcomes, and approvals can be decided with audit events. The next active step is Phase 2.6 request detail timeline and workflow stabilization before moving into Phase 3 seller workflow.
+Phase 2 is now complete in repo scope. Buyer agents and policies can be created and updated, spend requests can be submitted through real schema-backed write paths, policy evaluation persists structured outcomes, approvals can be decided with audit events, and buyer request detail routes now surface persisted policy outcomes, approval reasoning, and create-to-detail continuity.
 
 ## Exit Criteria
 
@@ -24,6 +24,7 @@ Phase 2.1 through 2.5 now have a baseline in repo scope. Buyer agents and polici
 - policy engine evaluates requests
 - approvals can be reviewed and decided
 - request timeline is real
+- persisted evaluation and approval reasoning are visible on buyer detail routes
 
 ## Detailed Sub-Steps
 
@@ -126,3 +127,4 @@ Later tracks may add:
 
 - a real request can be created and move through policy and approval flow
 - all key state changes are inspectable
+- buyer request detail stays coherent after create and approval actions

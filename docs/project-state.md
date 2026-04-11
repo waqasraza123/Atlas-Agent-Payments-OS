@@ -40,10 +40,10 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Execution source of truth: `docs/architecture/master-execution-plan.md`
 - Full-scale blueprint docs: `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Testing source of truth: `docs/architecture/testing-strategy.md`
-- Active detailed phase doc: `docs/backlog/phase-2-core-buyer-workflow-detailed.md`
+- Active detailed phase doc: `docs/backlog/phase-3-seller-workflow-detailed.md`
 - Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
-- Phase 2: core buyer workflow
+- Phase 2: core buyer workflow completed in repo scope
 - Phase 3: seller workflow
 - Phase 4: payments and receipts
 - Phase 5: operator controls and exceptions
@@ -78,6 +78,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 2 buyer workflow baseline across agent management, policy management, request creation, policy evaluation, approval decisions, and buyer write-path audit events
 - Shared buyer workflow contracts now live in `@atlas/domain` and Prisma-backed buyer workflow services now live in `@atlas/database`
 - Buyer-facing pages now support schema-backed create and update flows instead of overview-only seeded surfaces
+- Phase 2.6 buyer request detail and workflow stabilization now render persisted policy outcomes, approval reasons, idempotency posture, and create-to-detail continuity directly from request state
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -92,8 +93,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Legacy summary planning docs remain only as companions and point back to the master planning system
 - Phase 0 implementation slices 0.1 through 0.7 are now in place in repo scope
 - Phase 1 implementation slices 1.1 through 1.6 are now in place in repo scope
-- Phase 2.1 through 2.5 now have a baseline in repo scope
-- The current active execution slice is Phase 2.6 buyer request detail and workflow stabilization, followed by Phase 3 seller workflow
+- Phase 2 is now complete in repo scope through Phase 2.6
+- The current active execution slice is Phase 3 seller workflow, starting with seller profile, services, pricing, and inbound request visibility
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -121,7 +122,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
-- The buyer workflow baseline now exists, but buyer detail views still need tighter evaluation and approval reason rendering sourced from the new persisted request state
+- The buyer control loop is now operational across create, evaluate, approve, and inspect, but seller-side lifecycle participation remains the next major gap
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra before the Phase 2 buyer control loop is fully stabilized

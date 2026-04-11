@@ -1,3 +1,4 @@
+import { formatAtlasPolicyEvaluationOutcomeLabel, type AtlasPolicyEvaluationResult } from "@atlas/domain";
 import type { TimelinePanelItem } from "@atlas/ui";
 
 export type LifecycleRequestRecord = {
@@ -9,6 +10,16 @@ export type LifecycleRequestRecord = {
   serviceCategory: string;
   createdAt: Date | string;
   updatedAt: Date | string;
+};
+
+export type LifecycleEvaluationRecord = {
+  outcome: AtlasPolicyEvaluationResult["outcome"];
+  matchedPolicyLabel: string | null;
+  matchedPolicyVersion: number | null;
+  reasons: string[];
+  requiresApproval: boolean;
+  autoApproved: boolean;
+  occurredAt: Date | string;
 };
 
 export type LifecycleApprovalRecord = {
@@ -48,6 +59,7 @@ export type LifecycleAuditRecord = {
 
 export type LifecycleSource = {
   request: LifecycleRequestRecord;
+  evaluation?: LifecycleEvaluationRecord | null;
   approval?: LifecycleApprovalRecord | null;
   payment?: LifecyclePaymentRecord | null;
   receipt?: LifecycleReceiptRecord | null;
@@ -96,6 +108,18 @@ function resolveTone(value: string): TimelinePanelItem["tone"] {
   return "default";
 }
 
+function resolveEvaluationTone(value: LifecycleEvaluationRecord["outcome"]): TimelinePanelItem["tone"] {
+  if (value.startsWith("allow_")) {
+    return value === "allow_auto_approved" ? "success" : "warning";
+  }
+
+  return "critical";
+}
+
+function summarizeEvaluationReasons(source: LifecycleEvaluationRecord) {
+  return source.reasons[0] ?? formatAtlasPolicyEvaluationOutcomeLabel(source.outcome);
+}
+
 export function buildAtlasLifecycleTimeline(source: LifecycleSource): TimelinePanelItem[] {
   const entries: Array<TimelinePanelItem & { timestamp: number }> = [
     {
@@ -109,6 +133,19 @@ export function buildAtlasLifecycleTimeline(source: LifecycleSource): TimelinePa
       timestamp: new Date(source.request.createdAt).getTime()
     }
   ];
+
+  if (source.evaluation) {
+    entries.push({
+      id: `${source.request.id}:evaluation`,
+      label: "Policy",
+      title: source.evaluation.matchedPolicyLabel ?? "Policy evaluation",
+      description: summarizeEvaluationReasons(source.evaluation),
+      detail: formatTimestamp(source.evaluation.occurredAt),
+      statusLabel: formatAtlasPolicyEvaluationOutcomeLabel(source.evaluation.outcome),
+      tone: resolveEvaluationTone(source.evaluation.outcome),
+      timestamp: new Date(source.evaluation.occurredAt).getTime()
+    });
+  }
 
   if (source.approval) {
     entries.push({

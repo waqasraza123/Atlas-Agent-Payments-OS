@@ -14,6 +14,15 @@ describe("buildAtlasLifecycleTimeline", () => {
         createdAt: "2026-04-11T08:00:00.000Z",
         updatedAt: "2026-04-11T08:00:00.000Z"
       },
+      evaluation: {
+        outcome: "allow_requires_approval",
+        matchedPolicyLabel: "Low Risk API Access",
+        matchedPolicyVersion: 3,
+        reasons: ["The request is allowed but requires a human approval before execution."],
+        requiresApproval: true,
+        autoApproved: false,
+        occurredAt: "2026-04-11T08:01:00.000Z"
+      },
       approval: {
         id: "approval-1",
         status: "APPROVED",
@@ -49,8 +58,9 @@ describe("buildAtlasLifecycleTimeline", () => {
       ]
     });
 
-    expect(timeline).toHaveLength(5);
-    expect(timeline.map((entry) => entry.label)).toEqual(["Request", "Approval", "Payment", "Receipt", "Audit"]);
+    expect(timeline).toHaveLength(6);
+    expect(timeline.map((entry) => entry.label)).toEqual(["Request", "Policy", "Approval", "Payment", "Receipt", "Audit"]);
+    expect(timeline[1]?.statusLabel).toBe("Allow Requires Approval");
     expect(timeline.at(-1)?.title).toBe("Receipt Finalized");
   });
 

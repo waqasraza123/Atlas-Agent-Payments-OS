@@ -4,7 +4,9 @@ import {
   atlasBuyerPolicyCreateSchema,
   atlasBuyerRequestCreateSchema,
   evaluateAtlasBuyerSpendRequest,
-  normalizeAtlasBuyerPolicyRules
+  normalizeAtlasBuyerPolicyRules,
+  parseAtlasPolicyEvaluationResult,
+  summarizeAtlasPolicyEvaluation
 } from "./buyer-workflow";
 
 describe("atlas buyer workflow contracts", () => {
@@ -146,5 +148,24 @@ describe("atlas buyer workflow contracts", () => {
 
     expect(sellerDenied.outcome).toBe("deny_seller_not_allowed");
     expect(inactiveDenied.outcome).toBe("deny_agent_inactive");
+  });
+
+  it("parses persisted policy evaluation results and summarizes reasons", () => {
+    const parsed = parseAtlasPolicyEvaluationResult({
+      outcome: "allow_requires_approval",
+      status: "SUBMITTED",
+      approvalStatus: "PENDING",
+      matchedPolicyId: "policy-1",
+      matchedPolicyVersion: 3,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    });
+
+    expect(parsed?.matchedPolicyVersion).toBe(3);
+    expect(parsed ? summarizeAtlasPolicyEvaluation(parsed) : null).toBe(
+      "The request is allowed but requires a human approval before execution."
+    );
+    expect(parseAtlasPolicyEvaluationResult({ outcome: "unknown" })).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AgentStatus, ApprovalStatus, PolicyStatus, SpendRequestStatus } from "@atlas/types";
+import { approvalStatuses, spendRequestStatuses, type AgentStatus, type ApprovalStatus, type PolicyStatus, type SpendRequestStatus } from "@atlas/types";
 
 const trimmedString = z.string().trim().min(1);
 
@@ -81,16 +81,50 @@ export type AtlasPolicyEvaluationOutcome =
   | "deny_emergency_stop"
   | "deny_agent_inactive";
 
-export type AtlasPolicyEvaluationResult = {
-  outcome: AtlasPolicyEvaluationOutcome;
-  status: SpendRequestStatus;
-  approvalStatus: ApprovalStatus | null;
-  matchedPolicyId: string | null;
-  matchedPolicyVersion: number | null;
-  reasons: string[];
-  requiresApproval: boolean;
-  autoApproved: boolean;
-};
+export const atlasPolicyEvaluationOutcomeSchema = z.enum([
+  "allow_auto_approved",
+  "allow_requires_approval",
+  "deny_amount_exceeded",
+  "deny_seller_not_allowed",
+  "deny_service_not_allowed",
+  "deny_service_category_not_allowed",
+  "deny_emergency_stop",
+  "deny_agent_inactive"
+]);
+
+export const atlasPolicyEvaluationResultSchema = z.object({
+  outcome: atlasPolicyEvaluationOutcomeSchema,
+  status: z.enum(spendRequestStatuses),
+  approvalStatus: z.enum(approvalStatuses).nullable(),
+  matchedPolicyId: z.string().trim().min(1).nullable(),
+  matchedPolicyVersion: z.number().int().positive().nullable(),
+  reasons: z.array(trimmedString).default([]),
+  requiresApproval: z.boolean(),
+  autoApproved: z.boolean()
+});
+
+export type AtlasPolicyEvaluationResult = z.infer<typeof atlasPolicyEvaluationResultSchema>;
+
+export function parseAtlasPolicyEvaluationResult(value: unknown) {
+  const parsed = atlasPolicyEvaluationResultSchema.safeParse(value);
+
+  if (!parsed.success) {
+    return null;
+  }
+
+  return parsed.data;
+}
+
+export function formatAtlasPolicyEvaluationOutcomeLabel(value: AtlasPolicyEvaluationOutcome) {
+  return value
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+export function summarizeAtlasPolicyEvaluation(result: AtlasPolicyEvaluationResult) {
+  return result.reasons[0] ?? formatAtlasPolicyEvaluationOutcomeLabel(result.outcome);
+}
 
 export type AtlasPolicyEvaluationInput = {
   agentStatus: AgentStatus;
@@ -102,6 +136,10 @@ export type AtlasPolicyEvaluationInput = {
   policyVersion: number | null;
   rules: AtlasBuyerPolicyRules;
 };
+
+export function createAtlasPolicyEvaluationResult(input: AtlasPolicyEvaluationResult): AtlasPolicyEvaluationResult {
+  return atlasPolicyEvaluationResultSchema.parse(input);
+}
 
 function normalizeTextList(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean);
@@ -125,7 +163,7 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
   const autoApprovalThresholdMinor = rules.autoApprovalThresholdMinor ?? null;
 
   if (rules.emergencyStop) {
-    return {
+    return createAtlasPolicyEvaluationResult({
       outcome: "deny_emergency_stop",
       status: "REJECTED",
       approvalStatus: null,
@@ -134,11 +172,11 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
       reasons: ["The matched policy currently has an emergency stop enabled."],
       requiresApproval: false,
       autoApproved: false
-    };
+    });
   }
 
   if (input.agentStatus !== "ACTIVE") {
-    return {
+    return createAtlasPolicyEvaluationResult({
       outcome: "deny_agent_inactive",
       status: "REJECTED",
       approvalStatus: null,
@@ -147,11 +185,11 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
       reasons: ["The selected agent is not active and cannot create spend requests."],
       requiresApproval: false,
       autoApproved: false
-    };
+    });
   }
 
   if (maxAmountMinor !== null && input.amountMinor > maxAmountMinor) {
-    return {
+    return createAtlasPolicyEvaluationResult({
       outcome: "deny_amount_exceeded",
       status: "REJECTED",
       approvalStatus: null,
@@ -160,12 +198,12 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
       reasons: [`The request amount exceeds the per-action maximum of ${maxAmountMinor} minor units.`],
       requiresApproval: false,
       autoApproved: false
-    };
+    });
   }
 
   if (rules.sellerAllowlist.length > 0) {
     if (!input.sellerOrganizationId || !rules.sellerAllowlist.includes(input.sellerOrganizationId)) {
-      return {
+      return createAtlasPolicyEvaluationResult({
         outcome: "deny_seller_not_allowed",
         status: "REJECTED",
         approvalStatus: null,
@@ -174,13 +212,13 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
         reasons: ["The selected seller is not in the policy allowlist."],
         requiresApproval: false,
         autoApproved: false
-      };
+      });
     }
   }
 
   if (rules.serviceAllowlist.length > 0) {
     if (!input.serviceKey || !rules.serviceAllowlist.includes(input.serviceKey)) {
-      return {
+      return createAtlasPolicyEvaluationResult({
         outcome: "deny_service_not_allowed",
         status: "REJECTED",
         approvalStatus: null,
@@ -189,12 +227,12 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
         reasons: ["The selected service key is not in the policy allowlist."],
         requiresApproval: false,
         autoApproved: false
-      };
+      });
     }
   }
 
   if (rules.serviceCategories.length > 0 && !rules.serviceCategories.includes(input.serviceCategory)) {
-    return {
+    return createAtlasPolicyEvaluationResult({
       outcome: "deny_service_category_not_allowed",
       status: "REJECTED",
       approvalStatus: null,
@@ -203,11 +241,11 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
       reasons: ["The selected service category is not allowed by the policy."],
       requiresApproval: false,
       autoApproved: false
-    };
+    });
   }
 
   if (autoApprovalThresholdMinor !== null && input.amountMinor <= autoApprovalThresholdMinor) {
-    return {
+    return createAtlasPolicyEvaluationResult({
       outcome: "allow_auto_approved",
       status: "APPROVED",
       approvalStatus: "APPROVED",
@@ -216,10 +254,10 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
       reasons: ["The request amount is within the policy auto-approval threshold."],
       requiresApproval: false,
       autoApproved: true
-    };
+    });
   }
 
-  return {
+  return createAtlasPolicyEvaluationResult({
     outcome: "allow_requires_approval",
     status: "SUBMITTED",
     approvalStatus: "PENDING",
@@ -228,7 +266,7 @@ export function evaluateAtlasBuyerSpendRequest(input: AtlasPolicyEvaluationInput
     reasons: ["The request is allowed but requires a human approval before execution."],
     requiresApproval: true,
     autoApproved: false
-  };
+  });
 }
 
 export function formatAtlasPolicyStatusLabel(status: PolicyStatus) {

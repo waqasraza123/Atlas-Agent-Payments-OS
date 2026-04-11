@@ -9,6 +9,7 @@ import {
   atlasBuyerRequestCreateSchema,
   evaluateAtlasBuyerSpendRequest,
   normalizeAtlasBuyerPolicyRules,
+  parseAtlasPolicyEvaluationResult,
   type AtlasBuyerAgentCreateInput,
   type AtlasBuyerAgentUpdateInput,
   type AtlasBuyerApprovalDecisionInput,
@@ -165,8 +166,8 @@ function mapRequestRecord(
     approval: { status: string | null } | null;
   }
 ): AtlasBuyerRequestRecord {
-  const evaluationResult = asJsonObject(request.evaluationResult);
-  const evaluationOutcome = typeof evaluationResult?.outcome === "string" ? evaluationResult.outcome : null;
+  const evaluationResult = parseAtlasPolicyEvaluationResult(request.evaluationResult);
+  const evaluationOutcome = evaluationResult?.outcome ?? null;
 
   return {
     id: request.id,

@@ -1,14 +1,20 @@
 import type { WorkspaceDetailModel } from "@/lib/server/workspace-detail-data";
 import { DetailGrid, MetricCard, PageHeader, RecordListPanel, StatusChip, TimelinePanel } from "@atlas/ui";
+import type { WorkflowFeedback } from "@/lib/workflow-feedback";
 import { DemoScenarioPanel } from "./demo-scenario-panel";
+import { WorkflowFeedbackPanel } from "./workflow-feedback-panel";
 
 type WorkspaceDetailPageProps = Readonly<{
   model: WorkspaceDetailModel;
+  feedback?: WorkflowFeedback | null;
 }>;
 
-export function WorkspaceDetailPage({ model }: WorkspaceDetailPageProps) {
+export function WorkspaceDetailPage({ model, feedback = null }: WorkspaceDetailPageProps) {
   return (
     <div className="space-y-6">
+      {feedback ? (
+        <WorkflowFeedbackPanel title={feedback.title} description={feedback.description} tone={feedback.tone} />
+      ) : null}
       <PageHeader
         eyebrow={model.eyebrow}
         title={model.title}
@@ -36,6 +42,16 @@ export function WorkspaceDetailPage({ model }: WorkspaceDetailPageProps) {
           emptyDescription={model.preview.emptyDescription}
         />
       </section>
+      {model.analysis ? (
+        <DetailGrid
+          eyebrow={model.analysis.eyebrow}
+          title={model.analysis.title}
+          description={model.analysis.description}
+          items={model.analysis.items}
+          emptyTitle={model.analysis.emptyTitle}
+          emptyDescription={model.analysis.emptyDescription}
+        />
+      ) : null}
       <TimelinePanel
         eyebrow={model.timeline.eyebrow}
         title={model.timeline.title}

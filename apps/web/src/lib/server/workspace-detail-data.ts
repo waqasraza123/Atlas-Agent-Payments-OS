@@ -1,6 +1,11 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
-import type { AtlasWorkspaceSurfaceKey } from "@atlas/domain";
+import {
+  formatAtlasPolicyEvaluationOutcomeLabel,
+  parseAtlasPolicyEvaluationResult,
+  summarizeAtlasPolicyEvaluation,
+  type AtlasWorkspaceSurfaceKey
+} from "@atlas/domain";
 import type { OrganizationKind } from "@atlas/types";
 import type { DetailGridItem, RecordListPanelItem, TimelinePanelItem } from "@atlas/ui";
 import type { WorkspaceMetric } from "./workspace-data";
@@ -24,6 +29,14 @@ export type WorkspaceDetailModel = {
     emptyTitle: string;
     emptyDescription: string;
   };
+  analysis?: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    items: DetailGridItem[];
+    emptyTitle: string;
+    emptyDescription: string;
+  } | null;
   timeline: {
     eyebrow: string;
     title: string;
@@ -96,6 +109,18 @@ function formatJsonMetadataValue(value: unknown) {
   }
 
   return "Structured metadata available";
+}
+
+function formatBooleanLabel(value: boolean) {
+  return value ? "Yes" : "No";
+}
+
+function formatReasonList(reasons: string[]) {
+  return reasons.length > 0 ? reasons.join(" ") : "No policy reasoning recorded";
+}
+
+function formatOptionalValue(value: string | null | undefined, fallback: string) {
+  return value && value.trim().length > 0 ? value : fallback;
 }
 
 function createRelatedItem(
@@ -177,6 +202,8 @@ async function loadRequestDetailModel(
 
   const payload = typeof request.requestPayload === "object" && request.requestPayload !== null ? request.requestPayload : null;
   const metadata = typeof request.metadata === "object" && request.metadata !== null ? request.metadata : null;
+  const evaluationResult = parseAtlasPolicyEvaluationResult(request.evaluationResult);
+  const policyEvaluatedEvent = request.auditEvents.find((event) => event.eventType === "policy_evaluated");
   const scenarioLabel =
     metadata && "scenarioLabel" in metadata && typeof metadata.scenarioLabel === "string"
       ? metadata.scenarioLabel
@@ -193,6 +220,17 @@ async function loadRequestDetailModel(
       createdAt: request.createdAt,
       updatedAt: request.updatedAt
     },
+    evaluation: evaluationResult
+      ? {
+          outcome: evaluationResult.outcome,
+          matchedPolicyLabel: request.policy?.name ?? null,
+          matchedPolicyVersion: evaluationResult.matchedPolicyVersion,
+          reasons: evaluationResult.reasons,
+          requiresApproval: evaluationResult.requiresApproval,
+          autoApproved: evaluationResult.autoApproved,
+          occurredAt: policyEvaluatedEvent?.occurredAt ?? request.createdAt
+        }
+      : null,
     approval: request.approval
       ? {
           id: request.approval.id,
@@ -249,7 +287,7 @@ async function loadRequestDetailModel(
       {
         label: "Amount",
         value: formatCurrencyMinor(request.amountMinor, request.currency),
-        detail: "Seeded request amount currently attached to this lifecycle."
+        detail: "Persisted request amount currently attached to this lifecycle."
       },
       {
         label: "Service category",
@@ -257,14 +295,16 @@ async function loadRequestDetailModel(
         detail: "Current purchasable service class for the request."
       },
       {
-        label: "Approval",
-        value: request.approval ? formatTokenLabel(request.approval.status) : "Not created",
-        detail: "Approval remains a distinct lifecycle from the request and payment records."
+        label: "Policy outcome",
+        value: evaluationResult ? formatAtlasPolicyEvaluationOutcomeLabel(evaluationResult.outcome) : "Not evaluated",
+        detail: evaluationResult
+          ? summarizeAtlasPolicyEvaluation(evaluationResult)
+          : "Policy evaluation posture has not been captured yet."
       },
       {
-        label: "Payment",
-        value: request.payment ? formatTokenLabel(request.payment.status) : "Not created",
-        detail: "Payment evidence remains distinct from both approval and receipt state."
+        label: "Approval posture",
+        value: request.approval ? formatTokenLabel(request.approval.status) : "Not created",
+        detail: request.approval?.decisionReason ?? "Approval remains a distinct lifecycle from the request and payment records."
       }
     ],
     facts: [
@@ -284,9 +324,16 @@ async function loadRequestDetailModel(
         detail: request.agent.externalRef ?? "No external reference recorded"
       },
       {
+        label: "Purpose",
+        value: request.purpose,
+        detail: "Buyer-provided business context captured at request creation."
+      },
+      {
         label: "Policy",
         value: request.policy?.name ?? "No policy linked",
-        detail: request.policy ? formatTokenLabel(request.policy.status) : "Policy linkage arrives in later phases"
+        detail: request.policy
+          ? `Version ${evaluationResult?.matchedPolicyVersion ?? request.policy.version} · ${formatTokenLabel(request.policy.status)}`
+          : "Policy linkage arrives in later phases"
       },
       {
         label: "Created",
@@ -294,11 +341,50 @@ async function loadRequestDetailModel(
         detail: `Updated ${formatDateTime(request.updatedAt)}`
       },
       {
-        label: "Scenario",
-        value: scenarioLabel,
-        detail: metadata && "scenarioKey" in metadata ? formatJsonMetadataValue(metadata.scenarioKey) : "Phase 1 demo seed"
+        label: "Idempotency key",
+        value: formatOptionalValue(request.idempotencyKey, "Not provided"),
+        detail: "Repeat-safe request creation remains explicit in the persisted request record."
       }
     ],
+    analysis: {
+      eyebrow: "Policy and approval posture",
+      title: "Evaluation and human decision context",
+      description:
+        "The buyer control loop is only trustworthy when the matched policy outcome, approval requirement, and recorded reasoning stay explicit on the request detail itself.",
+      items: [
+        {
+          label: "Evaluation outcome",
+          value: evaluationResult ? formatAtlasPolicyEvaluationOutcomeLabel(evaluationResult.outcome) : "Not captured",
+          detail: evaluationResult ? formatReasonList(evaluationResult.reasons) : "No evaluation result was stored on this request."
+        },
+        {
+          label: "Requires approval",
+          value: evaluationResult ? formatBooleanLabel(evaluationResult.requiresApproval) : "Unknown",
+          detail: evaluationResult
+            ? evaluationResult.autoApproved
+              ? "The matched policy auto-approved the request."
+              : "The matched policy required a human approval step."
+            : "Approval posture is unavailable because the policy evaluation record is missing."
+        },
+        {
+          label: "Auto-approved",
+          value: evaluationResult ? formatBooleanLabel(evaluationResult.autoApproved) : "Unknown",
+          detail: request.approval?.decisionReason ?? "No approval decision has been recorded yet."
+        },
+        {
+          label: "Approval decision",
+          value: request.approval ? formatTokenLabel(request.approval.status) : "Not created",
+          detail: request.approval
+            ? `${formatOptionalValue(request.approval.approver?.name ?? request.approval.approver?.email, "Unknown approver")} · ${formatOptionalValue(
+                request.approval.decisionReason,
+                "Decision reason not captured yet"
+              )}`
+            : "The request has not generated a distinct approval record yet."
+        }
+      ],
+      emptyTitle: "No evaluation context available",
+      emptyDescription: "Atlas will render policy and approval reasoning here once the request captures it."
+    },
     preview: {
       eyebrow: "Execution evidence",
       title: "Receipt and fulfillment preview",
@@ -309,7 +395,10 @@ async function loadRequestDetailModel(
           label: "Service",
           value:
             payload && "service" in payload && typeof payload.service === "string" ? payload.service : request.title,
-          detail: "Requested service or endpoint name from the seed payload."
+          detail: formatOptionalValue(
+            payload && "serviceKey" in payload && typeof payload.serviceKey === "string" ? payload.serviceKey : null,
+            "Requested service or endpoint name from the request payload."
+          )
         },
         {
           label: "Receipt status",
@@ -323,8 +412,8 @@ async function loadRequestDetailModel(
         },
         {
           label: "Decision reason",
-          value: request.approval?.decisionReason ?? "Awaiting decision context",
-          detail: request.approval?.approver?.email ?? "No approver captured yet"
+          value: request.approval?.decisionReason ?? (evaluationResult ? summarizeAtlasPolicyEvaluation(evaluationResult) : "Awaiting decision context"),
+          detail: request.approval?.approver?.email ?? request.approval?.approver?.name ?? "No approver captured yet"
         }
       ],
       emptyTitle: "No execution evidence available",
@@ -456,7 +545,7 @@ async function loadApprovalDetailModel(actor: AtlasActorContext, recordId: strin
       {
         label: "Approval status",
         value: formatTokenLabel(approval.status),
-        detail: "Current seeded approval posture for the request."
+        detail: "Current approval posture for the request."
       },
       {
         label: "Approver",
@@ -471,9 +560,39 @@ async function loadApprovalDetailModel(actor: AtlasActorContext, recordId: strin
       {
         label: "Payment follow-on",
         value: approval.request.payment ? formatTokenLabel(approval.request.payment.status) : "Not created",
-        detail: "Phase 4 will turn this seeded posture into real payment execution."
+        detail: "Payment remains a distinct lifecycle after the approval decision."
       }
     ],
+    analysis: {
+      eyebrow: "Decision reasoning",
+      title: "Approval outcome and rationale",
+      description:
+        "Approval detail must preserve the human decision, the approver identity, and the matched request context without forcing operators to reconstruct it from the broader timeline.",
+      items: [
+        {
+          label: "Decision reason",
+          value: formatOptionalValue(approval.decisionReason, "No reason captured yet"),
+          detail: "Approval decision reasons remain first-class records for later audit and export."
+        },
+        {
+          label: "Approver identity",
+          value: approval.approver?.email ?? "No approver assigned",
+          detail: approval.approver?.name ?? "Approver display name not recorded"
+        },
+        {
+          label: "Request status after decision",
+          value: formatTokenLabel(approval.request.status),
+          detail: "The related request lifecycle advances immediately after the approval decision."
+        },
+        {
+          label: "Seller context",
+          value: approval.request.sellerOrganization?.name ?? "Not assigned",
+          detail: approval.request.sellerOrganization?.slug ?? "Seller not attached yet"
+        }
+      ],
+      emptyTitle: "No approval reasoning available",
+      emptyDescription: "Atlas will render approval-specific reasoning here when the record is available."
+    },
     preview: {
       eyebrow: "Decision posture",
       title: "Approval decision summary",
