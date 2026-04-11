@@ -168,6 +168,21 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the buyer request detail route with payment execution posture", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/requests/phase-0-request-approved`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Execute payment attempt") ||
+        html.includes("Retry payment attempt") ||
+        html.includes("Execution currently unavailable") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Record not available in this workspace") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller workspace route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller`);
     const html = await response.text();

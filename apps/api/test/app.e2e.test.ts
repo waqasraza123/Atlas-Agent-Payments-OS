@@ -254,6 +254,11 @@ const databaseMock = vi.hoisted(() => ({
       currency: "USD",
       latestAttemptNumber: 1,
       latestAttemptStatus: "CAPTURED",
+      requestStatus: "COMPLETED",
+      receiptStatus: "AVAILABLE",
+      sellerFulfillmentStatus: "DELIVERED",
+      retryEligible: false,
+      reconciliationState: "RECEIPT_AVAILABLE",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       attempts: [
@@ -264,6 +269,11 @@ const databaseMock = vi.hoisted(() => ({
           rail: "INTERNAL_SIMULATED",
           status: "CAPTURED",
           reference: "sim-request-created-captured-01",
+          providerStatus: "captured",
+          evidence: {
+            providerStatus: "captured",
+            paymentIntentId: null
+          },
           errorCode: null,
           errorMessage: null,
           createdAt: new Date().toISOString()
@@ -286,6 +296,11 @@ const databaseMock = vi.hoisted(() => ({
     currency: "USD",
     latestAttemptNumber: 1,
     latestAttemptStatus: "CAPTURED",
+    requestStatus: "COMPLETED",
+    receiptStatus: "AVAILABLE",
+    sellerFulfillmentStatus: "DELIVERED",
+    retryEligible: false,
+    reconciliationState: "RECEIPT_AVAILABLE",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     attempts: [
@@ -296,6 +311,11 @@ const databaseMock = vi.hoisted(() => ({
         rail: "INTERNAL_SIMULATED",
         status: "CAPTURED",
         reference: "sim-request-created-captured-01",
+        providerStatus: "captured",
+        evidence: {
+          providerStatus: "captured",
+          paymentIntentId: null
+        },
         errorCode: null,
         errorMessage: null,
         createdAt: new Date().toISOString()
@@ -317,6 +337,11 @@ const databaseMock = vi.hoisted(() => ({
     currency: "USD",
     latestAttemptNumber: 1,
     latestAttemptStatus: "CAPTURED",
+    requestStatus: "COMPLETED",
+    receiptStatus: "AVAILABLE",
+    sellerFulfillmentStatus: "DELIVERED",
+    retryEligible: false,
+    reconciliationState: "RECEIPT_AVAILABLE",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     attempts: [
@@ -327,6 +352,11 @@ const databaseMock = vi.hoisted(() => ({
         rail: "INTERNAL_SIMULATED",
         status: "CAPTURED",
         reference: "sim-request-created-captured-01",
+        providerStatus: "captured",
+        evidence: {
+          providerStatus: "captured",
+          paymentIntentId: null
+        },
         errorCode: null,
         errorMessage: null,
         createdAt: new Date().toISOString()
@@ -343,6 +373,9 @@ const databaseMock = vi.hoisted(() => ({
       storageKey: "receipts/request-created.json",
       contentType: "application/json",
       paymentReference: "sim-request-created-captured-01",
+      paymentStatus: "CAPTURED",
+      sellerFulfillmentStatus: "DELIVERED",
+      rail: "INTERNAL_SIMULATED",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -356,6 +389,9 @@ const databaseMock = vi.hoisted(() => ({
     storageKey: "receipts/request-created.json",
     contentType: "application/json",
     paymentReference: "sim-request-created-captured-01",
+    paymentStatus: "CAPTURED",
+    sellerFulfillmentStatus: "DELIVERED",
+    rail: "INTERNAL_SIMULATED",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }))
@@ -602,14 +638,24 @@ describe("atlas api e2e", () => {
       expect.objectContaining({
         id: "payment-1",
         rail: "INTERNAL_SIMULATED",
-        latestAttemptStatus: "CAPTURED"
+        latestAttemptStatus: "CAPTURED",
+        reconciliationState: "RECEIPT_AVAILABLE",
+        retryEligible: false
       })
     ]);
 
     expect(getResponse.status).toBe(200);
     expect(getResponse.body.item).toMatchObject({
       id: "payment-1",
-      status: "CAPTURED"
+      status: "CAPTURED",
+      requestStatus: "COMPLETED",
+      receiptStatus: "AVAILABLE",
+      sellerFulfillmentStatus: "DELIVERED",
+      attempts: [
+        expect.objectContaining({
+          providerStatus: "captured"
+        })
+      ]
     });
 
     expect(executeResponse.status).toBe(201);
@@ -648,6 +694,133 @@ describe("atlas api e2e", () => {
     expect(response.body.message).toBe("A payment already exists for this request and is not currently retry eligible.");
   });
 
+  it("executes the stripe rail through the protected buyer payment route", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockResolvedValueOnce({
+      id: "payment-stripe",
+      requestId: "request-created",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      rail: "STRIPE",
+      status: "PENDING",
+      provider: "stripe",
+      reference: "pi_test_123",
+      amountMinor: 2400,
+      currency: "USD",
+      latestAttemptNumber: 1,
+      latestAttemptStatus: "PENDING",
+      requestStatus: "EXECUTING",
+      receiptStatus: "PENDING",
+      sellerFulfillmentStatus: null,
+      retryEligible: false,
+      reconciliationState: "AWAITING_PAYMENT_METHOD",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      attempts: [
+        {
+          id: "attempt-stripe-1",
+          paymentId: "payment-stripe",
+          attemptNumber: 1,
+          rail: "STRIPE",
+          status: "PENDING",
+          reference: "pi_test_123",
+          providerStatus: "requires_payment_method",
+          evidence: {
+            providerStatus: "requires_payment_method",
+            paymentIntentId: "pi_test_123"
+          },
+          errorCode: null,
+          errorMessage: null,
+          createdAt: new Date().toISOString()
+        }
+      ]
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "STRIPE"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.item).toMatchObject({
+      id: "payment-stripe",
+      rail: "STRIPE",
+      provider: "stripe",
+      reconciliationState: "AWAITING_PAYMENT_METHOD"
+    });
+  });
+
+  it("returns bad request when stripe execution is not configured", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockRejectedValueOnce(
+      new AtlasPaymentsWorkflowError("Stripe rail is not configured in this environment.", "bad_request")
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "STRIPE"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Stripe rail is not configured in this environment.");
+  });
+
+  it("returns conflict when payment retries switch rails in the current baseline", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockRejectedValueOnce(
+      new AtlasPaymentsWorkflowError("Payment retries must use the same rail during the current Phase 4 baseline.", "conflict")
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "STRIPE"
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe("Payment retries must use the same rail during the current Phase 4 baseline.");
+  });
+
   it("lists and fetches receipts through shared protected routes", async () => {
     actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
       status: "ready",
@@ -678,7 +851,9 @@ describe("atlas api e2e", () => {
     expect(getResponse.status).toBe(200);
     expect(getResponse.body.item).toMatchObject({
       id: "receipt-1",
-      paymentReference: "sim-request-created-captured-01"
+      paymentReference: "sim-request-created-captured-01",
+      paymentStatus: "CAPTURED",
+      rail: "INTERNAL_SIMULATED"
     });
   });
 

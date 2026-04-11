@@ -1,4 +1,5 @@
 import {
+  formatAtlasPaymentReconciliationStateLabel,
   getAtlasWorkspaceSurfaceByKey,
   listAtlasApiDomainDefinitionsForWorkspace,
   listAtlasQueueDefinitionsForFamily,
@@ -81,6 +82,45 @@ function resolvePaymentStatusTone(status: PaymentStatus): RecordListPanelItem["s
   }
 
   return "default";
+}
+
+function extractSellerFulfillmentStatus(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const sellerFulfillment = (metadata as Record<string, unknown>).sellerFulfillment;
+
+  if (!sellerFulfillment || typeof sellerFulfillment !== "object" || Array.isArray(sellerFulfillment)) {
+    return null;
+  }
+
+  const fulfillmentStatus = (sellerFulfillment as Record<string, unknown>).fulfillmentStatus;
+  return fulfillmentStatus === "DELIVERED" || fulfillmentStatus === "FAILED" ? fulfillmentStatus : null;
+}
+
+function derivePaymentReconciliationLabel(input: {
+  requestStatus: SpendRequestStatus;
+  paymentStatus: PaymentStatus;
+  receiptStatus: string | null;
+  sellerFulfillmentStatus: "DELIVERED" | "FAILED" | null;
+}) {
+  const reconciliationState =
+    input.paymentStatus === "CAPTURED" && input.receiptStatus === "AVAILABLE"
+      ? "RECEIPT_AVAILABLE"
+      : input.paymentStatus === "CAPTURED" && input.sellerFulfillmentStatus !== "DELIVERED"
+        ? "AWAITING_SELLER_CONFIRMATION"
+        : input.paymentStatus === "AUTHORIZED"
+          ? "AWAITING_SETTLEMENT"
+          : input.paymentStatus === "FAILED"
+            ? "FAILED"
+            : input.paymentStatus === "VOIDED"
+              ? "CANCELED"
+              : input.requestStatus === "APPROVED"
+                ? "READY_TO_EXECUTE"
+                : "AWAITING_PAYMENT_METHOD";
+
+  return formatAtlasPaymentReconciliationStateLabel(reconciliationState);
 }
 
 function createModuleAlignmentItems(workspace: OrganizationKind): RecordListPanelItem[] {
@@ -416,7 +456,11 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
         sellerOrganizationId: actor.organization.id
       },
       include: {
-        request: true,
+        request: {
+          include: {
+            receipt: true
+          }
+        },
         organization: true
       },
       orderBy: {
@@ -429,7 +473,12 @@ async function loadSellerPrimaryItems(actor: AtlasActorContext, surfaceKey: Atla
       id: payment.id,
       title: payment.request.title,
       description: `${payment.organization.name} · ${formatCurrencyMinor(payment.amountMinor, payment.currency)}`,
-      detail: payment.reference ?? "No payment reference",
+      detail: `${derivePaymentReconciliationLabel({
+        requestStatus: payment.request.status,
+        paymentStatus: payment.status,
+        receiptStatus: payment.request.receipt?.status ?? null,
+        sellerFulfillmentStatus: extractSellerFulfillmentStatus(payment.request.metadata)
+      })} · ${payment.reference ?? "No payment reference"}`,
       href: getAtlasWorkspaceDetailHref("SELLER", "payments", payment.id) ?? undefined,
       statusLabel: payment.status,
       statusTone: resolvePaymentStatusTone(payment.status)
@@ -589,7 +638,8 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
       include: {
         organization: true,
         sellerOrganization: true,
-        payment: true
+        payment: true,
+        receipt: true
       },
       orderBy: {
         createdAt: "desc"
@@ -601,7 +651,14 @@ async function loadOperatorPrimaryItems(actor: AtlasActorContext, surfaceKey: At
       id: request.id,
       title: request.title,
       description: `${request.organization.name} → ${request.sellerOrganization?.name ?? "No seller"}`,
-      detail: request.payment?.status ?? request.status,
+      detail: request.payment
+        ? `${derivePaymentReconciliationLabel({
+            requestStatus: request.status,
+            paymentStatus: request.payment.status,
+            receiptStatus: request.receipt?.status ?? null,
+            sellerFulfillmentStatus: extractSellerFulfillmentStatus(request.metadata)
+          })} · ${request.payment.status}`
+        : request.status,
       href: getAtlasWorkspaceDetailHref("OPERATOR", "transactions", request.id) ?? undefined,
       statusLabel: request.status,
       statusTone: resolveRequestStatusTone(request.status)

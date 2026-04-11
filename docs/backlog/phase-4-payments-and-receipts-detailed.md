@@ -24,8 +24,10 @@ Phases 0 through 3 build trust, structure, and two-sided workflows. Phase 4 turn
 
 - Phase 4.1 payment rail abstraction is now in place in repo scope
 - Phase 4.2 internal simulated settlement is now in place in repo scope
-- Initial receipt truth updates now happen during buyer-triggered payment execution
-- The next active Phase 4 slice is Stripe baseline, retry lifecycle hardening, and reconciliation views
+- Phase 4.3 Stripe baseline is now in place in repo scope through payment-intent creation behind the shared rail abstraction
+- Phase 4.4 retry lifecycle hardening is now in place in repo scope through immutable attempts, rail-locked retries, and attempt caps
+- Initial receipt truth updates now happen during buyer-triggered payment execution, and payment detail now exposes reconciliation posture
+- The next active Phase 4 slice is richer receipt evidence and broader reconciliation views
 
 ## Detailed Sub-Steps
 

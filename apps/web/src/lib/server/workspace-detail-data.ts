@@ -2,6 +2,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
   formatAtlasPaymentRailLabel,
+  formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
   formatAtlasPolicyEvaluationOutcomeLabel,
   formatAtlasReceiptStatusLabel,
@@ -1001,6 +1002,36 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
     return null;
   }
 
+  const paymentMetadata =
+    payment.metadata && typeof payment.metadata === "object" && !Array.isArray(payment.metadata)
+      ? (payment.metadata as Record<string, unknown>)
+      : null;
+  const receiptMetadata =
+    payment.request.receipt?.metadata &&
+    typeof payment.request.receipt.metadata === "object" &&
+    !Array.isArray(payment.request.receipt.metadata)
+      ? (payment.request.receipt.metadata as Record<string, unknown>)
+      : null;
+  const sellerFulfillment = extractSellerFulfillment(
+    payment.request.metadata && typeof payment.request.metadata === "object" && !Array.isArray(payment.request.metadata)
+      ? (payment.request.metadata as Record<string, unknown>)
+      : null
+  );
+  const reconciliationState =
+    payment.status === "CAPTURED" && payment.request.receipt?.status === "AVAILABLE"
+      ? "RECEIPT_AVAILABLE"
+      : payment.status === "CAPTURED" && sellerFulfillment?.fulfillmentStatus !== "DELIVERED"
+        ? "AWAITING_SELLER_CONFIRMATION"
+        : payment.status === "AUTHORIZED"
+          ? "AWAITING_SETTLEMENT"
+          : payment.status === "FAILED"
+            ? "FAILED"
+            : payment.status === "VOIDED"
+              ? "CANCELED"
+              : payment.request.status === "APPROVED"
+                ? "READY_TO_EXECUTE"
+                : "AWAITING_PAYMENT_METHOD";
+
   const requestDetail = await loadRequestDetailModel(actor, actor.workspace === "SELLER" ? "requests" : "transactions", payment.request.id);
 
   if (!requestDetail) {
@@ -1024,6 +1055,13 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
         label: "Rail",
         value: formatAtlasPaymentRailLabel(payment.rail),
         detail: payment.reference ?? "No external payment reference recorded"
+      },
+      {
+        label: "Reconciliation",
+        value: formatAtlasPaymentReconciliationStateLabel(reconciliationState),
+        detail: payment.request.receipt?.status
+          ? `Receipt ${formatAtlasReceiptStatusLabel(payment.request.receipt.status)}`
+          : "Receipt record not available yet"
       },
       {
         label: "Amount",
@@ -1052,6 +1090,14 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
           detail: payment.attempts[0]?.reference ?? "Atlas will append immutable attempts here during execution."
         },
         {
+          label: "Provider status",
+          value:
+            (typeof paymentMetadata?.latestProviderStatus === "string" && paymentMetadata.latestProviderStatus) ||
+            (typeof receiptMetadata?.providerStatus === "string" && receiptMetadata.providerStatus) ||
+            "Not captured",
+          detail: "Atlas keeps the normalized payment status separate from the provider-native status."
+        },
+        {
           label: "Buyer organization",
           value: payment.organization.name,
           detail: payment.organization.slug
@@ -1077,7 +1123,14 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       items: payment.attempts.slice(0, 4).map((attempt) => ({
         label: `Attempt ${attempt.attemptNumber}`,
         value: formatAtlasPaymentStatusLabel(attempt.status),
-        detail: attempt.errorMessage ?? attempt.reference ?? "No attempt evidence captured"
+        detail:
+          attempt.errorMessage ??
+          (attempt.evidence &&
+          typeof attempt.evidence === "object" &&
+          !Array.isArray(attempt.evidence) &&
+          typeof (attempt.evidence as Record<string, unknown>).providerStatus === "string"
+            ? ((attempt.evidence as Record<string, unknown>).providerStatus as string)
+            : attempt.reference ?? "No attempt evidence captured")
       })),
       emptyTitle: "No payment attempts recorded",
       emptyDescription: "Atlas will render immutable payment attempts here once execution begins."

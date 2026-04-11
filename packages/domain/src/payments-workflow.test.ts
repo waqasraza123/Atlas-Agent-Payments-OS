@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
+  deriveAtlasPaymentReconciliationState,
   determineAtlasSimulatedPaymentScenario,
   formatAtlasPaymentRailLabel,
+  formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
   formatAtlasReceiptStatusLabel,
+  isAtlasPaymentAttemptLimitReached,
   isAtlasPaymentExecutionEligible,
   isAtlasPaymentRetryEligible,
+  isAtlasStripePaymentIntentStatus,
+  normalizeAtlasStripePaymentStatus,
   resolveAtlasReceiptStatus
 } from "./payments-workflow";
 
@@ -53,8 +59,39 @@ describe("atlas payments workflow contracts", () => {
     expect(formatAtlasPaymentRailLabel("INTERNAL_SIMULATED")).toBe("Internal Simulated");
     expect(formatAtlasPaymentStatusLabel("CAPTURED")).toBe("Captured");
     expect(formatAtlasReceiptStatusLabel("AVAILABLE")).toBe("Available");
+    expect(formatAtlasPaymentReconciliationStateLabel("AWAITING_SELLER_CONFIRMATION")).toBe("Awaiting Seller Confirmation");
     expect(isAtlasPaymentExecutionEligible("APPROVED")).toBe(true);
     expect(isAtlasPaymentRetryEligible("FAILED")).toBe(true);
     expect(isAtlasPaymentRetryEligible("CAPTURED")).toBe(false);
+  });
+
+  it("normalizes stripe payment intent statuses", () => {
+    expect(normalizeAtlasStripePaymentStatus("requires_payment_method")).toBe("PENDING");
+    expect(normalizeAtlasStripePaymentStatus("requires_capture")).toBe("AUTHORIZED");
+    expect(normalizeAtlasStripePaymentStatus("succeeded")).toBe("CAPTURED");
+    expect(normalizeAtlasStripePaymentStatus("canceled")).toBe("VOIDED");
+    expect(isAtlasStripePaymentIntentStatus("processing")).toBe(true);
+    expect(isAtlasStripePaymentIntentStatus("unknown")).toBe(false);
+  });
+
+  it("derives reconciliation posture and retry caps", () => {
+    expect(
+      deriveAtlasPaymentReconciliationState({
+        requestStatus: "APPROVED",
+        paymentStatus: null,
+        receiptStatus: null,
+        sellerFulfillmentStatus: null
+      })
+    ).toBe("READY_TO_EXECUTE");
+    expect(
+      deriveAtlasPaymentReconciliationState({
+        requestStatus: "EXECUTING",
+        paymentStatus: "CAPTURED",
+        receiptStatus: "PENDING",
+        sellerFulfillmentStatus: null
+      })
+    ).toBe("AWAITING_SELLER_CONFIRMATION");
+    expect(isAtlasPaymentAttemptLimitReached(atlasPaymentMaximumAttemptCount)).toBe(true);
+    expect(isAtlasPaymentAttemptLimitReached(atlasPaymentMaximumAttemptCount - 1)).toBe(false);
   });
 });

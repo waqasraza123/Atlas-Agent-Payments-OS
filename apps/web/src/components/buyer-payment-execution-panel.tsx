@@ -1,4 +1,5 @@
-import { isAtlasPaymentExecutionEligible, isAtlasPaymentRetryEligible } from "@atlas/domain";
+import { paymentRuntime } from "@atlas/config";
+import { atlasPaymentMaximumAttemptCount, isAtlasPaymentAttemptLimitReached, isAtlasPaymentExecutionEligible, isAtlasPaymentRetryEligible } from "@atlas/domain";
 import { prisma } from "@atlas/database";
 import { DetailGrid, StatePanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -69,16 +70,28 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
   }
 
   const latestAttempt = request.payment?.attempts[0] ?? null;
+  const attemptCount = request.payment?.attempts.length ?? 0;
   const canExecute = isAtlasPaymentExecutionEligible(request.status);
   const canRetry = request.payment ? isAtlasPaymentRetryEligible(request.payment.status) : false;
+  const attemptLimitReached = isAtlasPaymentAttemptLimitReached(attemptCount);
   const action = executeBuyerPaymentAction.bind(null, requestId);
+  const availableRails = paymentRuntime.stripeEnabled
+    ? [
+        { value: "INTERNAL_SIMULATED", label: "Internal simulated" },
+        { value: "STRIPE", label: "Stripe" }
+      ]
+    : [{ value: "INTERNAL_SIMULATED", label: "Internal simulated" }];
 
-  if (!canExecute && !canRetry) {
+  if ((!canExecute && !canRetry) || attemptLimitReached) {
     return (
       <DetailGrid
         eyebrow="Payment execution"
-        title="Execution currently unavailable"
-        description="Payment execution remains gated until the request is approved or an existing failed attempt becomes retry eligible."
+        title={attemptLimitReached ? "Execution limit reached" : "Execution currently unavailable"}
+        description={
+          attemptLimitReached
+            ? `Atlas only allows ${atlasPaymentMaximumAttemptCount} attempts per request during the current Phase 4 baseline.`
+            : "Payment execution remains gated until the request is approved or an existing failed attempt becomes retry eligible."
+        }
         items={[
           {
             label: "Request status",
@@ -89,6 +102,11 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
             label: "Current payment",
             value: request.payment?.status ?? "Not created",
             detail: formatOptionalValue(latestAttempt?.reference, "No payment attempt has been recorded yet.")
+          },
+          {
+            label: "Attempt count",
+            value: `${attemptCount}`,
+            detail: `Maximum attempts in this baseline: ${atlasPaymentMaximumAttemptCount}`
           },
           {
             label: "Seller",
@@ -103,18 +121,30 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
   return (
     <WorkflowFormPanel
       eyebrow="Payment execution"
-      title={canRetry ? "Retry payment attempt" : "Execute simulated payment"}
+      title={canRetry ? "Retry payment attempt" : "Execute payment attempt"}
       description="Atlas creates an immutable payment attempt, updates the payment intent, and refreshes receipt truth from the latest seller fulfillment posture."
       action={action}
       submitLabel={canRetry ? "Retry payment execution" : "Execute payment"}
     >
-      <input type="hidden" name="rail" value="INTERNAL_SIMULATED" />
-      <WorkflowFormField label="Rail" hint="Phase 4 uses the internal simulated rail. Stripe remains behind the same abstraction for a later slice.">
-        <input
-          readOnly
-          value="Internal simulated"
+      <WorkflowFormField
+        label="Rail"
+        hint={
+          paymentRuntime.stripeEnabled
+            ? "Stripe is available in this environment and remains hidden behind the same Atlas payment abstraction."
+            : "Stripe is not configured in this environment, so execution falls back to the internal simulated rail."
+        }
+      >
+        <select
+          name="rail"
+          defaultValue="INTERNAL_SIMULATED"
           className="w-full rounded-2xl border border-[var(--atlas-outline)] bg-[var(--atlas-surface-muted)] px-4 py-3 text-sm text-[var(--atlas-ink)]"
-        />
+        >
+          {availableRails.map((rail) => (
+            <option key={rail.value} value={rail.value}>
+              {rail.label}
+            </option>
+          ))}
+        </select>
       </WorkflowFormField>
       <WorkflowFormField label="Execution posture" hint="Execution is allowed on approved requests and retries remain limited to failed or voided attempts.">
         <input
@@ -134,6 +164,13 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
         <input
           readOnly
           value={formatOptionalValue(latestAttempt?.reference, "No attempt recorded")}
+          className="w-full rounded-2xl border border-[var(--atlas-outline)] bg-[var(--atlas-surface-muted)] px-4 py-3 text-sm text-[var(--atlas-ink)]"
+        />
+      </WorkflowFormField>
+      <WorkflowFormField label="Attempt count" hint="Phase 4 currently caps execution attempts per request to keep evidence and retry posture bounded.">
+        <input
+          readOnly
+          value={`${attemptCount} of ${atlasPaymentMaximumAttemptCount}`}
           className="w-full rounded-2xl border border-[var(--atlas-outline)] bg-[var(--atlas-surface-muted)] px-4 py-3 text-sm text-[var(--atlas-ink)]"
         />
       </WorkflowFormField>

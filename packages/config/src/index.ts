@@ -3,6 +3,11 @@ function readNumber(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readOptionalText(value: string | undefined) {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
 export const atlasProduct = {
   name: "Atlas Agent Payments OS",
   summary: "Premium controls for managed AI agent spend across paid APIs and digital services."
@@ -20,6 +25,12 @@ export const apiRuntime = {
 
 export const workerRuntime = {
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379"
+} as const;
+
+export const paymentRuntime = {
+  stripeSecretKey: readOptionalText(process.env.STRIPE_SECRET_KEY),
+  stripeWebhookSecret: readOptionalText(process.env.STRIPE_WEBHOOK_SECRET),
+  stripeEnabled: Boolean(readOptionalText(process.env.STRIPE_SECRET_KEY))
 } as const;
 
 export const storageRuntime = {

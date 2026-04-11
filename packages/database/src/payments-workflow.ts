@@ -1,15 +1,22 @@
 import type { AtlasActorContext } from "@atlas/auth";
+import { paymentRuntime } from "@atlas/config";
 import {
+  atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
+  deriveAtlasPaymentReconciliationState,
   determineAtlasSimulatedPaymentScenario,
   formatAtlasPaymentRailLabel,
+  isAtlasPaymentAttemptLimitReached,
   isAtlasPaymentExecutionEligible,
   isAtlasPaymentRetryEligible,
+  isAtlasStripePaymentIntentStatus,
+  normalizeAtlasStripePaymentStatus,
   resolveAtlasReceiptStatus,
   type AtlasPaymentAttemptRecord,
   type AtlasPaymentIntentRecord,
   type AtlasReceiptRecord
 } from "@atlas/domain";
+import Stripe from "stripe";
 import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
@@ -25,6 +32,18 @@ export class AtlasPaymentsWorkflowError extends Error {
 }
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
+
+type PaymentExecutionResolution = {
+  provider: string;
+  reference: string;
+  normalizedStatus: AtlasPaymentAttemptRecord["status"];
+  providerStatus: string;
+  evidence: Record<string, unknown>;
+  errorCode: string | null;
+  errorMessage: string | null;
+};
+
+let atlasStripeClient: Stripe | null | undefined;
 
 function normalizeValidationError(error: unknown): never {
   if (error instanceof AtlasPaymentsWorkflowError) {
@@ -50,6 +69,20 @@ function asInputJsonValue(value: Record<string, unknown>): Prisma.InputJsonValue
   return value as Prisma.InputJsonValue;
 }
 
+function getAtlasStripeClient() {
+  if (atlasStripeClient !== undefined) {
+    return atlasStripeClient;
+  }
+
+  if (!paymentRuntime.stripeSecretKey) {
+    atlasStripeClient = null;
+    return atlasStripeClient;
+  }
+
+  atlasStripeClient = new Stripe(paymentRuntime.stripeSecretKey);
+  return atlasStripeClient;
+}
+
 function extractSellerFulfillmentStatus(metadata: Prisma.JsonValue | null) {
   const metadataObject = asJsonObject(metadata);
   const sellerFulfillment =
@@ -69,6 +102,12 @@ function extractScenarioKey(metadata: Prisma.JsonValue | null) {
   return typeof scenarioKey === "string" && scenarioKey.trim().length > 0 ? scenarioKey : null;
 }
 
+function extractProviderStatus(value: Prisma.JsonValue | null) {
+  const metadataObject = asJsonObject(value);
+  const providerStatus = metadataObject?.providerStatus;
+  return typeof providerStatus === "string" && providerStatus.trim().length > 0 ? providerStatus : null;
+}
+
 function mapPaymentAttemptRecord(attempt: {
   id: string;
   paymentId: string;
@@ -76,6 +115,7 @@ function mapPaymentAttemptRecord(attempt: {
   rail: string;
   status: string;
   reference: string | null;
+  evidence: Prisma.JsonValue | null;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: Date;
@@ -87,6 +127,8 @@ function mapPaymentAttemptRecord(attempt: {
     rail: attempt.rail as AtlasPaymentAttemptRecord["rail"],
     status: attempt.status as AtlasPaymentAttemptRecord["status"],
     reference: attempt.reference,
+    providerStatus: extractProviderStatus(attempt.evidence),
+    evidence: asJsonObject(attempt.evidence),
     errorCode: attempt.errorCode,
     errorMessage: attempt.errorMessage,
     createdAt: attempt.createdAt.toISOString()
@@ -104,6 +146,13 @@ function mapPaymentIntentRecord(payment: {
   currency: string;
   createdAt: Date;
   updatedAt: Date;
+  request: {
+    status: string;
+    metadata: Prisma.JsonValue | null;
+    receipt: {
+      status: string;
+    } | null;
+  };
   organization: { id: string; name: string };
   sellerOrganization: { id: string; name: string } | null;
   attempts: Array<{
@@ -113,6 +162,7 @@ function mapPaymentIntentRecord(payment: {
     rail: string;
     status: string;
     reference: string | null;
+    evidence: Prisma.JsonValue | null;
     errorCode: string | null;
     errorMessage: string | null;
     createdAt: Date;
@@ -123,6 +173,8 @@ function mapPaymentIntentRecord(payment: {
     .sort((left, right) => right.attemptNumber - left.attemptNumber)
     .map(mapPaymentAttemptRecord);
   const latestAttempt = attempts[0] ?? null;
+  const sellerFulfillmentStatus = extractSellerFulfillmentStatus(payment.request.metadata);
+  const receiptStatus = payment.request.receipt?.status as AtlasPaymentIntentRecord["receiptStatus"];
 
   return {
     id: payment.id,
@@ -139,6 +191,16 @@ function mapPaymentIntentRecord(payment: {
     currency: payment.currency,
     latestAttemptNumber: latestAttempt?.attemptNumber ?? 0,
     latestAttemptStatus: latestAttempt?.status ?? null,
+    requestStatus: payment.request.status,
+    receiptStatus: receiptStatus ?? null,
+    sellerFulfillmentStatus,
+    retryEligible: isAtlasPaymentRetryEligible(payment.status as AtlasPaymentIntentRecord["status"]),
+    reconciliationState: deriveAtlasPaymentReconciliationState({
+      requestStatus: payment.request.status,
+      paymentStatus: payment.status as AtlasPaymentIntentRecord["status"],
+      receiptStatus: receiptStatus ?? null,
+      sellerFulfillmentStatus
+    }),
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
     attempts
@@ -158,6 +220,12 @@ function mapReceiptRecord(receipt: {
 }): AtlasReceiptRecord {
   const metadata = asJsonObject(receipt.metadata);
   const paymentReference = typeof metadata?.paymentReference === "string" ? metadata.paymentReference : null;
+  const paymentStatus = typeof metadata?.paymentStatus === "string" ? metadata.paymentStatus : null;
+  const sellerFulfillmentStatus =
+    metadata?.sellerFulfillmentStatus === "DELIVERED" || metadata?.sellerFulfillmentStatus === "FAILED"
+      ? metadata.sellerFulfillmentStatus
+      : null;
+  const rail = typeof metadata?.rail === "string" ? metadata.rail : null;
 
   return {
     id: receipt.id,
@@ -168,6 +236,9 @@ function mapReceiptRecord(receipt: {
     storageKey: receipt.storageKey,
     contentType: receipt.contentType,
     paymentReference,
+    paymentStatus: paymentStatus as AtlasReceiptRecord["paymentStatus"],
+    sellerFulfillmentStatus,
+    rail: rail as AtlasReceiptRecord["rail"],
     createdAt: receipt.createdAt.toISOString(),
     updatedAt: receipt.updatedAt.toISOString()
   };
@@ -198,6 +269,84 @@ async function createAuditEvent(
   });
 }
 
+async function executeInternalSimulatedRail(input: {
+  requestId: string;
+  requestStatus: string;
+  scenarioKey: string | null;
+  serviceCategory: string;
+  amountMinor: number;
+  currency: string;
+  attemptNumber: number;
+}): Promise<PaymentExecutionResolution> {
+  const simulatedScenario = determineAtlasSimulatedPaymentScenario({
+    scenarioKey: input.scenarioKey,
+    serviceCategory: input.serviceCategory,
+    amountMinor: input.amountMinor
+  });
+  const reference = `sim-${input.requestId}-${simulatedScenario.referenceSuffix}-${String(input.attemptNumber).padStart(2, "0")}`;
+
+  return {
+    provider: "simulated",
+    reference,
+    normalizedStatus: simulatedScenario.outcome,
+    providerStatus: simulatedScenario.outcome.toLowerCase(),
+    evidence: {
+      ...simulatedScenario.evidence,
+      providerStatus: simulatedScenario.outcome.toLowerCase(),
+      requestStatusBeforeExecution: input.requestStatus
+    },
+    errorCode: simulatedScenario.outcome === "FAILED" ? "SIMULATED_SETTLEMENT_FAILURE" : null,
+    errorMessage: simulatedScenario.outcome === "FAILED" ? "Simulated rail rejected the payment attempt." : null
+  };
+}
+
+async function executeStripeRail(input: {
+  requestId: string;
+  organizationId: string;
+  sellerOrganizationId: string;
+  amountMinor: number;
+  currency: string;
+  attemptNumber: number;
+}): Promise<PaymentExecutionResolution> {
+  const stripe = getAtlasStripeClient();
+
+  if (!stripe) {
+    throw new AtlasPaymentsWorkflowError("Stripe rail is not configured in this environment.", "bad_request");
+  }
+
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: input.amountMinor,
+    currency: input.currency.toLowerCase(),
+    automatic_payment_methods: {
+      enabled: true
+    },
+    metadata: {
+      atlasRequestId: input.requestId,
+      atlasBuyerOrganizationId: input.organizationId,
+      atlasSellerOrganizationId: input.sellerOrganizationId,
+      atlasAttemptNumber: String(input.attemptNumber)
+    }
+  });
+
+  const providerStatus = isAtlasStripePaymentIntentStatus(paymentIntent.status) ? paymentIntent.status : "processing";
+
+  return {
+    provider: "stripe",
+    reference: paymentIntent.id,
+    normalizedStatus: normalizeAtlasStripePaymentStatus(providerStatus),
+    providerStatus,
+    evidence: {
+      providerStatus,
+      paymentIntentId: paymentIntent.id,
+      livemode: paymentIntent.livemode,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency
+    },
+    errorCode: null,
+    errorMessage: null
+  };
+}
+
 export async function listPaymentIntents(actor: AtlasActorContext, client: DatabaseClient = prisma) {
   const where =
     actor.workspace === "BUYER"
@@ -209,6 +358,17 @@ export async function listPaymentIntents(actor: AtlasActorContext, client: Datab
   const payments = await client.payment.findMany({
     where,
     include: {
+      request: {
+        select: {
+          status: true,
+          metadata: true,
+          receipt: {
+            select: {
+              status: true
+            }
+          }
+        }
+      },
       organization: {
         select: {
           id: true,
@@ -242,6 +402,17 @@ export async function getPaymentIntent(actor: AtlasActorContext, paymentId: stri
         id: paymentId
       },
       include: {
+        request: {
+          select: {
+            status: true,
+            metadata: true,
+            receipt: {
+              select: {
+                status: true
+              }
+            }
+          }
+        },
         organization: {
           select: {
             id: true,
@@ -266,6 +437,17 @@ export async function getPaymentIntent(actor: AtlasActorContext, paymentId: stri
         requestId: paymentId
       },
       include: {
+        request: {
+          select: {
+            status: true,
+            metadata: true,
+            receipt: {
+              select: {
+                status: true
+              }
+            }
+          }
+        },
         organization: {
           select: {
             id: true,
@@ -391,13 +573,6 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
   try {
     const input = atlasPaymentExecutionSchema.parse(rawInput);
 
-    if (input.rail !== "INTERNAL_SIMULATED") {
-      throw new AtlasPaymentsWorkflowError(
-        `${formatAtlasPaymentRailLabel(input.rail)} execution is not implemented in the current Phase 4 baseline.`,
-        "bad_request"
-      );
-    }
-
     return await prisma.$transaction(async (transaction) => {
       const request = await transaction.spendRequest.findFirst({
         where: {
@@ -405,6 +580,17 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
           organizationId: actor.organization.id
         },
         include: {
+          request: {
+            select: {
+              status: true,
+              metadata: true,
+              receipt: {
+                select: {
+                  status: true
+                }
+              }
+            }
+          },
           organization: {
             select: {
               id: true,
@@ -458,16 +644,43 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
         );
       }
 
+      if (request.payment && request.payment.rail !== input.rail) {
+        throw new AtlasPaymentsWorkflowError(
+          "Payment retries must use the same rail during the current Phase 4 baseline.",
+          "conflict"
+        );
+      }
+
+      if (request.payment && isAtlasPaymentAttemptLimitReached(request.payment.attempts.length)) {
+        throw new AtlasPaymentsWorkflowError(
+          `Atlas only allows ${atlasPaymentMaximumAttemptCount} payment attempts per request in the current Phase 4 baseline.`,
+          "conflict"
+        );
+      }
+
       const scenarioKey = extractScenarioKey(request.metadata);
-      const simulatedScenario = determineAtlasSimulatedPaymentScenario({
-        scenarioKey,
-        serviceCategory: request.serviceCategory,
-        amountMinor: request.amountMinor
-      });
       const sellerFulfillmentStatus = extractSellerFulfillmentStatus(request.metadata);
       const attemptNumber = (request.payment?.attempts[0]?.attemptNumber ?? 0) + 1;
-      const reference = `sim-${request.id}-${simulatedScenario.referenceSuffix}-${String(attemptNumber).padStart(2, "0")}`;
-      const provider = input.rail === "STRIPE" ? "stripe" : "simulated";
+      const execution =
+        input.rail === "STRIPE"
+          ? await executeStripeRail({
+              requestId: request.id,
+              organizationId: request.organizationId,
+              sellerOrganizationId: request.sellerOrganizationId,
+              amountMinor: request.amountMinor,
+              currency: request.currency,
+              attemptNumber
+            })
+          : await executeInternalSimulatedRail({
+              requestId: request.id,
+              requestStatus: request.status,
+              scenarioKey,
+              serviceCategory: request.serviceCategory,
+              amountMinor: request.amountMinor,
+              currency: request.currency,
+              attemptNumber
+            });
+      const provider = execution.provider;
 
       const payment =
         request.payment ??
@@ -483,7 +696,8 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
             currency: request.currency,
             metadata: {
               scenarioKey,
-              createdByUserId: actor.user.id
+              createdByUserId: actor.user.id,
+              createdViaRail: input.rail
             }
           },
           include: {
@@ -525,16 +739,16 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
           paymentId: payment.id,
           attemptNumber,
           rail: input.rail,
-          status: simulatedScenario.outcome,
-          reference,
+          status: execution.normalizedStatus,
+          reference: execution.reference,
           evidence: asInputJsonValue({
-            ...simulatedScenario.evidence,
+            ...execution.evidence,
             scenarioKey,
+            providerStatus: execution.providerStatus,
             requestStatusBeforeExecution: request.status
           }),
-          errorCode: simulatedScenario.outcome === "FAILED" ? "SIMULATED_SETTLEMENT_FAILURE" : null,
-          errorMessage:
-            simulatedScenario.outcome === "FAILED" ? "Simulated rail rejected the payment attempt." : null
+          errorCode: execution.errorCode,
+          errorMessage: execution.errorMessage
         }
       });
 
@@ -546,20 +760,21 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
         payload: {
           rail: input.rail,
           attemptNumber,
-          reference
+          reference: execution.reference,
+          providerStatus: execution.providerStatus
         }
       });
 
       const nextRequestStatus =
-        simulatedScenario.outcome === "FAILED" || simulatedScenario.outcome === "VOIDED"
+        execution.normalizedStatus === "FAILED" || execution.normalizedStatus === "VOIDED"
           ? "FAILED"
-          : simulatedScenario.outcome === "CAPTURED" && sellerFulfillmentStatus === "DELIVERED"
+          : execution.normalizedStatus === "CAPTURED" && sellerFulfillmentStatus === "DELIVERED"
             ? "COMPLETED"
-            : simulatedScenario.outcome === "CAPTURED" && sellerFulfillmentStatus === "FAILED"
+            : execution.normalizedStatus === "CAPTURED" && sellerFulfillmentStatus === "FAILED"
               ? "FAILED"
               : "EXECUTING";
       const nextReceiptStatus = resolveAtlasReceiptStatus({
-        paymentStatus: simulatedScenario.outcome,
+        paymentStatus: execution.normalizedStatus,
         sellerFulfillmentStatus
       });
       const receiptStorageKey = `receipts/${request.id}.json`;
@@ -567,15 +782,17 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
         ...((asJsonObject(payment.metadata) ?? {}) as Prisma.InputJsonObject),
         scenarioKey,
         latestAttemptNumber: attemptNumber,
-        latestReference: reference,
-        latestOutcome: simulatedScenario.outcome,
-        latestEvidence: asInputJsonValue(simulatedScenario.evidence)
+        latestReference: execution.reference,
+        latestOutcome: execution.normalizedStatus,
+        latestProviderStatus: execution.providerStatus,
+        latestEvidence: asInputJsonValue(execution.evidence)
       } satisfies Prisma.InputJsonObject;
       const receiptMetadata = {
         scenarioKey,
         rail: input.rail,
-        paymentReference: reference,
-        paymentStatus: simulatedScenario.outcome,
+        paymentReference: execution.reference,
+        paymentStatus: execution.normalizedStatus,
+        providerStatus: execution.providerStatus,
         sellerFulfillmentStatus,
         attemptNumber
       } satisfies Prisma.InputJsonObject;
@@ -587,8 +804,8 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
         data: {
           rail: input.rail,
           provider,
-          reference,
-          status: simulatedScenario.outcome,
+          reference: execution.reference,
+          status: execution.normalizedStatus,
           metadata: paymentMetadata
         }
       });
@@ -642,18 +859,19 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
         targetType: "Payment",
         targetId: payment.id,
         eventType:
-          simulatedScenario.outcome === "FAILED"
+          execution.normalizedStatus === "FAILED"
             ? "payment.failed"
-            : simulatedScenario.outcome === "AUTHORIZED"
+            : execution.normalizedStatus === "AUTHORIZED"
               ? "payment.authorized"
-              : simulatedScenario.outcome === "PENDING"
+              : execution.normalizedStatus === "PENDING"
                 ? "payment.pending"
                 : "payment.captured",
         payload: {
           rail: input.rail,
           attemptNumber,
-          reference,
-          outcome: simulatedScenario.outcome
+          reference: execution.reference,
+          outcome: execution.normalizedStatus,
+          providerStatus: execution.providerStatus
         }
       });
 
@@ -675,6 +893,17 @@ export async function executeBuyerPayment(actor: AtlasActorContext, requestId: s
           id: payment.id
         },
         include: {
+          request: {
+            select: {
+              status: true,
+              metadata: true,
+              receipt: {
+                select: {
+                  status: true
+                }
+              }
+            }
+          },
           organization: {
             select: {
               id: true,

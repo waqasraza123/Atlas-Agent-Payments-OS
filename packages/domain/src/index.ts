@@ -34,23 +34,33 @@ export {
   type AtlasPolicyEvaluationResult
 } from "./buyer-workflow";
 export {
+  atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
+  atlasPaymentReconciliationStates,
+  atlasStripePaymentIntentStatuses,
+  deriveAtlasPaymentReconciliationState,
   determineAtlasSimulatedPaymentScenario,
   formatAtlasPaymentRailLabel,
+  formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
   formatAtlasReceiptStatusLabel,
+  isAtlasPaymentAttemptLimitReached,
   isAtlasPaymentExecutionEligible,
   isAtlasPaymentRetryEligible,
   isAtlasPaymentStatus,
   isAtlasPaymentTerminalStatus,
   isAtlasReceiptStatus,
+  isAtlasStripePaymentIntentStatus,
+  normalizeAtlasStripePaymentStatus,
   resolveAtlasReceiptStatus,
   type AtlasPaymentAttemptRecord,
   type AtlasPaymentExecutionInput,
   type AtlasPaymentIntentRecord,
+  type AtlasPaymentReconciliationState,
   type AtlasReceiptRecord,
   type AtlasSimulatedPaymentOutcome,
-  type AtlasSimulatedPaymentScenario
+  type AtlasSimulatedPaymentScenario,
+  type AtlasStripePaymentIntentStatus
 } from "./payments-workflow";
 export {
   atlasSellerFulfillmentStatuses,
