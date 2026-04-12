@@ -139,6 +139,7 @@ export async function POST(request: Request) {
 
             const session = await exchangeExternalIdentityForSession({
               selection: verification.payload.selection,
+              externalEmail: verification.payload.email,
               subject: verification.payload.subject,
               provider: verification.payload.provider,
               issuer: verification.payload.issuer,

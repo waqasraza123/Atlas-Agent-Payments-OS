@@ -34,6 +34,11 @@ export type AtlasPersistedAuthSessionRecord = {
   lastSeenAt: string;
 };
 
+type ExternalIdentityAssignmentRecord = {
+  id: string;
+  status: "ACTIVE" | "SUSPENDED" | "REVOKED";
+};
+
 export function mapPersistedAuthSession(session: {
   id: string;
   source: string;
@@ -137,6 +142,29 @@ async function loadIdentityProviderLink(
   });
 }
 
+async function loadExternalIdentityAssignment(
+  client: DatabaseClient,
+  input: {
+    provider: string;
+    externalEmail: string;
+    membershipId: string;
+  }
+) {
+  return client.externalIdentityAssignment.findUnique({
+    where: {
+      provider_externalEmail_membershipId: {
+        provider: input.provider,
+        externalEmail: input.externalEmail,
+        membershipId: input.membershipId
+      }
+    },
+    select: {
+      id: true,
+      status: true
+    }
+  }) as Promise<ExternalIdentityAssignmentRecord | null>;
+}
+
 export async function exchangeIdentityAssertionForSession(
   input: {
     selection: AtlasLocalSessionSelection;
@@ -166,6 +194,7 @@ export async function exchangeIdentityAssertionForSession(
 export async function exchangeExternalIdentityForSession(
   input: {
     selection: AtlasLocalSessionSelection;
+    externalEmail: string;
     subject: string;
     provider: string;
     issuer: string;
@@ -179,6 +208,7 @@ export async function exchangeExternalIdentityForSession(
   return exchangeIdentitySession(
     {
       selection: input.selection,
+      externalEmail: input.externalEmail,
       subject: input.subject,
       provider: input.provider,
       issuedAt: input.issuedAt,
@@ -197,6 +227,7 @@ export async function exchangeExternalIdentityForSession(
 async function exchangeIdentitySession(
   input: {
     selection: AtlasLocalSessionSelection;
+    externalEmail?: string;
     subject: string;
     provider: string;
     issuedAt: string;
@@ -228,6 +259,31 @@ async function exchangeIdentitySession(
   const membership = await loadMembership(input.selection, client);
   if (!membership) {
     throw new AtlasAuthSessionWorkflowError("Identity exchange could not resolve an Atlas membership.", "not_found");
+  }
+
+  const externalIdentityAssignment =
+    input.authProviderMode === "EXTERNAL_OIDC"
+      ? await loadExternalIdentityAssignment(client, {
+          provider,
+          externalEmail: (input.externalEmail ?? input.selection.userEmail).trim().toLowerCase(),
+          membershipId: membership.id
+        })
+      : null;
+
+  if (input.authProviderMode === "EXTERNAL_OIDC") {
+    if (!externalIdentityAssignment) {
+      throw new AtlasAuthSessionWorkflowError(
+        "This external identity has not been provisioned for the requested Atlas membership.",
+        "forbidden"
+      );
+    }
+
+    if (externalIdentityAssignment.status !== "ACTIVE") {
+      throw new AtlasAuthSessionWorkflowError(
+        "The supplied external identity is not currently allowed to exchange into an Atlas session.",
+        "forbidden"
+      );
+    }
   }
 
   const existingLink = await loadIdentityProviderLink(client, {
@@ -301,6 +357,17 @@ async function exchangeIdentitySession(
       }
     });
 
+    if (externalIdentityAssignment) {
+      await transaction.externalIdentityAssignment.update({
+        where: {
+          id: externalIdentityAssignment.id
+        },
+        data: {
+          lastExchangedAt: new Date()
+        }
+      });
+    }
+
     await createAuditEvent(transaction, {
       organizationId: membership.organization.id,
       userId: membership.user.id,
@@ -357,6 +424,18 @@ export async function loadAuthSessionById(sessionId: string, client: DatabaseCli
 
     if (!identityProviderLink || identityProviderLink.status !== "ACTIVE") {
       return null;
+    }
+
+    if (session.authProviderMode === "EXTERNAL_OIDC") {
+      const externalIdentityAssignment = await loadExternalIdentityAssignment(client, {
+        provider: session.provider,
+        externalEmail: session.user.email.toLowerCase(),
+        membershipId: session.membership.id
+      });
+
+      if (!externalIdentityAssignment || externalIdentityAssignment.status !== "ACTIVE") {
+        return null;
+      }
     }
   }
 

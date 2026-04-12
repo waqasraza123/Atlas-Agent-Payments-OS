@@ -442,6 +442,12 @@ describe("access governance workflow", () => {
           status: "ACTIVE"
         }))
       },
+      externalIdentityAssignment: {
+        findUnique: vi.fn(async () => ({
+          id: "assignment-1",
+          status: "ACTIVE"
+        }))
+      },
       $transaction: vi.fn(async (callback: (input: typeof transaction) => Promise<unknown>) => callback(transaction))
     } as const;
 

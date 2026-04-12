@@ -187,6 +187,12 @@ enum IdentityProviderLinkStatus {
   REVOKED
 }
 
+enum ExternalIdentityAssignmentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -199,7 +205,10 @@ model User {
   name            String?
   memberships     Membership[]
   identityProviderLinks IdentityProviderLink[]
+  externalIdentityAssignments ExternalIdentityAssignment[]
   managedIdentityProviderLinks IdentityProviderLink[] @relation("IdentityProviderLinkStatusChangedByUser")
+  provisionedExternalIdentityAssignments ExternalIdentityAssignment[] @relation("ExternalIdentityAssignmentProvisionedByUser")
+  managedExternalIdentityAssignments ExternalIdentityAssignment[] @relation("ExternalIdentityAssignmentStatusChangedByUser")
   authSessions    AuthSession[]
   approvals       Approval[]
   auditEvents     AuditEvent[]
@@ -219,6 +228,7 @@ model Organization {
   name           String
   metadata       Json?
   memberships    Membership[]
+  externalIdentityAssignments ExternalIdentityAssignment[]
   agents         Agent[]
   policies       Policy[]
   services       Service[]
@@ -247,6 +257,7 @@ model Membership {
   role           MembershipRole
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  externalIdentityAssignments ExternalIdentityAssignment[]
   authSessions   AuthSession[]
   createdAt      DateTime       @default(now())
 
@@ -271,6 +282,35 @@ model IdentityProviderLink {
   @@unique([provider, subject])
   @@index([userId, provider])
   @@index([status, lastAuthenticatedAt])
+}
+
+model ExternalIdentityAssignment {
+  id                    String                           @id @default(cuid())
+  provider              String
+  externalEmail         String
+  userId                String
+  organizationId        String
+  membershipId          String
+  status                ExternalIdentityAssignmentStatus @default(ACTIVE)
+  statusReason          String?
+  metadata              Json?
+  provisionedByUserId   String
+  statusChangedByUserId String?
+  provisionedAt         DateTime                         @default(now())
+  statusChangedAt       DateTime?
+  lastExchangedAt       DateTime?
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+  user                  User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization          Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership            Membership                       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  provisionedByUser     User                             @relation("ExternalIdentityAssignmentProvisionedByUser", fields: [provisionedByUserId], references: [id], onDelete: Restrict)
+  statusChangedByUser   User?                            @relation("ExternalIdentityAssignmentStatusChangedByUser", fields: [statusChangedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEmail, membershipId])
+  @@index([provider, externalEmail, status])
+  @@index([organizationId, status])
+  @@index([membershipId, status])
 }
 
 model AuthSession {

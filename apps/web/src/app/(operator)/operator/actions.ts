@@ -10,8 +10,10 @@ import { appRuntime, authRuntime } from "@atlas/config";
 import {
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
+  provisionExternalIdentityAssignment,
   performOperatorCaseAction,
   updateIdentityProviderLinkLifecycle,
+  updateExternalIdentityAssignmentLifecycle,
   revokeIdentityProviderSession,
   issueSupportAccessGrant,
   recertifySupportAccessGrant,
@@ -351,5 +353,61 @@ export async function updateIdentityProviderLinkLifecycleAction(linkId: string, 
     );
   } catch (error) {
     redirectWithFeedback("/operator/support-access", "Identity provider update failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function provisionExternalIdentityAssignmentAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const assignment = await provisionExternalIdentityAssignment(actor, {
+      provider: toTextValue(formData.get("provider")),
+      externalEmail: toTextValue(formData.get("externalEmail")),
+      targetOrganizationSlug: toTextValue(formData.get("targetOrganizationSlug")),
+      targetRole:
+        toTextValue(formData.get("targetRole")) === "OWNER"
+          ? "OWNER"
+          : toTextValue(formData.get("targetRole")) === "OPERATOR"
+            ? "OPERATOR"
+            : toTextValue(formData.get("targetRole")) === "REVIEWER"
+              ? "REVIEWER"
+              : toTextValue(formData.get("targetRole")) === "FINANCE"
+                ? "FINANCE"
+                : "ADMIN",
+      userName: toTextValue(formData.get("userName")) || null,
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/identity-access");
+    redirectWithFeedback(
+      "/operator/identity-access",
+      "External identity provisioned",
+      `Atlas provisioned ${assignment.externalEmail} for ${assignment.organizationName} as ${assignment.role.toLowerCase()}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/identity-access", "External identity update failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateExternalIdentityAssignmentLifecycleAction(assignmentId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const result = await updateExternalIdentityAssignmentLifecycle(actor, assignmentId, {
+      action:
+        toTextValue(formData.get("action")) === "REVOKE"
+          ? "REVOKE"
+          : toTextValue(formData.get("action")) === "REACTIVATE"
+            ? "REACTIVATE"
+            : "SUSPEND",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/identity-access");
+    redirectWithFeedback(
+      "/operator/identity-access",
+      "External identity lifecycle updated",
+      `Atlas set ${result.assignment.externalEmail} to ${result.assignment.status.toLowerCase()} and revoked ${result.revokedSessionCount} active sessions.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/identity-access", "External identity update failed", normalizeActionError(error), "error");
   }
 }

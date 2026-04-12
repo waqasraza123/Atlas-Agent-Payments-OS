@@ -279,6 +279,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the operator identity-access route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/identity-access`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Provision external tenant identities") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller services route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller/services`);
     const html = await response.text();

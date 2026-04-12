@@ -45,6 +45,7 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 - external OIDC tokens are exchanged through `/auth/provider-exchange`
 - the web runtime verifies issuer, audience, provider, and RS256 signature against configured JWKS keys
+- the exchange requires an active persisted external identity assignment for the exact provider, email, and Atlas membership
 - the exchange creates a persisted Atlas auth session tied to user, organization, membership, and provider identity
 - downstream web and API requests use the exchanged signed Atlas session rather than the raw OIDC token
 - the API validates the exchanged session against stored auth-session records before actor resolution
@@ -74,12 +75,13 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - review campaign items can recertify or revoke existing grants
 - operator governance can revoke active provider-backed tenant sessions from the same surface
 - operator governance can suspend, reactivate, or revoke persisted provider identity links from the same surface
+- operator governance can provision, suspend, reactivate, and revoke persisted external identity assignments from `/operator/identity-access`
 - support-mode sessions are blocked from CSV export and actor-scoped reporting paths that would bypass tenant-safe inspection rules
 
 ## Current Gaps
 
 - no external approval workflow outside Atlas for issuing support grants
-- no direct provisioning integration with an external IdP yet
+- no direct upstream provisioning integration with an external IdP yet
 - no automated directory deprovisioning or SCIM lifecycle yet
 
 ## Verification Commands
@@ -92,6 +94,6 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
-- add direct external identity provisioning and deprovisioning
+- add direct upstream identity provisioning and deprovisioning beyond the current Atlas-managed assignment ledger
 - add stricter tenancy audit coverage across analytics, export, and support inspection paths
 - add operational access-review checks and restore-drill execution outside local-only workflows

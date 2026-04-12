@@ -3,6 +3,7 @@ export * from "./access-governance";
 export * from "./auth-sessions";
 export { prisma } from "./client";
 export * from "./buyer-workflow";
+export * from "./external-identity-access";
 export * from "./operator-workflow";
 export * from "./payments-workflow";
 export * from "./programmable-settlement";

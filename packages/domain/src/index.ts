@@ -188,7 +188,8 @@ export type AtlasWorkspaceSurfaceKey =
   | "exceptions"
   | "audit"
   | "alerts"
-  | "support-access";
+  | "support-access"
+  | "identity-access";
 
 export type AtlasWorkspaceSurfaceDefinition = {
   key: AtlasWorkspaceSurfaceKey;
@@ -500,6 +501,15 @@ const operatorWorkspaceDefinition: AtlasWorkspaceDefinition = {
       description: "Issue constrained tenant-scoped support sessions with explicit reason capture instead of relying on silent cross-tenant access.",
       detail: "This route anchors the future support-access control model for broader rollout.",
       href: "/operator/support-access",
+      status: "available"
+    },
+    {
+      key: "identity-access",
+      label: "Identity access",
+      title: "External identity assignments",
+      description: "Provision, suspend, reactivate, and revoke tenant identity assignments before provider-backed sessions can exchange into Atlas.",
+      detail: "This route anchors direct external identity provisioning and deprovisioning for rollout hardening.",
+      href: "/operator/identity-access",
       status: "available"
     },
     {

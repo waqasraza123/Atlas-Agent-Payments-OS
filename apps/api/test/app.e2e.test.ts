@@ -947,6 +947,77 @@ const databaseMock = vi.hoisted(() => ({
     verificationNote: "Verified by operator",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
+  })),
+  listExternalIdentityAssignments: vi.fn(async () => [
+    {
+      id: "assignment-1",
+      provider: "okta-design-partner",
+      externalEmail: "buyer-admin@example.com",
+      userId: "user-buyer",
+      userEmail: "buyer-admin@example.com",
+      userName: "Buyer Admin",
+      organizationId: "org-buyer",
+      organizationSlug: "atlas-demo-buyer",
+      organizationName: "Atlas Demo Buyer",
+      workspace: "BUYER",
+      membershipId: "membership-buyer-admin",
+      role: "ADMIN",
+      status: "ACTIVE",
+      statusReason: "Design partner buyer admin provisioned for external rollout.",
+      provisionedAt: new Date().toISOString(),
+      lastExchangedAt: new Date().toISOString(),
+      statusChangedAt: new Date().toISOString(),
+      provisionedByUserEmail: "operator-admin@atlas.local",
+      statusChangedByUserEmail: "operator-admin@atlas.local",
+      activeSessionCount: 1
+    }
+  ]),
+  provisionExternalIdentityAssignment: vi.fn(async () => ({
+    id: "assignment-created",
+    provider: "okta-design-partner",
+    externalEmail: "seller-admin@example.com",
+    userId: "user-seller-admin",
+    userEmail: "seller-admin@example.com",
+    userName: "Seller Admin",
+    organizationId: "org-seller",
+    organizationSlug: "atlas-demo-seller",
+    organizationName: "Atlas Demo Seller",
+    workspace: "SELLER",
+    membershipId: "membership-seller-admin",
+    role: "ADMIN",
+    status: "ACTIVE",
+    statusReason: "Provisioned for seller rollout validation.",
+    provisionedAt: new Date().toISOString(),
+    lastExchangedAt: null,
+    statusChangedAt: new Date().toISOString(),
+    provisionedByUserEmail: "operator-admin@atlas.local",
+    statusChangedByUserEmail: "operator-admin@atlas.local",
+    activeSessionCount: 0
+  })),
+  updateExternalIdentityAssignmentLifecycle: vi.fn(async () => ({
+    assignment: {
+      id: "assignment-1",
+      provider: "okta-design-partner",
+      externalEmail: "buyer-admin@example.com",
+      userId: "user-buyer",
+      userEmail: "buyer-admin@example.com",
+      userName: "Buyer Admin",
+      organizationId: "org-buyer",
+      organizationSlug: "atlas-demo-buyer",
+      organizationName: "Atlas Demo Buyer",
+      workspace: "BUYER",
+      membershipId: "membership-buyer-admin",
+      role: "ADMIN",
+      status: "SUSPENDED",
+      statusReason: "Temporarily suspended during tenant review.",
+      provisionedAt: new Date().toISOString(),
+      lastExchangedAt: new Date().toISOString(),
+      statusChangedAt: new Date().toISOString(),
+      provisionedByUserEmail: "operator-admin@atlas.local",
+      statusChangedByUserEmail: "operator-admin@atlas.local",
+      activeSessionCount: 0
+    },
+    revokedSessionCount: 1
   }))
 }));
 
@@ -985,6 +1056,9 @@ vi.mock("@atlas/database", async () => {
       databaseMock.updateOrganizationProgrammableSettlementSettings,
     listProgrammableSettlementOrganizations: databaseMock.listProgrammableSettlementOrganizations,
     verifyOrganizationWallet: databaseMock.verifyOrganizationWallet,
+    listExternalIdentityAssignments: databaseMock.listExternalIdentityAssignments,
+    provisionExternalIdentityAssignment: databaseMock.provisionExternalIdentityAssignment,
+    updateExternalIdentityAssignmentLifecycle: databaseMock.updateExternalIdentityAssignmentLifecycle,
     listReceiptRecords: databaseMock.listReceiptRecords,
     getReceiptRecord: databaseMock.getReceiptRecord,
     getOperatorOverview: databaseMock.getOperatorOverview,
@@ -1235,6 +1309,98 @@ describe("atlas api e2e", () => {
 
     expect(response.status).toBe(403);
     expect(response.body.message).toBe("Actor does not have access to this workspace");
+  });
+
+  it("serves operator external identity assignments through guarded identity routes", async () => {
+    actorResolutionServiceMock.resolveFromHeaders.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator-admin@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/identity/external-assignments")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        id: "assignment-1",
+        externalEmail: "buyer-admin@example.com",
+        status: "ACTIVE"
+      })
+    ]);
+  });
+
+  it("provisions external identity assignments through guarded identity routes", async () => {
+    actorResolutionServiceMock.resolveFromHeaders.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator-admin@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/identity/external-assignments")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        provider: "okta-design-partner",
+        externalEmail: "seller-admin@example.com",
+        targetOrganizationSlug: "atlas-demo-seller",
+        targetRole: "ADMIN",
+        userName: "Seller Admin",
+        reason: "Provision seller administrator for rollout validation."
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.item).toMatchObject({
+      id: "assignment-created",
+      organizationSlug: "atlas-demo-seller",
+      role: "ADMIN"
+    });
+  });
+
+  it("updates external identity assignment lifecycle through guarded identity routes", async () => {
+    actorResolutionServiceMock.resolveFromHeaders.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator-admin@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/identity/external-assignments/assignment-1/lifecycle")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        action: "SUSPEND",
+        reason: "Temporarily suspend external access while tenant mapping is reviewed."
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.assignment).toMatchObject({
+      id: "assignment-1",
+      status: "SUSPENDED"
+    });
+    expect(response.body.revokedSessionCount).toBe(1);
   });
 
   it("allows shared modules for supported workspaces", async () => {
