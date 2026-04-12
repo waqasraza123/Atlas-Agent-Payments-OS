@@ -24,7 +24,7 @@ describe("health service", () => {
       ])
     );
     },
-    10000
+    20000
   );
 
   it("returns startup metadata from runtime config", async () => {

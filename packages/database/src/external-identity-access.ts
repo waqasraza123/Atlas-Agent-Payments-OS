@@ -6,6 +6,7 @@ import {
   type PrismaClient
 } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 type AtlasExternalIdentityAssignmentAction = "SUSPEND" | "REACTIVATE" | "REVOKE";
@@ -361,12 +362,22 @@ export async function listExternalIdentityAssignments(
     client
   );
 
-  return assignments.map((assignment) =>
+  const items = assignments.map((assignment) =>
     mapAssignmentRecord({
       ...assignment,
       activeSessionCount: activeSessionCounts.get(`${assignment.provider}:${assignment.membershipId}`) ?? 0
     })
   );
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "external_identity.assignments_inspected",
+    targetType: "identity_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "external_identity_assignments",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function provisionExternalIdentityAssignment(

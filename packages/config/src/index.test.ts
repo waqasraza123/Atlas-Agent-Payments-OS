@@ -14,6 +14,7 @@ describe("atlas config", () => {
       authRuntime,
       canAtlasPromoteEnvironment,
       deploymentRuntime,
+      operationsRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
       storageRuntime,
@@ -21,7 +22,10 @@ describe("atlas config", () => {
       workerRuntime,
       createAtlasStructuredLogPayload,
       createAtlasReleaseManifest,
+      validateAtlasPromotionOperationalReadiness,
       validateAtlasPromotionReadiness,
+      validateAtlasRestoreDrillReport,
+      validateAtlasSecretRotationManifest,
       validateAtlasRuntimeConfiguration
     } = await import("./index");
 
@@ -42,6 +46,16 @@ describe("atlas config", () => {
     expect(programmableSettlementRuntime.enabled).toBe(false);
     expect(programmableSettlementRuntime.chainId).toBe(84532);
     expect(storageRuntime.bucketReceipts).toBe("atlas-receipts");
+    expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
+    expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
+    expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
+      "AUTH_SESSION_SIGNING_SECRET",
+      "AUTH_IDENTITY_BRIDGE_SECRET",
+      "DATABASE_URL",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "MINIO_SECRET_KEY"
+    ]);
     expect(
       createAtlasStructuredLogPayload("api", "info", "booted", {
         requestId: "req-1"
@@ -68,6 +82,92 @@ describe("atlas config", () => {
     expect(canAtlasPromoteEnvironment("development", "staging")).toBe(true);
     expect(canAtlasPromoteEnvironment("development", "production")).toBe(false);
     expect(validateAtlasPromotionReadiness("development")).toEqual([]);
+    expect(
+      validateAtlasSecretRotationManifest("staging", {
+        version: 1,
+        environment: "staging",
+        rotatedBy: "operator-admin@atlas.local",
+        reason: "Rotate shared staging secrets before partner validation.",
+        generatedAt: new Date().toISOString(),
+        maxAgeHours: 720,
+        secrets: [
+          { key: "AUTH_SESSION_SIGNING_SECRET", rotatedAt: new Date().toISOString() },
+          { key: "AUTH_IDENTITY_BRIDGE_SECRET", rotatedAt: new Date().toISOString() },
+          { key: "DATABASE_URL", rotatedAt: new Date().toISOString() },
+          { key: "STRIPE_SECRET_KEY", rotatedAt: new Date().toISOString() },
+          { key: "STRIPE_WEBHOOK_SECRET", rotatedAt: new Date().toISOString() },
+          { key: "MINIO_SECRET_KEY", rotatedAt: new Date().toISOString() }
+        ]
+      })
+    ).toEqual([]);
+    expect(
+      validateAtlasRestoreDrillReport("staging", {
+        version: 1,
+        appEnv: "staging",
+        releaseStage: "private-beta",
+        revision: "rev-123",
+        backupPath: "/tmp/atlas.sql",
+        manifestPath: "/tmp/atlas.sql.manifest.json",
+        executedRestore: true,
+        targetEnvironment: "staging",
+        targetLabel: "staging-restore-slot",
+        backupIntegrity: {
+          version: 1,
+          filePath: "/tmp/atlas.sql",
+          sha256: "a".repeat(64),
+          sizeBytes: 128,
+          generatedAt: new Date().toISOString()
+        },
+        execution: {
+          databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
+          stdout: "RESTORE"
+        },
+        completedAt: new Date().toISOString()
+      })
+    ).toEqual([]);
+    expect(
+      validateAtlasPromotionOperationalReadiness("staging", {
+        restoreDrillReport: {
+          version: 1,
+          appEnv: "staging",
+          releaseStage: "private-beta",
+          revision: "rev-123",
+          backupPath: "/tmp/atlas.sql",
+          manifestPath: "/tmp/atlas.sql.manifest.json",
+          executedRestore: true,
+          targetEnvironment: "staging",
+          targetLabel: "staging-restore-slot",
+          backupIntegrity: {
+            version: 1,
+            filePath: "/tmp/atlas.sql",
+            sha256: "a".repeat(64),
+            sizeBytes: 128,
+            generatedAt: new Date().toISOString()
+          },
+          execution: {
+            databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
+            stdout: "RESTORE"
+          },
+          completedAt: new Date().toISOString()
+        },
+        secretRotationManifest: {
+          version: 1,
+          environment: "staging",
+          rotatedBy: "operator-admin@atlas.local",
+          reason: "Rotate shared staging secrets before partner validation.",
+          generatedAt: new Date().toISOString(),
+          maxAgeHours: 720,
+          secrets: [
+            { key: "AUTH_SESSION_SIGNING_SECRET", rotatedAt: new Date().toISOString() },
+            { key: "AUTH_IDENTITY_BRIDGE_SECRET", rotatedAt: new Date().toISOString() },
+            { key: "DATABASE_URL", rotatedAt: new Date().toISOString() },
+            { key: "STRIPE_SECRET_KEY", rotatedAt: new Date().toISOString() },
+            { key: "STRIPE_WEBHOOK_SECRET", rotatedAt: new Date().toISOString() },
+            { key: "MINIO_SECRET_KEY", rotatedAt: new Date().toISOString() }
+          ]
+        }
+      })
+    ).toEqual([]);
   });
 
   it("reads runtime values from the environment", async () => {
@@ -100,6 +200,12 @@ describe("atlas config", () => {
     vi.stubEnv("MINIO_ACCESS_KEY", "atlasminio");
     vi.stubEnv("MINIO_SECRET_KEY", "atlassecret");
     vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
+    vi.stubEnv("RESTORE_DRILL_MAX_AGE_HOURS", "168");
+    vi.stubEnv("SECRET_ROTATION_MAX_AGE_HOURS", "720");
+    vi.stubEnv(
+      "SECRET_ROTATION_REQUIRED_KEYS",
+      "AUTH_SESSION_SIGNING_SECRET,AUTH_IDENTITY_BRIDGE_SECRET,DATABASE_URL,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,MINIO_SECRET_KEY"
+    );
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_atlas");
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_atlas");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_ENABLED", "true");
@@ -115,6 +221,7 @@ describe("atlas config", () => {
       appRuntime,
       authRuntime,
       deploymentRuntime,
+      operationsRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
       storageRuntime,
@@ -159,6 +266,16 @@ describe("atlas config", () => {
     expect(programmableSettlementRuntime.requiredConfirmations).toBe(6);
     expect(storageRuntime.port).toBe(9100);
     expect(storageRuntime.useSsl).toBe(true);
+    expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
+    expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
+    expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
+      "AUTH_SESSION_SIGNING_SECRET",
+      "AUTH_IDENTITY_BRIDGE_SECRET",
+      "DATABASE_URL",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "MINIO_SECRET_KEY"
+    ]);
     expect(validateAtlasRuntimeConfiguration("api")).toMatchObject({
       service: "api",
       appEnv: "staging",
@@ -255,7 +372,7 @@ describe("atlas config", () => {
   });
 
   it("blocks unsafe promotion readiness in higher environments", async () => {
-    const { validateAtlasPromotionReadiness } = await import("./index");
+    const { validateAtlasPromotionOperationalReadiness, validateAtlasPromotionReadiness } = await import("./index");
 
     expect(
       validateAtlasPromotionReadiness("staging", {
@@ -281,6 +398,56 @@ describe("atlas config", () => {
       "Promotion to staging requires APP_REVISION to identify a non-local release.",
       "Promotion to staging requires RELEASE_ARTIFACT_ID to identify the release artifact.",
       "Promotion to staging requires RELEASE_ARTIFACT_SHA256 to be a 64-character artifact digest."
+    ]);
+
+    expect(
+      validateAtlasPromotionOperationalReadiness("production", {
+        restoreDrillReport: {
+          version: 1,
+          appEnv: "production",
+          releaseStage: "ga",
+          revision: "rev-1",
+          backupPath: "/tmp/atlas.sql",
+          manifestPath: "/tmp/atlas.sql.manifest.json",
+          executedRestore: false,
+          targetEnvironment: "staging",
+          targetLabel: "staging-restore-slot",
+          backupIntegrity: {
+            version: 1,
+            filePath: "/tmp/atlas.sql",
+            sha256: "bad",
+            sizeBytes: 0,
+            generatedAt: new Date("2020-01-01T00:00:00.000Z").toISOString()
+          },
+          execution: null,
+          completedAt: new Date("2020-01-01T00:00:00.000Z").toISOString()
+        },
+        secretRotationManifest: {
+          version: 1,
+          environment: "staging",
+          rotatedBy: "ops",
+          reason: "too short",
+          generatedAt: new Date("2020-01-01T00:00:00.000Z").toISOString(),
+          maxAgeHours: 720,
+          secrets: [{ key: "AUTH_SESSION_SIGNING_SECRET", rotatedAt: new Date("2020-01-01T00:00:00.000Z").toISOString() }]
+        }
+      })
+    ).toEqual([
+      "Restore drill report must target production.",
+      "Promotion to production requires an executed restore drill report, not a dry run.",
+      "Restore drill completedAt is older than the allowed 168-hour freshness window.",
+      "Restore drill report must include a backup integrity sha256 digest.",
+      "Restore drill report must include a positive backup size.",
+      "Secret rotation manifest must target production.",
+      "Secret rotation manifest must include the operator who completed the rotation.",
+      "Secret rotation manifest must include a durable operational reason.",
+      "Secret rotation manifest generatedAt is older than the allowed 720-hour freshness window.",
+      "Secret rotation timestamp for AUTH_SESSION_SIGNING_SECRET is older than the allowed 720-hour freshness window.",
+      "Secret rotation manifest must include AUTH_IDENTITY_BRIDGE_SECRET.",
+      "Secret rotation manifest must include DATABASE_URL.",
+      "Secret rotation manifest must include STRIPE_SECRET_KEY.",
+      "Secret rotation manifest must include STRIPE_WEBHOOK_SECRET.",
+      "Secret rotation manifest must include MINIO_SECRET_KEY."
     ]);
   });
 });

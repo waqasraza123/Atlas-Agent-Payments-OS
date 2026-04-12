@@ -51,6 +51,16 @@ Optional execution mode:
 
 1. `ATLAS_RESTORE_DRILL_EXECUTE=true ATLAS_RESTORE_DRILL_DATABASE_URL=<database-url> pnpm verify:restore-drill`
 
+Explicit proof mode:
+
+1. `ATLAS_RESTORE_DRILL_EXECUTE=true ATLAS_RESTORE_DRILL_DATABASE_URL=<database-url> pnpm exec tsx ./scripts/run-restore-drill.ts --backup <backup-file> --environment staging --label staging-restore-slot --report restore-drills/staging/latest.json`
+
+Requirements:
+
+- the restore-drill report must show `executedRestore=true`
+- the report target environment must match the environment being promoted
+- the report must stay within the configured freshness window before promotion
+
 ## Current Limitation
 
-The repo now owns the scripts, integrity checks, and dry-run restore-drill verification, but backup scheduling and non-local restore drills still need a real deployment environment and documented ownership.
+The repo now owns the scripts, integrity checks, dry-run restore-drill verification, and proof-bearing restore-drill reports, but backup scheduling and non-local restore execution still need a real deployment environment and documented ownership.

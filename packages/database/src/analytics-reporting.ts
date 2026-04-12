@@ -27,6 +27,7 @@ import type { OrganizationKind } from "@atlas/types";
 import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 export class AtlasAnalyticsReportingError extends Error {
   constructor(
@@ -98,6 +99,23 @@ function normalizeValidationError(error: unknown): never {
   }
 
   throw error;
+}
+
+function normalizeAuditFilters(rawFilters: Record<string, string | string[] | undefined>) {
+  const normalized: Prisma.JsonObject = {};
+
+  for (const [key, value] of Object.entries(rawFilters)) {
+    if (typeof value === "string") {
+      normalized[key] = value;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      normalized[key] = value;
+    }
+  }
+
+  return normalized;
 }
 
 function assertTenantAnalyticsActor(
@@ -814,7 +832,20 @@ export async function getBuyerAnalyticsForActor(actor: AtlasActorContext, client
     accessMode: "inspect"
   });
 
-  return getBuyerAnalytics(actor.organization.id, client);
+  const item = await getBuyerAnalytics(actor.organization.id, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.buyer_overview_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "BUYER",
+      accessMode: "inspect",
+      surface: "overview",
+      requestCount: item.requestCount,
+      totalSpendMinor: item.totalSpendMinor
+    }
+  });
+  return item;
 }
 
 export async function listBuyerRequestAnalytics(
@@ -843,7 +874,20 @@ export async function listBuyerRequestAnalyticsForActor(
     accessMode: "inspect"
   });
 
-  return listBuyerRequestAnalytics(actor.organization.id, rawFilters, client);
+  const items = await listBuyerRequestAnalytics(actor.organization.id, rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.buyer_requests_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "BUYER",
+      accessMode: "inspect",
+      surface: "requests",
+      resultCount: items.length,
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return items;
 }
 
 export async function listBuyerActivityAnalytics(
@@ -909,7 +953,20 @@ export async function listBuyerActivityAnalyticsForActor(
     accessMode: "inspect"
   });
 
-  return listBuyerActivityAnalytics(actor.organization.id, rawFilters, client);
+  const items = await listBuyerActivityAnalytics(actor.organization.id, rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.buyer_activity_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "BUYER",
+      accessMode: "inspect",
+      surface: "activity",
+      resultCount: items.length,
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return items;
 }
 
 export async function exportBuyerRequestCsv(
@@ -952,7 +1009,20 @@ export async function exportBuyerRequestCsvForActor(
     accessMode: "export"
   });
 
-  return exportBuyerRequestCsv(actor.organization.id, rawFilters, client);
+  const csv = await exportBuyerRequestCsv(actor.organization.id, rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.buyer_requests_exported",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "BUYER",
+      accessMode: "export",
+      surface: "requests",
+      exportFormat: "csv",
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return csv;
 }
 
 export async function getSellerRevenueAnalytics(
@@ -1025,7 +1095,20 @@ export async function getSellerRevenueAnalyticsForActor(actor: AtlasActorContext
     accessMode: "inspect"
   });
 
-  return getSellerRevenueAnalytics(actor.organization.id, client);
+  const item = await getSellerRevenueAnalytics(actor.organization.id, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.seller_overview_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "SELLER",
+      accessMode: "inspect",
+      surface: "overview",
+      requestCount: item.requestCount,
+      totalRevenueMinor: item.totalRevenueMinor
+    }
+  });
+  return item;
 }
 
 export async function listSellerRequestAnalytics(
@@ -1054,7 +1137,20 @@ export async function listSellerRequestAnalyticsForActor(
     accessMode: "inspect"
   });
 
-  return listSellerRequestAnalytics(actor.organization.id, rawFilters, client);
+  const items = await listSellerRequestAnalytics(actor.organization.id, rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.seller_requests_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "SELLER",
+      accessMode: "inspect",
+      surface: "requests",
+      resultCount: items.length,
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return items;
 }
 
 export async function exportSellerRequestCsv(
@@ -1097,7 +1193,20 @@ export async function exportSellerRequestCsvForActor(
     accessMode: "export"
   });
 
-  return exportSellerRequestCsv(actor.organization.id, rawFilters, client);
+  const csv = await exportSellerRequestCsv(actor.organization.id, rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.seller_requests_exported",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "SELLER",
+      accessMode: "export",
+      surface: "requests",
+      exportFormat: "csv",
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return csv;
 }
 
 export async function getPlatformAnalytics(client: DatabaseClient = prisma): Promise<AtlasPlatformAnalyticsRecord> {
@@ -1183,7 +1292,20 @@ export async function getPlatformAnalytics(client: DatabaseClient = prisma): Pro
 
 export async function getPlatformAnalyticsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
   assertPlatformAnalyticsActor(actor, "inspect");
-  return getPlatformAnalytics(client);
+  const item = await getPlatformAnalytics(client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.platform_overview_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "OPERATOR",
+      accessMode: "inspect",
+      surface: "platform_overview",
+      totalRequestCount: item.totalRequestCount,
+      successfulPaymentCount: item.successfulPaymentCount
+    }
+  });
+  return item;
 }
 
 export async function listPlatformTransactions(
@@ -1206,7 +1328,20 @@ export async function listPlatformTransactionsForActor(
   client: DatabaseClient = prisma
 ) {
   assertPlatformAnalyticsActor(actor, "inspect");
-  return listPlatformTransactions(rawFilters, client);
+  const items = await listPlatformTransactions(rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.platform_transactions_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "OPERATOR",
+      accessMode: "inspect",
+      surface: "transactions",
+      resultCount: items.length,
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return items;
 }
 
 export async function listPlatformOrganizations(client: DatabaseClient = prisma): Promise<AtlasOrganizationHealthRecord[]> {
@@ -1293,7 +1428,19 @@ export async function listPlatformOrganizations(client: DatabaseClient = prisma)
 
 export async function listPlatformOrganizationsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
   assertPlatformAnalyticsActor(actor, "inspect");
-  return listPlatformOrganizations(client);
+  const items = await listPlatformOrganizations(client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.platform_organizations_inspected",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "OPERATOR",
+      accessMode: "inspect",
+      surface: "organizations",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function exportPlatformTransactionCsv(
@@ -1334,5 +1481,18 @@ export async function exportPlatformTransactionCsvForActor(
   client: DatabaseClient = prisma
 ) {
   assertPlatformAnalyticsActor(actor, "export");
-  return exportPlatformTransactionCsv(rawFilters, client);
+  const csv = await exportPlatformTransactionCsv(rawFilters, client);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "analytics.platform_transactions_exported",
+    targetType: "analytics_scope",
+    targetId: actor.organization.id,
+    payload: {
+      workspace: "OPERATOR",
+      accessMode: "export",
+      surface: "transactions",
+      exportFormat: "csv",
+      filters: normalizeAuditFilters(rawFilters)
+    }
+  });
+  return csv;
 }

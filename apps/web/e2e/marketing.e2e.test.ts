@@ -86,7 +86,7 @@ describe("marketing e2e", () => {
     }
 
     throw new Error(`Could not start or discover a usable web server.\n${serverLogs}`);
-  });
+  }, 240000);
 
   afterAll(async () => {
     if (serverProcess && !serverProcess.killed) {

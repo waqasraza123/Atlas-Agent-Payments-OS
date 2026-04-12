@@ -10,4 +10,5 @@ export * from "./programmable-settlement";
 export * from "./seller-workflow";
 export * from "./seed-data";
 export * from "./support-access";
+export * from "./tenant-access-audit";
 export * from "./generated/client/index.js";

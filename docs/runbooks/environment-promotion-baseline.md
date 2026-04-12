@@ -17,8 +17,9 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 1. `pnpm verify:env`
 2. `pnpm release:manifest`
-3. `pnpm promote:staging`
-4. `pnpm promote:production`
+3. `pnpm secrets:rotation:manifest --environment staging --rotated-by <operator-email> --reason "<ticket>" --key AUTH_SESSION_SIGNING_SECRET --key AUTH_IDENTITY_BRIDGE_SECRET --key DATABASE_URL --key STRIPE_SECRET_KEY --key STRIPE_WEBHOOK_SECRET --key MINIO_SECRET_KEY`
+4. `pnpm promote:staging`
+5. `pnpm promote:production`
 5. `pnpm verify:rollback`
 
 ## Promotion Sequence
@@ -27,9 +28,10 @@ These files are templates only. Real secrets must come from a secret manager or 
 2. Generate a release manifest for the target deployment.
 3. Run `pnpm verify:release`.
 4. Capture a database backup before applying schema changes.
-5. Promote the same revision forward from development to staging to production.
-6. Store the generated promotion manifest with the release record for later rollback and incident review.
-7. Treat the generated promotion bundle as the release artifact manifest for the environment handoff.
+5. Produce a restore-drill report for the target environment and a secret-rotation manifest that covers the required secret set.
+6. Promote the same revision forward from development to staging to production with `--restore-report` and `--rotation-manifest`, or the matching env vars.
+7. Store the generated promotion manifest with the release record for later rollback and incident review.
+8. Treat the generated promotion bundle as the release artifact manifest for the environment handoff.
 
 ## Expected Metadata
 
@@ -38,9 +40,12 @@ These files are templates only. Real secrets must come from a secret manager or 
 - `APP_REVISION`
 - `DEPLOYMENT_SLOT`
 - `DATABASE_BACKUP_DIR`
+- `RESTORE_DRILL_MAX_AGE_HOURS`
+- `SECRET_ROTATION_MAX_AGE_HOURS`
+- `SECRET_ROTATION_REQUIRED_KEYS`
 - `RELEASE_ARTIFACT_ID`
 - `RELEASE_ARTIFACT_SHA256`
 
 ## Current Limitation
 
-The repo now validates environment shape, release metadata, promotion-manifest generation, and artifact-bound promotion bundles, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.
+The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation manifest coverage, promotion-manifest generation, and artifact-bound promotion bundles, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.

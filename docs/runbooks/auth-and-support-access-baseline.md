@@ -95,5 +95,5 @@ All current session types are HMAC-signed and time-bounded. Local development an
 ## Next Hardening Step
 
 - add direct upstream identity provisioning and deprovisioning beyond the current Atlas-managed assignment ledger
-- add stricter tenancy audit coverage across analytics, export, and support inspection paths
-- add operational access-review checks and restore-drill execution outside local-only workflows
+- add secret-manager-backed rotation execution and formal access-review operations
+- add non-local restore-drill execution and stored proof workflows

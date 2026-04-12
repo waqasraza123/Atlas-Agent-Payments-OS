@@ -13,6 +13,7 @@ import {
   type SupportAccessGrantStatus
 } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type SupportAccessReadClient = PrismaClient | Prisma.TransactionClient;
 type SupportAccessWriteClient = PrismaClient | Prisma.TransactionClient;
@@ -590,8 +591,17 @@ export async function listSupportAccessGrants(actor: AtlasActorContext, client: 
   });
 
   const normalizedGrants = await Promise.all(grants.map((grant) => markExpiredGrantIfNeeded(grant.id, client)));
-
-  return normalizedGrants.filter((grant) => grant !== null).map(mapSupportAccessGrantRecord);
+  const items = normalizedGrants.filter((grant) => grant !== null).map(mapSupportAccessGrantRecord);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.grants_inspected",
+    targetType: "support_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "support_access_grants",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function activateSupportAccessGrant(

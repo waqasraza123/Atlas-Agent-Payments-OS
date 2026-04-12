@@ -14,6 +14,7 @@ import {
   recertifySupportAccessGrant,
   revokeSupportAccessGrant
 } from "./support-access";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
@@ -381,7 +382,17 @@ export async function listSupportAccessReviewCampaignCandidates(
     ]
   });
 
-  return grants.map(mapCampaignCandidate);
+  const items = grants.map(mapCampaignCandidate);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.review_campaign_candidates_inspected",
+    targetType: "support_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "support_access_review_candidates",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function createSupportAccessReviewCampaign(
@@ -486,7 +497,17 @@ export async function listSupportAccessReviewCampaigns(
     }
   });
 
-  return campaigns.map(mapCampaignRecord);
+  const items = campaigns.map(mapCampaignRecord);
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.review_campaigns_inspected",
+    targetType: "support_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "support_access_review_campaigns",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function resolveSupportAccessReviewCampaignItem(
@@ -648,12 +669,22 @@ export async function listIdentityProviderSessions(
     }
   });
 
-  return sessions.map((session) =>
+  const items = sessions.map((session) =>
     mapIdentityProviderSession({
       ...mapPersistedAuthSession(session),
       organizationKind: session.organization.kind
     })
   );
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "identity_provider.sessions_inspected",
+    targetType: "identity_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "identity_provider_sessions",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function listIdentityProviderLinks(
@@ -721,12 +752,22 @@ export async function listIdentityProviderLinks(
     activeSessionCounts.set(key, (activeSessionCounts.get(key) ?? 0) + 1);
   }
 
-  return links.map((link) =>
+  const items = links.map((link) =>
     mapIdentityProviderLink({
       ...link,
       activeSessionCount: activeSessionCounts.get(`${link.provider}:${link.subject}`) ?? 0
     })
   );
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "identity_provider.links_inspected",
+    targetType: "identity_access_scope",
+    targetId: actor.organization.id,
+    payload: {
+      surface: "identity_provider_links",
+      resultCount: items.length
+    }
+  });
+  return items;
 }
 
 export async function updateIdentityProviderLinkLifecycle(

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { appRuntime, deploymentRuntime } from "../packages/config/src/index.ts";
+import { appRuntime, deploymentRuntime, type AtlasAppEnvironment } from "../packages/config/src/index.ts";
 import { createFileIntegrityManifest, verifyFileIntegrityManifest, writeFileIntegrityManifest } from "./lib/file-integrity";
 
 function readArgumentValue(flag: string) {
@@ -31,6 +31,20 @@ function shouldExecuteRestore() {
   return process.argv.includes("--execute") || process.env.ATLAS_RESTORE_DRILL_EXECUTE === "true";
 }
 
+function resolveTargetEnvironment(): AtlasAppEnvironment {
+  const value = readArgumentValue("--environment") ?? appRuntime.appEnv;
+
+  if (value === "local" || value === "development" || value === "staging" || value === "production") {
+    return value;
+  }
+
+  throw new Error("Restore drill environment must be local, development, staging, or production.");
+}
+
+function resolveTargetLabel() {
+  return readArgumentValue("--label") ?? process.env.ATLAS_RESTORE_DRILL_TARGET_LABEL?.trim() ?? "default-restore-target";
+}
+
 function runRestore(backupPath: string) {
   const targetDatabaseUrl = process.env.ATLAS_RESTORE_DRILL_DATABASE_URL?.trim() ?? "";
 
@@ -57,6 +71,8 @@ async function main() {
   const backupPath = resolveBackupPath();
   const reportPath = resolveReportPath();
   const manifestPath = `${backupPath}.manifest.json`;
+  const targetEnvironment = resolveTargetEnvironment();
+  const targetLabel = resolveTargetLabel();
 
   writeFileIntegrityManifest(backupPath, manifestPath);
   const verification = verifyFileIntegrityManifest(backupPath, manifestPath);
@@ -76,6 +92,8 @@ async function main() {
     backupIntegrity: createFileIntegrityManifest(backupPath),
     manifestPath,
     executedRestore,
+    targetEnvironment,
+    targetLabel,
     execution,
     completedAt: new Date().toISOString()
   };

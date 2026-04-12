@@ -35,6 +35,14 @@ function readBoolean(value: string | undefined, fallback: boolean) {
 const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
+const atlasDefaultSecretRotationKeys = [
+  "AUTH_SESSION_SIGNING_SECRET",
+  "AUTH_IDENTITY_BRIDGE_SECRET",
+  "DATABASE_URL",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "MINIO_SECRET_KEY"
+] as const;
 const atlasReleaseStages = [
   "internal-concept-demo",
   "functional-alpha",
@@ -170,6 +178,19 @@ export const storageRuntime = {
   bucketReceipts: process.env.MINIO_BUCKET_RECEIPTS ?? "atlas-receipts"
 } as const;
 
+function readOperationsRuntime(env: Record<string, string | undefined>) {
+  const configuredKeys = readTextList(env.SECRET_ROTATION_REQUIRED_KEYS);
+
+  return {
+    restoreDrillMaxAgeHours: readNumber(env.RESTORE_DRILL_MAX_AGE_HOURS, 168),
+    secretRotationMaxAgeHours: readNumber(env.SECRET_ROTATION_MAX_AGE_HOURS, 720),
+    secretRotationRequiredKeys:
+      configuredKeys.length > 0 ? configuredKeys : [...atlasDefaultSecretRotationKeys]
+  } as const;
+}
+
+export const operationsRuntime = readOperationsRuntime(process.env);
+
 export function createAtlasStructuredLogPayload(
   service: string,
   level: AtlasLogLevel,
@@ -248,6 +269,43 @@ export type AtlasReleaseManifest = {
     restore: string;
     rollbackReadiness: string;
   };
+};
+
+export type AtlasSecretRotationManifest = {
+  version: 1;
+  environment: AtlasPromotionTarget;
+  rotatedBy: string;
+  reason: string;
+  generatedAt: string;
+  maxAgeHours: number;
+  secrets: Array<{
+    key: string;
+    rotatedAt: string;
+  }>;
+};
+
+export type AtlasRestoreDrillReport = {
+  version: 1;
+  appEnv: AtlasAppEnvironment;
+  releaseStage: AtlasReleaseStage;
+  revision: string;
+  backupPath: string;
+  manifestPath: string;
+  executedRestore: boolean;
+  targetEnvironment: AtlasAppEnvironment;
+  targetLabel: string;
+  backupIntegrity: {
+    version: 1;
+    filePath: string;
+    sha256: string;
+    sizeBytes: number;
+    generatedAt: string;
+  };
+  execution: {
+    databaseUrlRedacted: string;
+    stdout: string;
+  } | null;
+  completedAt: string;
 };
 
 function atlasBaseRuntimeVariables() {
@@ -431,6 +489,148 @@ export function validateAtlasPromotionReadiness(
 
   if ((toEnv === "staging" || toEnv === "production") && !/^[a-f0-9]{64}$/i.test(artifactSha256)) {
     issues.push(`Promotion to ${toEnv} requires RELEASE_ARTIFACT_SHA256 to be a 64-character artifact digest.`);
+  }
+
+  return issues;
+}
+
+function validateTimestampAge(label: string, value: string, maxAgeHours: number, issues: string[]) {
+  const parsed = Date.parse(value);
+
+  if (Number.isNaN(parsed)) {
+    issues.push(`${label} must be a valid ISO timestamp.`);
+    return;
+  }
+
+  if (Date.now() - parsed > maxAgeHours * 60 * 60 * 1000) {
+    issues.push(`${label} is older than the allowed ${maxAgeHours}-hour freshness window.`);
+  }
+}
+
+export function validateAtlasSecretRotationManifest(
+  targetEnv: AtlasPromotionTarget,
+  manifest: AtlasSecretRotationManifest,
+  env: Record<string, string | undefined> = process.env
+) {
+  const runtime = readOperationsRuntime(env);
+  const issues: string[] = [];
+
+  if (manifest.version !== 1) {
+    issues.push("Secret rotation manifest version must equal 1.");
+  }
+
+  if (manifest.environment !== targetEnv) {
+    issues.push(`Secret rotation manifest must target ${targetEnv}.`);
+  }
+
+  if (typeof manifest.rotatedBy !== "string" || manifest.rotatedBy.trim().length < 5) {
+    issues.push("Secret rotation manifest must include the operator who completed the rotation.");
+  }
+
+  if (typeof manifest.reason !== "string" || manifest.reason.trim().length < 12) {
+    issues.push("Secret rotation manifest must include a durable operational reason.");
+  }
+
+  validateTimestampAge("Secret rotation manifest generatedAt", manifest.generatedAt, runtime.secretRotationMaxAgeHours, issues);
+
+  if (!Array.isArray(manifest.secrets) || manifest.secrets.length === 0) {
+    issues.push("Secret rotation manifest must include at least one rotated secret.");
+    return issues;
+  }
+
+  const seenKeys = new Set<string>();
+  for (const secret of manifest.secrets) {
+    if (typeof secret.key !== "string" || secret.key.trim().length < 2) {
+      issues.push("Secret rotation manifest entries must include a non-empty key.");
+      continue;
+    }
+
+    if (seenKeys.has(secret.key)) {
+      issues.push(`Secret rotation manifest cannot contain duplicate entries for ${secret.key}.`);
+      continue;
+    }
+
+    seenKeys.add(secret.key);
+    validateTimestampAge(
+      `Secret rotation timestamp for ${secret.key}`,
+      secret.rotatedAt,
+      runtime.secretRotationMaxAgeHours,
+      issues
+    );
+  }
+
+  for (const requiredKey of runtime.secretRotationRequiredKeys) {
+    if (!seenKeys.has(requiredKey)) {
+      issues.push(`Secret rotation manifest must include ${requiredKey}.`);
+    }
+  }
+
+  return issues;
+}
+
+export function validateAtlasRestoreDrillReport(
+  targetEnv: AtlasPromotionTarget,
+  report: AtlasRestoreDrillReport,
+  env: Record<string, string | undefined> = process.env
+) {
+  const runtime = readOperationsRuntime(env);
+  const issues: string[] = [];
+
+  if (report.version !== 1) {
+    issues.push("Restore drill report version must equal 1.");
+  }
+
+  if (report.targetEnvironment !== targetEnv) {
+    issues.push(`Restore drill report must target ${targetEnv}.`);
+  }
+
+  if (!report.executedRestore) {
+    issues.push(`Promotion to ${targetEnv} requires an executed restore drill report, not a dry run.`);
+  }
+
+  if (typeof report.targetLabel !== "string" || report.targetLabel.trim().length < 3) {
+    issues.push("Restore drill report must include a target label.");
+  }
+
+  validateTimestampAge("Restore drill completedAt", report.completedAt, runtime.restoreDrillMaxAgeHours, issues);
+
+  if (!/^[a-f0-9]{64}$/i.test(report.backupIntegrity.sha256)) {
+    issues.push("Restore drill report must include a backup integrity sha256 digest.");
+  }
+
+  if (report.backupIntegrity.sizeBytes <= 0) {
+    issues.push("Restore drill report must include a positive backup size.");
+  }
+
+  return issues;
+}
+
+export function validateAtlasPromotionOperationalReadiness(
+  targetEnv: AtlasPromotionTarget,
+  evidence: {
+    restoreDrillReport: AtlasRestoreDrillReport;
+    secretRotationManifest: AtlasSecretRotationManifest;
+  },
+  env: Record<string, string | undefined> = process.env
+) {
+  return [
+    ...validateAtlasRestoreDrillReport(targetEnv, evidence.restoreDrillReport, env),
+    ...validateAtlasSecretRotationManifest(targetEnv, evidence.secretRotationManifest, env)
+  ];
+}
+
+export function assertAtlasPromotionOperationalReadiness(
+  targetEnv: AtlasPromotionTarget,
+  evidence: {
+    restoreDrillReport: AtlasRestoreDrillReport;
+    secretRotationManifest: AtlasSecretRotationManifest;
+  },
+  env: Record<string, string | undefined> = process.env
+) {
+  const issues = validateAtlasPromotionOperationalReadiness(targetEnv, evidence, env);
+
+  if (issues.length > 0) {
+    throw new Error(issues.join(" "));
   }
 
   return issues;

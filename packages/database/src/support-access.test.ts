@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   activateSupportAccessGrant,
   issueSupportAccessGrant,
+  listSupportAccessGrants,
   recertifySupportAccessGrant,
   reviewSupportAccessGrant
 } from "./support-access";
@@ -338,5 +339,64 @@ describe("support access workflow", () => {
     expect(grant.status).toBe("ACTIVE");
     expect(transaction.supportAccessGrantReview.create).toHaveBeenCalled();
     expect(transaction.supportAccessGrant.update).toHaveBeenCalled();
+  });
+
+  it("records audit events when support-access grants are inspected", async () => {
+    const actor = createOperatorActor();
+    const grant = {
+      id: "grant-1",
+      issuedByUserId: actor.user.id,
+      issuedByOrganizationId: actor.organization.id,
+      targetOrganizationId: "org-buyer",
+      targetWorkspace: "BUYER",
+      authProviderMode: "LOCAL_SIGNED",
+      reason: "Investigate a delayed settlement and receipt mismatch.",
+      status: "ACTIVE",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastReviewedAt: new Date(),
+      reviewExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      lastActivatedAt: null,
+      revokedAt: null,
+      revokedReason: null,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      issuedByUser: {
+        id: actor.user.id,
+        email: actor.user.email
+      },
+      issuedByOrganization: {
+        id: actor.organization.id,
+        slug: actor.organization.slug,
+        name: actor.organization.name
+      },
+      targetOrganization: {
+        id: "org-buyer",
+        slug: "atlas-demo-buyer",
+        name: "Atlas Demo Buyer"
+      },
+      reviews: []
+    } as const;
+    const client = {
+      supportAccessGrant: {
+        findMany: vi.fn(async () => [grant]),
+        findUnique: vi.fn(async () => grant),
+        update: vi.fn(async () => grant)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const grants = await listSupportAccessGrants(actor, client as never);
+
+    expect(grants).toHaveLength(1);
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.grants_inspected",
+        targetType: "support_access_scope",
+        targetId: actor.organization.id
+      })
+    });
   });
 });
