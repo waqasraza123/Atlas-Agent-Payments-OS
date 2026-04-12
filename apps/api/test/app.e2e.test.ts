@@ -1032,6 +1032,7 @@ function createActor(
     agentId: null,
     source: "local-development",
     providerMode: "local-signed",
+    sessionId: null,
     ...overrides
   };
 }

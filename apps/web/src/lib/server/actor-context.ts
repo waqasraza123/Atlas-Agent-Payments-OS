@@ -1,5 +1,4 @@
 import {
-  atlasIdentityAssertionHeaderName,
   atlasLocalSessionCookieName,
   atlasLocalSessionProfileList,
   canAtlasActorAccessWorkspace,
@@ -12,11 +11,11 @@ import {
   type AtlasLocalSessionSelection,
   type AtlasSupportAccessRecord
 } from "@atlas/auth";
-import { verifyAtlasIdentityAssertionToken, verifyAtlasSignedSessionToken } from "@atlas/auth/server";
+import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
-import { prisma } from "@atlas/database";
+import { loadAuthSessionById, prisma, touchAuthSession } from "@atlas/database";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 
 export type WorkspaceActorResolution =
   | {
@@ -77,16 +76,6 @@ async function readSignedSessionSelection(workspace: OrganizationKind) {
   };
 }
 
-async function readIdentityAssertionSelection() {
-  const requestHeaders = await headers();
-  const verification = verifyAtlasIdentityAssertionToken(
-    authRuntime.identityBridgeSecret,
-    requestHeaders.get(atlasIdentityAssertionHeaderName)
-  );
-
-  return verification.status === "ready" ? verification.payload : null;
-}
-
 async function loadMembership(input: {
   role: MembershipRole;
   userEmail: string;
@@ -120,6 +109,7 @@ function createBaseActorContext(
     providerMode: AtlasActorContext["providerMode"];
     sessionIssuedAt: string;
     sessionExpiresAt: string;
+    sessionId: string | null;
   }
 ) {
   return {
@@ -142,6 +132,7 @@ function createBaseActorContext(
     agentId: input.agentId,
     source: input.source,
     providerMode: input.providerMode,
+    sessionId: input.sessionId,
     sessionIssuedAt: input.sessionIssuedAt,
     sessionExpiresAt: input.sessionExpiresAt,
     principalOrganization: null,
@@ -194,10 +185,55 @@ function isSupportAccessAllowedEmail(userEmail: string) {
 async function loadActorContext(input: {
   selection: AtlasLocalSessionSelection;
   source: AtlasActorContext["source"];
+  sessionId: string | null;
+  provider: string | null;
   supportAccess: AtlasSupportAccessRecord | null;
   issuedAt: string;
   expiresAt: string;
 }) {
+  if (input.source === "identity-provider") {
+    const persistedSession = await loadAuthSessionById(input.sessionId ?? "");
+
+    if (
+      !persistedSession ||
+      persistedSession.provider !== (input.provider ?? "") ||
+      persistedSession.userEmail.toLowerCase() !== input.selection.userEmail.toLowerCase() ||
+      persistedSession.organizationSlug !== input.selection.organizationSlug ||
+      persistedSession.role !== input.selection.role
+    ) {
+      return null;
+    }
+
+    await touchAuthSession(persistedSession.id).catch(() => null);
+
+    return {
+      user: {
+        id: persistedSession.userId,
+        email: persistedSession.userEmail,
+        name: persistedSession.userName
+      },
+      organization: {
+        id: persistedSession.organizationId,
+        slug: persistedSession.organizationSlug,
+        name: persistedSession.organizationName,
+        kind: input.selection.workspace
+      },
+      membership: {
+        id: persistedSession.membershipId,
+        role: input.selection.role
+      },
+      workspace: input.selection.workspace,
+      agentId: input.selection.agentId,
+      source: "identity-provider",
+      providerMode: "identity-bridge",
+      sessionId: persistedSession.id,
+      sessionIssuedAt: input.issuedAt,
+      sessionExpiresAt: input.expiresAt,
+      principalOrganization: null,
+      supportAccess: null
+    } satisfies AtlasActorContext;
+  }
+
   const membership = await loadMembership({
     role: input.selection.role,
     userEmail: input.selection.userEmail,
@@ -215,7 +251,8 @@ async function loadActorContext(input: {
     source: input.source,
     providerMode: input.source === "identity-bridge" ? "identity-bridge" : authRuntime.providerMode,
     sessionIssuedAt: input.issuedAt,
-    sessionExpiresAt: input.expiresAt
+    sessionExpiresAt: input.expiresAt,
+    sessionId: null
   });
 
   if (!input.supportAccess) {
@@ -262,7 +299,7 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
     authRuntime.providerMode === "local-signed" && (appRuntime.appEnv === "local" || appRuntime.appEnv === "development")
       ? atlasLocalSessionProfileList.filter((profile) => profile.workspace === workspace)
       : [];
-  const session = (await readSignedSessionSelection(workspace)) ?? (await readIdentityAssertionSelection());
+  const session = await readSignedSessionSelection(workspace);
 
   if (!session) {
     return {
@@ -276,6 +313,8 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
     const actor = await loadActorContext({
       selection: session.selection,
       source: session.source,
+      sessionId: "sessionId" in session ? session.sessionId : null,
+      provider: "provider" in session ? session.provider : null,
       supportAccess: "supportAccess" in session ? session.supportAccess : null,
       issuedAt: session.issuedAt,
       expiresAt: session.expiresAt

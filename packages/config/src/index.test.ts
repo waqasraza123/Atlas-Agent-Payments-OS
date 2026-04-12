@@ -21,6 +21,7 @@ describe("atlas config", () => {
       workerRuntime,
       createAtlasStructuredLogPayload,
       createAtlasReleaseManifest,
+      validateAtlasPromotionReadiness,
       validateAtlasRuntimeConfiguration
     } = await import("./index");
 
@@ -62,6 +63,7 @@ describe("atlas config", () => {
     });
     expect(canAtlasPromoteEnvironment("development", "staging")).toBe(true);
     expect(canAtlasPromoteEnvironment("development", "production")).toBe(false);
+    expect(validateAtlasPromotionReadiness("development")).toEqual([]);
   });
 
   it("reads runtime values from the environment", async () => {
@@ -73,6 +75,7 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_PROVIDER_MODE", "identity-bridge");
     vi.stubEnv("AUTH_IDENTITY_BRIDGE_SECRET", "atlas-bridge-secret");
     vi.stubEnv("AUTH_IDENTITY_BRIDGE_PROVIDER", "generic-sso");
+    vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "240");
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
@@ -110,6 +113,7 @@ describe("atlas config", () => {
       webRuntime,
       workerRuntime,
       createAtlasReleaseManifest,
+      validateAtlasPromotionReadiness,
       validateAtlasRuntimeConfiguration,
       assertAtlasRuntimeConfiguration
     } = await import("./index");
@@ -125,6 +129,7 @@ describe("atlas config", () => {
     expect(authRuntime.providerMode).toBe("identity-bridge");
     expect(authRuntime.identityBridgeSecret).toBe("atlas-bridge-secret");
     expect(authRuntime.identityBridgeProvider).toBe("generic-sso");
+    expect(authRuntime.identitySessionTtlMinutes).toBe(240);
     expect(authRuntime.localSessionTtlMinutes).toBe(120);
     expect(authRuntime.supportAccessTtlMinutes).toBe(30);
     expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
@@ -153,6 +158,7 @@ describe("atlas config", () => {
       deploymentSlot: "blue"
     });
     expect(() => assertAtlasRuntimeConfiguration("worker")).not.toThrow();
+    expect(validateAtlasPromotionReadiness("production")).toEqual([]);
   });
 
   it("reports missing runtime variables clearly", async () => {
@@ -179,5 +185,22 @@ describe("atlas config", () => {
         RELEASE_STAGE: "ga"
       })
     ).toThrow(/AUTH_SESSION_SIGNING_SECRET/);
+  });
+
+  it("blocks unsafe promotion readiness in higher environments", async () => {
+    const { validateAtlasPromotionReadiness } = await import("./index");
+
+    expect(
+      validateAtlasPromotionReadiness("staging", {
+        AUTH_PROVIDER_MODE: "local-signed"
+      })
+    ).toContain("Promotion to staging requires AUTH_PROVIDER_MODE=identity-bridge.");
+
+    expect(
+      validateAtlasPromotionReadiness("production", {
+        AUTH_PROVIDER_MODE: "identity-bridge",
+        AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS: ""
+      })
+    ).toContain("Promotion to production requires AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured.");
   });
 });

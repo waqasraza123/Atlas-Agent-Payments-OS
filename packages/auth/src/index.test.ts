@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canAtlasActorAccessWorkspace,
+  canAtlasActorExportData,
   canAtlasActorMutate,
   canAtlasSupportAccessMethod,
   createAtlasLocalSessionSelection,
@@ -11,6 +12,7 @@ import {
 } from "./index";
 import {
   createAtlasIdentityAssertionTokenForSelection,
+  createAtlasIdentityProviderSessionToken,
   createAtlasLocalSessionToken,
   createAtlasSupportSessionToken,
   verifyAtlasIdentityAssertionToken,
@@ -98,6 +100,28 @@ describe("atlas auth session utilities", () => {
     expect(verification.status === "ready" ? verification.payload.selection.profileKey : "missing").toBeNull();
   });
 
+  it("verifies exchanged identity-provider session tokens", () => {
+    const token = createAtlasIdentityProviderSessionToken(
+      sessionSecret,
+      {
+        ...createAtlasLocalSessionSelection("buyer-admin"),
+        profileKey: null
+      },
+      {
+        sessionId: "session-123",
+        provider: "generic-sso",
+        issuedAt: "2026-04-12T00:00:00.000Z",
+        expiresAt: "2026-04-12T08:00:00.000Z"
+      }
+    );
+
+    const verification = verifyAtlasSignedSessionToken(sessionSecret, token, new Date("2026-04-12T01:00:00.000Z"));
+
+    expect(verification.status).toBe("ready");
+    expect(verification.status === "ready" ? verification.payload.source : null).toBe("identity-provider");
+    expect(verification.status === "ready" ? verification.payload.sessionId : null).toBe("session-123");
+  });
+
   it("returns null for malformed raw selections", () => {
     expect(parseAtlasLocalSessionSelection(undefined)).toBeNull();
     expect(parseAtlasLocalSessionSelection("not-json")).toBeNull();
@@ -130,8 +154,7 @@ describe("atlas auth session utilities", () => {
   });
 
   it("blocks write access for support actors", () => {
-    expect(
-      canAtlasActorMutate({
+    const actor = {
         user: { id: "user-1", email: "operator@atlas.local", name: "Operator" },
         organization: { id: "org-1", slug: "atlas-demo-buyer", name: "Buyer", kind: "BUYER" },
         membership: { id: "membership-1", role: "OPERATOR" },
@@ -139,6 +162,7 @@ describe("atlas auth session utilities", () => {
         agentId: null,
         source: "internal-support",
         providerMode: "local-signed",
+        sessionId: null,
         principalOrganization: { id: "org-operator", slug: "atlas-demo-operator", name: "Operator", kind: "OPERATOR" },
         supportAccess: createAtlasSupportAccessRecord({
           grantId: "grant-support-1",
@@ -149,7 +173,9 @@ describe("atlas auth session utilities", () => {
         }),
         sessionIssuedAt: "2026-04-12T00:00:00.000Z",
         sessionExpiresAt: "2026-04-12T01:00:00.000Z"
-      })
-    ).toBe(false);
+      } as const;
+
+    expect(canAtlasActorMutate(actor)).toBe(false);
+    expect(canAtlasActorExportData(actor)).toBe(false);
   });
 });

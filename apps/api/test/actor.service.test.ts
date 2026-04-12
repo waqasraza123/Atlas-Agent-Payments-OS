@@ -1,13 +1,17 @@
 import "reflect-metadata";
 import { createAtlasLocalSessionSelection, createAtlasSupportAccessRecord } from "@atlas/auth";
 import {
-  createAtlasIdentityAssertionTokenForSelection,
+  createAtlasIdentityProviderSessionToken,
   createAtlasLocalSessionToken,
   createAtlasSupportSessionToken
 } from "@atlas/auth/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
+  authSession: {
+    findUnique: vi.fn(),
+    update: vi.fn()
+  },
   membership: {
     findFirst: vi.fn()
   },
@@ -18,11 +22,62 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@atlas/database", () => ({
-  prisma: prismaMock
+  prisma: prismaMock,
+  loadAuthSessionById: async (sessionId: string) => {
+    const session = await prismaMock.authSession.findUnique({
+      where: {
+        id: sessionId
+      }
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    if (session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
+      return null;
+    }
+
+    return {
+      id: session.id,
+      userId: session.user.id,
+      userEmail: session.user.email,
+      userName: session.user.name ?? null,
+      organizationId: session.organization.id,
+      organizationSlug: session.organization.slug,
+      organizationName: session.organization.name,
+      membershipId: session.membership.id,
+      role: session.membership.role,
+      provider: session.provider ?? "",
+      providerSubject: session.providerSubject ?? "",
+      source: session.source,
+      issuedAt:
+        session.metadata &&
+        typeof session.metadata === "object" &&
+        !Array.isArray(session.metadata) &&
+        typeof session.metadata.issuedAt === "string"
+          ? session.metadata.issuedAt
+          : session.lastSeenAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      revokedAt: session.revokedAt?.toISOString() ?? null,
+      lastSeenAt: session.lastSeenAt.toISOString()
+    };
+  },
+  touchAuthSession: async (sessionId: string) =>
+    prismaMock.authSession.update({
+      where: {
+        id: sessionId
+      },
+      data: {
+        lastSeenAt: new Date()
+      }
+    })
 }));
 
 describe("actor resolution service", () => {
   beforeEach(() => {
+    prismaMock.authSession.findUnique.mockReset();
+    prismaMock.authSession.update.mockReset();
     prismaMock.membership.findFirst.mockReset();
     prismaMock.supportAccessGrant.findUnique.mockReset();
     prismaMock.supportAccessGrant.update.mockReset();
@@ -138,16 +193,23 @@ describe("actor resolution service", () => {
     expect(resolution.status).toBe("invalid");
   });
 
-  it("resolves identity assertion headers when the provider boundary is enabled", async () => {
+  it("resolves exchanged identity-provider sessions when the provider boundary is enabled", async () => {
     vi.stubEnv("AUTH_PROVIDER_MODE", "identity-bridge");
-    vi.stubEnv("AUTH_IDENTITY_BRIDGE_SECRET", "atlas-identity-bridge-secret");
     vi.stubEnv("AUTH_IDENTITY_BRIDGE_PROVIDER", "generic-sso");
 
     const { ActorResolutionService } = await import("../src/modules/actor/actor.service");
 
-    prismaMock.membership.findFirst.mockResolvedValue({
-      id: "membership-buyer",
-      role: "ADMIN",
+    prismaMock.authSession.findUnique.mockResolvedValue({
+      id: "session-provider-1",
+      source: "IDENTITY_PROVIDER",
+      provider: "generic-sso",
+      providerSubject: "subject-buyer-1",
+      expiresAt: new Date("2026-04-12T08:00:00.000Z"),
+      revokedAt: null,
+      lastSeenAt: new Date("2026-04-12T00:00:00.000Z"),
+      metadata: {
+        issuedAt: "2026-04-12T00:00:00.000Z"
+      },
       user: {
         id: "user-buyer",
         email: "buyer-admin@atlas.local",
@@ -156,31 +218,36 @@ describe("actor resolution service", () => {
       organization: {
         id: "org-buyer",
         slug: "atlas-demo-buyer",
-        name: "Atlas Demo Buyer",
-        kind: "BUYER"
+        name: "Atlas Demo Buyer"
+      },
+      membership: {
+        id: "membership-buyer",
+        role: "ADMIN"
       }
     });
 
     const service = new ActorResolutionService();
-    const token = createAtlasIdentityAssertionTokenForSelection(
-      "atlas-identity-bridge-secret",
+    const token = createAtlasIdentityProviderSessionToken(
+      "atlas-local-session-secret",
       {
         ...createAtlasLocalSessionSelection("buyer-admin"),
         profileKey: null
       },
       {
-        subject: "subject-buyer-1",
         provider: "generic-sso",
-        userName: "Buyer Admin"
+        sessionId: "session-provider-1",
+        issuedAt: "2026-04-12T00:00:00.000Z",
+        expiresAt: "2026-04-12T08:00:00.000Z"
       }
     );
 
     const resolution = await service.resolveFromHeaders({
-      "x-atlas-auth-assertion": token
+      "x-atlas-local-session": token
     });
 
     expect(resolution.status).toBe("ready");
-    expect(resolution.status === "ready" ? resolution.actor.source : null).toBe("identity-bridge");
+    expect(resolution.status === "ready" ? resolution.actor.source : null).toBe("identity-provider");
     expect(resolution.status === "ready" ? resolution.selection.profileKey : "missing").toBeNull();
+    expect(prismaMock.authSession.update).toHaveBeenCalled();
   });
 });

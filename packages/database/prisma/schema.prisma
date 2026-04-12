@@ -143,10 +143,23 @@ enum AuthProviderMode {
   IDENTITY_BRIDGE
 }
 
+enum AppSessionSource {
+  LOCAL_SIGNED
+  IDENTITY_PROVIDER
+  INTERNAL_SUPPORT
+}
+
 enum SupportAccessGrantStatus {
+  PENDING_REVIEW
   ACTIVE
+  REJECTED
   REVOKED
   EXPIRED
+}
+
+enum SupportAccessGrantReviewDecision {
+  APPROVED
+  REJECTED
 }
 
 enum AuditActorType {
@@ -160,11 +173,14 @@ model User {
   email           String           @unique
   name            String?
   memberships     Membership[]
+  identityProviderLinks IdentityProviderLink[]
+  authSessions    AuthSession[]
   approvals       Approval[]
   auditEvents     AuditEvent[]
   operatorActions OperatorAction[] @relation("OperatorActionUser")
   issuedSupportAccessGrants  SupportAccessGrant[] @relation("SupportAccessIssuedByUser")
   revokedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessRevokedByUser")
+  supportAccessGrantReviews SupportAccessGrantReview[] @relation("SupportAccessReviewUser")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -188,8 +204,10 @@ model Organization {
   auditEvents    AuditEvent[]
   operatorCases  OperatorCase[]
   notifications  Notification[]
+  authSessions   AuthSession[]
   issuedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessIssuedByOrganization")
   targetedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessTargetOrganization")
+  supportAccessGrantReviews SupportAccessGrantReview[] @relation("SupportAccessReviewOrganization")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -201,9 +219,49 @@ model Membership {
   role           MembershipRole
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authSessions   AuthSession[]
   createdAt      DateTime       @default(now())
 
   @@unique([userId, organizationId, role])
+}
+
+model IdentityProviderLink {
+  id                 String   @id @default(cuid())
+  provider           String
+  subject            String
+  userId             String
+  metadata           Json?
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedAt           DateTime @default(now())
+  lastAuthenticatedAt DateTime @default(now())
+
+  @@unique([provider, subject])
+  @@index([userId, provider])
+}
+
+model AuthSession {
+  id               String           @id @default(cuid())
+  userId           String
+  organizationId   String
+  membershipId     String
+  source           AppSessionSource
+  authProviderMode AuthProviderMode
+  provider         String?
+  providerSubject  String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastSeenAt       DateTime         @default(now())
+  metadata         Json?
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership       Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId, expiresAt])
+  @@index([organizationId, expiresAt])
+  @@index([membershipId, expiresAt])
+  @@index([source, expiresAt])
 }
 
 model Agent {
@@ -381,8 +439,9 @@ model SupportAccessGrant {
   targetWorkspace      OrganizationKind
   authProviderMode     AuthProviderMode
   reason               String
-  status               SupportAccessGrantStatus @default(ACTIVE)
+  status               SupportAccessGrantStatus @default(PENDING_REVIEW)
   expiresAt            DateTime
+  lastActivatedAt      DateTime?
   revokedAt            DateTime?
   revokedReason        String?
   revokedByUserId      String?
@@ -391,11 +450,28 @@ model SupportAccessGrant {
   issuedByOrganization Organization             @relation("SupportAccessIssuedByOrganization", fields: [issuedByOrganizationId], references: [id], onDelete: Cascade)
   targetOrganization   Organization             @relation("SupportAccessTargetOrganization", fields: [targetOrganizationId], references: [id], onDelete: Cascade)
   revokedByUser        User?                    @relation("SupportAccessRevokedByUser", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  reviews              SupportAccessGrantReview[]
   createdAt            DateTime                 @default(now())
   updatedAt            DateTime                 @updatedAt
 
   @@index([issuedByOrganizationId, status, createdAt])
   @@index([targetOrganizationId, status, createdAt])
+}
+
+model SupportAccessGrantReview {
+  id                     String                          @id @default(cuid())
+  supportAccessGrantId   String
+  reviewerUserId         String
+  reviewerOrganizationId String
+  decision               SupportAccessGrantReviewDecision
+  reason                 String
+  supportAccessGrant     SupportAccessGrant              @relation(fields: [supportAccessGrantId], references: [id], onDelete: Cascade)
+  reviewerUser           User                            @relation("SupportAccessReviewUser", fields: [reviewerUserId], references: [id], onDelete: Cascade)
+  reviewerOrganization   Organization                    @relation("SupportAccessReviewOrganization", fields: [reviewerOrganizationId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                        @default(now())
+
+  @@index([supportAccessGrantId, createdAt])
+  @@index([reviewerOrganizationId, createdAt])
 }
 
 model AuditEvent {

@@ -127,9 +127,11 @@ export function WorkspaceShell({
                 value={
                   actor.source === "internal-support"
                     ? "Internal support"
-                    : actor.source === "identity-bridge"
-                      ? "Identity bridge"
-                      : "Signed local session"
+                    : actor.source === "identity-provider"
+                      ? "Identity provider"
+                      : actor.source === "identity-bridge"
+                        ? "Identity bridge"
+                        : "Signed local session"
                 }
               />
               {actor.supportAccess ? (

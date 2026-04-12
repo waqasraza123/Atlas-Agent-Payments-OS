@@ -15,7 +15,7 @@ export const atlasSignedSessionVersion = 1;
 export const atlasSupportAllowedMethods = ["GET", "HEAD", "OPTIONS"] as const;
 
 export type AtlasIdentityProviderMode = "local-signed" | "identity-bridge";
-export type AtlasSessionSource = "local-development" | "identity-bridge" | "internal-support";
+export type AtlasSessionSource = "local-development" | "identity-provider" | "identity-bridge" | "internal-support";
 
 export type AtlasActorUser = {
   id: string;
@@ -54,6 +54,7 @@ export type AtlasActorContext = {
   agentId: string | null;
   source: AtlasSessionSource;
   providerMode: AtlasIdentityProviderMode;
+  sessionId: string | null;
   principalOrganization?: AtlasActorOrganization | null;
   supportAccess?: AtlasSupportAccessRecord | null;
   sessionIssuedAt?: string;
@@ -97,6 +98,8 @@ export type AtlasSignedSessionPayload = {
   issuedAt: string;
   expiresAt: string;
   selection: AtlasLocalSessionSelection;
+  sessionId: string | null;
+  provider: string | null;
   supportAccess: AtlasSupportAccessRecord | null;
 };
 
@@ -293,6 +296,8 @@ export function createAtlasSignedSessionPayload(
     source?: AtlasSessionSource;
     issuedAt?: string;
     expiresAt?: string;
+    sessionId?: string | null;
+    provider?: string | null;
     supportAccess?: AtlasSupportAccessRecord | null;
   }
 ) {
@@ -300,6 +305,8 @@ export function createAtlasSignedSessionPayload(
   const expiresAt = options?.expiresAt ?? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
   const source = options?.source ?? "local-development";
   const supportAccess = source === "internal-support" ? options?.supportAccess ?? null : null;
+  const sessionId = source === "identity-provider" ? options?.sessionId?.trim() ?? null : null;
+  const provider = source === "identity-provider" ? options?.provider?.trim() ?? null : null;
 
   return {
     version: atlasSignedSessionVersion,
@@ -307,6 +314,8 @@ export function createAtlasSignedSessionPayload(
     issuedAt,
     expiresAt,
     selection,
+    sessionId,
+    provider,
     supportAccess
   } satisfies AtlasSignedSessionPayload;
 }
@@ -345,6 +354,10 @@ export function canAtlasSupportAccessMethod(method: string) {
 }
 
 export function canAtlasActorMutate(actor: AtlasActorContext) {
+  return !isAtlasSupportAccessActor(actor);
+}
+
+export function canAtlasActorExportData(actor: AtlasActorContext) {
   return !isAtlasSupportAccessActor(actor);
 }
 

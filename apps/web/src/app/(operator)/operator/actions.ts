@@ -8,8 +8,10 @@ import {
 import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import {
+  activateSupportAccessGrant,
   performOperatorCaseAction,
   issueSupportAccessGrant,
+  reviewSupportAccessGrant,
   revokeSupportAccessGrant,
   AtlasOperatorWorkflowError,
   AtlasSupportAccessWorkflowError
@@ -92,6 +94,56 @@ export async function performOperatorCaseActionAction(caseId: string, formData: 
 
 export async function createSupportAccessSessionAction(formData: FormData) {
   const actor = await requireOperatorActor();
+  const grantId = toTextValue(formData.get("grantId"));
+
+  if (grantId) {
+    let grant;
+
+    try {
+      grant = await activateSupportAccessGrant(actor, grantId);
+    } catch (error) {
+      redirectWithFeedback("/operator/support-access", "Support scope rejected", normalizeActionError(error), "error");
+    }
+
+    const supportAccess = createAtlasSupportAccessRecord({
+      grantId: grant.id,
+      targetOrganizationSlug: grant.targetOrganizationSlug,
+      targetWorkspace: grant.targetWorkspace,
+      reason: grant.reason,
+      grantedByUserEmail: actor.user.email
+    });
+    const token = createAtlasSupportSessionToken(
+      authRuntime.sessionSigningSecret,
+      {
+        profileKey: actor.membership.role === "ADMIN" ? "operator-admin" : "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: actor.user.email,
+        organizationSlug: actor.organization.slug,
+        role: actor.membership.role,
+        agentId: null
+      },
+      supportAccess,
+      {
+        expiresAt: grant.expiresAt
+      }
+    );
+
+    const cookieStore = await cookies();
+    cookieStore.set(atlasLocalSessionCookieName, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: appRuntime.appEnv !== "local",
+      maxAge: authRuntime.supportAccessTtlMinutes * 60,
+      path: "/"
+    });
+
+    redirectWithFeedback(
+      grant.targetWorkspace === "BUYER" ? "/buyer" : "/seller",
+      "Support session issued",
+      `Atlas entered read-only support mode for ${grant.targetOrganizationName}.`
+    );
+  }
+
   const targetOrganizationSlug = toTextValue(formData.get("targetOrganizationSlug"));
   const targetWorkspace = toTextValue(formData.get("targetWorkspace"));
   const reason = toTextValue(formData.get("reason"));
@@ -138,56 +190,43 @@ export async function createSupportAccessSessionAction(formData: FormData) {
   }
 
   const expiresAt = new Date(Date.now() + authRuntime.supportAccessTtlMinutes * 60 * 1000).toISOString();
-  let grant;
 
   try {
-    grant = await issueSupportAccessGrant(actor, {
+    const grant = await issueSupportAccessGrant(actor, {
       targetOrganizationSlug,
       targetWorkspace,
       reason,
       expiresAt
     });
+
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Support scope requested",
+      `Atlas recorded the request for ${grant.targetOrganizationName} and is waiting for operator review.`
+    );
   } catch (error) {
     redirectWithFeedback("/operator/support-access", "Support scope rejected", normalizeActionError(error), "error");
   }
+}
 
-  const supportAccess = createAtlasSupportAccessRecord({
-    grantId: grant.id,
-    targetOrganizationSlug: grant.targetOrganizationSlug,
-    targetWorkspace,
-    reason: grant.reason,
-    grantedByUserEmail: actor.user.email
-  });
-  const token = createAtlasSupportSessionToken(
-    authRuntime.sessionSigningSecret,
-    {
-      profileKey: actor.membership.role === "ADMIN" ? "operator-admin" : "operator-operator",
-      workspace: "OPERATOR",
-      userEmail: actor.user.email,
-      organizationSlug: actor.organization.slug,
-      role: actor.membership.role,
-      agentId: null
-    },
-    supportAccess,
-    {
-      expiresAt
-    }
-  );
+export async function reviewSupportAccessGrantAction(grantId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
 
-  const cookieStore = await cookies();
-  cookieStore.set(atlasLocalSessionCookieName, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: appRuntime.appEnv !== "local",
-    maxAge: authRuntime.supportAccessTtlMinutes * 60,
-    path: "/"
-  });
-
-  redirectWithFeedback(
-    targetWorkspace === "BUYER" ? "/buyer" : "/seller",
-    "Support session issued",
-    `Atlas entered read-only support mode for ${grant.targetOrganizationName}.`
-  );
+  try {
+    const grant = await reviewSupportAccessGrant(actor, grantId, {
+      decision: toTextValue(formData.get("decision")) === "REJECTED" ? "REJECTED" : "APPROVED",
+      reviewReason: toTextValue(formData.get("reviewReason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Support review recorded",
+      `Atlas updated ${grant.targetOrganizationName} to ${grant.status.toLowerCase().replaceAll("_", " ")}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Support review failed", normalizeActionError(error), "error");
+  }
 }
 
 export async function revokeSupportAccessGrantAction(grantId: string, formData: FormData) {

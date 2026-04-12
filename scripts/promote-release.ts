@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  assertAtlasPromotionReadiness,
   canAtlasPromoteEnvironment,
   createAtlasReleaseManifest,
   type AtlasPromotionTarget,
@@ -65,6 +66,7 @@ async function main() {
     ...parseEnvFile(envFile),
     APP_ENV: toEnv
   };
+  assertAtlasPromotionReadiness(toEnv, environment);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outputDirectory = resolveRepoPath(join("release-manifests", toEnv, timestamp));
   mkdirSync(outputDirectory, { recursive: true });

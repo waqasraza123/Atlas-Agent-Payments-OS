@@ -114,6 +114,7 @@ export const authRuntime = {
   sessionSigningSecret: readText(process.env.AUTH_SESSION_SIGNING_SECRET, "atlas-local-session-secret"),
   identityBridgeSecret: readText(process.env.AUTH_IDENTITY_BRIDGE_SECRET, "atlas-identity-bridge-secret"),
   identityBridgeProvider: readText(process.env.AUTH_IDENTITY_BRIDGE_PROVIDER, "generic-sso"),
+  identitySessionTtlMinutes: readNumber(process.env.AUTH_IDENTITY_SESSION_TTL_MINUTES, 480),
   localSessionTtlMinutes: readNumber(process.env.AUTH_LOCAL_SESSION_TTL_MINUTES, 480),
   supportAccessTtlMinutes: readNumber(process.env.AUTH_SUPPORT_ACCESS_TTL_MINUTES, 60),
   supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
@@ -276,7 +277,9 @@ export function validateAtlasRuntimeConfiguration(
   const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
   const requiredVariables = [
     ...listAtlasRuntimeVariables(service),
-    ...(service !== "worker" && providerMode === "identity-bridge" ? ["AUTH_IDENTITY_BRIDGE_SECRET", "AUTH_IDENTITY_BRIDGE_PROVIDER"] : [])
+    ...(service !== "worker" && providerMode === "identity-bridge"
+      ? ["AUTH_IDENTITY_BRIDGE_SECRET", "AUTH_IDENTITY_BRIDGE_PROVIDER", "AUTH_IDENTITY_SESSION_TTL_MINUTES"]
+      : [])
   ];
   const issues = requiredVariables.flatMap((variable) => {
     const value = env[variable];
@@ -349,4 +352,36 @@ export function canAtlasPromoteEnvironment(fromEnv: AtlasPromotionTarget, toEnv:
   const toIndex = atlasPromotionOrder.indexOf(toEnv);
 
   return fromIndex >= 0 && toIndex >= 0 && toIndex === fromIndex + 1;
+}
+
+export function validateAtlasPromotionReadiness(
+  toEnv: AtlasPromotionTarget,
+  env: Record<string, string | undefined> = process.env
+) {
+  const issues: string[] = [];
+  const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
+  const allowedSupportEmails = readTextList(env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS);
+
+  if ((toEnv === "staging" || toEnv === "production") && providerMode !== "identity-bridge") {
+    issues.push(`Promotion to ${toEnv} requires AUTH_PROVIDER_MODE=identity-bridge.`);
+  }
+
+  if (toEnv === "production" && allowedSupportEmails.length === 0) {
+    issues.push("Promotion to production requires AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured.");
+  }
+
+  return issues;
+}
+
+export function assertAtlasPromotionReadiness(
+  toEnv: AtlasPromotionTarget,
+  env: Record<string, string | undefined> = process.env
+) {
+  const issues = validateAtlasPromotionReadiness(toEnv, env);
+
+  if (issues.length > 0) {
+    throw new Error(issues.join(" "));
+  }
+
+  return issues;
 }

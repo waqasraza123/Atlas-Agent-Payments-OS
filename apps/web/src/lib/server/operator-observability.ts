@@ -1,5 +1,5 @@
-import { atlasIdentityAssertionHeaderName, type AtlasLocalSessionSelection } from "@atlas/auth";
-import { createAtlasLocalSessionToken } from "@atlas/auth/server";
+import type { AtlasActorContext, AtlasLocalSessionSelection } from "@atlas/auth";
+import { createAtlasIdentityProviderSessionToken, createAtlasLocalSessionToken } from "@atlas/auth/server";
 import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
   AtlasApiRuntimeMetricsSnapshot,
@@ -7,8 +7,6 @@ import type {
   AtlasObservabilityAlertRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
-import { headers } from "next/headers";
-
 type AtlasApiEnvelope<T> = {
   item?: T;
   items?: T[];
@@ -16,23 +14,25 @@ type AtlasApiEnvelope<T> = {
 
 async function fetchOperatorObservabilityResource<T>(
   path: string,
+  actor: AtlasActorContext,
   selection: AtlasLocalSessionSelection
 ): Promise<AtlasApiEnvelope<T>> {
-  const requestHeaders = await headers();
-  const identityAssertion = requestHeaders.get(atlasIdentityAssertionHeaderName);
+  const sessionHeader =
+    actor.source === "identity-provider" && actor.sessionId
+      ? createAtlasIdentityProviderSessionToken(authRuntime.sessionSigningSecret, selection, {
+          sessionId: actor.sessionId,
+          provider: authRuntime.identityBridgeProvider,
+          expiresAt: actor.sessionExpiresAt
+        })
+      : createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {
+          expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
+        });
   const response = await fetch(`${apiRuntime.baseUrl}${path}`, {
     method: "GET",
     cache: "no-store",
-    headers:
-      identityAssertion && selection.profileKey === null
-        ? {
-            [atlasIdentityAssertionHeaderName]: identityAssertion
-          }
-        : {
-            "x-atlas-local-session": createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {
-              expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
-            })
-          }
+    headers: {
+      "x-atlas-local-session": sessionHeader
+    }
   });
 
   if (!response.ok) {
@@ -55,14 +55,14 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
-export async function loadOperatorObservabilityData(selection: AtlasLocalSessionSelection) {
+export async function loadOperatorObservabilityData(actor: AtlasActorContext, selection: AtlasLocalSessionSelection) {
   const [metricsResponse, alertsResponse, incidentsResponse] = await Promise.all([
     fetchOperatorObservabilityResource<AtlasApiRuntimeMetricsSnapshot & {
       configurationStatus: "valid" | "invalid";
       verificationCommand: string;
-    }>("/observability/metrics", selection),
-    fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", selection),
-    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", selection)
+    }>("/observability/metrics", actor, selection),
+    fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection),
+    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection)
   ]);
 
   return {

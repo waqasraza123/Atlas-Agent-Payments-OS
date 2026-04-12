@@ -107,7 +107,9 @@ export function verifyAtlasSignedSessionToken(
 
     if (
       parsed.version !== atlasSignedSessionVersion ||
-      (parsed.source !== "local-development" && parsed.source !== "internal-support") ||
+      (parsed.source !== "local-development" &&
+        parsed.source !== "internal-support" &&
+        parsed.source !== "identity-provider") ||
       !selection ||
       issuedAt === null ||
       expiresAt === null ||
@@ -135,6 +137,29 @@ export function verifyAtlasSignedSessionToken(
       }
     }
 
+    if (parsed.source === "identity-provider") {
+      if (typeof parsed.sessionId !== "string" || parsed.sessionId.trim().length === 0) {
+        return {
+          status: "invalid",
+          message: "Identity-provider session token is missing its persisted session reference"
+        };
+      }
+
+      if (typeof parsed.provider !== "string" || parsed.provider.trim().length === 0) {
+        return {
+          status: "invalid",
+          message: "Identity-provider session token is missing its provider label"
+        };
+      }
+
+      if (parsed.supportAccess !== null && parsed.supportAccess !== undefined) {
+        return {
+          status: "invalid",
+          message: "Identity-provider sessions cannot carry support-access scope"
+        };
+      }
+    }
+
     if (parsed.source === "local-development" && parsed.supportAccess !== null && parsed.supportAccess !== undefined) {
       return {
         status: "invalid",
@@ -157,6 +182,8 @@ export function verifyAtlasSignedSessionToken(
         issuedAt: new Date(issuedAt).toISOString(),
         expiresAt: new Date(expiresAt).toISOString(),
         selection,
+        sessionId: parsed.source === "identity-provider" && typeof parsed.sessionId === "string" ? parsed.sessionId.trim() : null,
+        provider: parsed.source === "identity-provider" && typeof parsed.provider === "string" ? parsed.provider.trim() : null,
         supportAccess: parsed.source === "internal-support" ? parsed.supportAccess ?? null : null
       }
     };
@@ -265,6 +292,31 @@ export function createAtlasLocalSessionToken(
       source: "local-development",
       issuedAt: options?.issuedAt,
       expiresAt: options?.expiresAt,
+      sessionId: null,
+      provider: null,
+      supportAccess: null
+    })
+  );
+}
+
+export function createAtlasIdentityProviderSessionToken(
+  secret: string,
+  selection: AtlasLocalSessionSelection,
+  input: {
+    sessionId: string;
+    provider: string;
+    issuedAt?: string;
+    expiresAt?: string;
+  }
+) {
+  return createAtlasSignedSessionToken(
+    secret,
+    createAtlasSignedSessionPayload(selection, {
+      source: "identity-provider",
+      issuedAt: input.issuedAt,
+      expiresAt: input.expiresAt,
+      sessionId: input.sessionId,
+      provider: input.provider,
       supportAccess: null
     })
   );
@@ -285,6 +337,8 @@ export function createAtlasSupportSessionToken(
       source: "internal-support",
       issuedAt: options?.issuedAt,
       expiresAt: options?.expiresAt,
+      sessionId: null,
+      provider: null,
       supportAccess
     })
   );

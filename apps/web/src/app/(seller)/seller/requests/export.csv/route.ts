@@ -1,3 +1,4 @@
+import { canAtlasActorExportData } from "@atlas/auth";
 import { exportSellerRequestCsv } from "@atlas/database";
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -7,6 +8,12 @@ export async function GET(request: NextRequest) {
 
   if (resolution.status !== "ready") {
     return new NextResponse("Seller context could not be resolved.", {
+      status: 403
+    });
+  }
+
+  if (!canAtlasActorExportData(resolution.actor)) {
+    return new NextResponse("Support sessions cannot export seller data.", {
       status: 403
     });
   }
@@ -24,4 +31,3 @@ export async function GET(request: NextRequest) {
     }
   });
 }
-

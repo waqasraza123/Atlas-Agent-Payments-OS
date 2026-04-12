@@ -115,7 +115,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Security readiness
 
 - internal access controls and seller/payment trust boundaries are stronger
-- support-access issuance is bounded and auditable
+- support-access issuance, review, and revoke controls are bounded and auditable
 
 ### Docs readiness
 

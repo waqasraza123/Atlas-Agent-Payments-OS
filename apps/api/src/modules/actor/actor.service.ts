@@ -1,11 +1,7 @@
-import {
-  atlasIdentityAssertionHeaderName,
-  atlasLocalSessionHeaderName,
-  type AtlasActorContext
-} from "@atlas/auth";
-import { verifyAtlasIdentityAssertionToken, verifyAtlasSignedSessionToken } from "@atlas/auth/server";
+import { atlasLocalSessionHeaderName, type AtlasActorContext } from "@atlas/auth";
+import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
-import { prisma } from "@atlas/database";
+import { loadAuthSessionById, prisma, touchAuthSession } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
 import type { ActorResolutionResult } from "./actor.types";
@@ -88,6 +84,7 @@ export class ActorResolutionService {
       agentId: string | null;
       issuedAt: string;
       expiresAt: string;
+      sessionId: string | null;
     }
   ) {
     return {
@@ -110,6 +107,7 @@ export class ActorResolutionService {
       agentId: input.agentId,
       source: input.source,
       providerMode: input.providerMode,
+      sessionId: input.sessionId,
       principalOrganization: null,
       supportAccess: null,
       sessionIssuedAt: input.issuedAt,
@@ -128,14 +126,64 @@ export class ActorResolutionService {
 
     const { payload } = verification;
 
-    if (appRuntime.appEnv === "production") {
-      return {
-        status: "invalid",
-        message: "Signed local-development and support sessions are disabled in production"
-      };
-    }
-
     try {
+      if (payload.source === "local-development" && appRuntime.appEnv === "production") {
+        return {
+          status: "invalid",
+          message: "Signed local-development sessions are disabled in production"
+        };
+      }
+
+      if (payload.source === "identity-provider") {
+        const persistedSession = await loadAuthSessionById(payload.sessionId ?? "");
+
+        if (
+          !persistedSession ||
+          persistedSession.provider !== (payload.provider ?? "") ||
+          persistedSession.userEmail.toLowerCase() !== payload.selection.userEmail.toLowerCase() ||
+          persistedSession.organizationSlug !== payload.selection.organizationSlug ||
+          persistedSession.role !== payload.selection.role
+        ) {
+          return {
+            status: "invalid",
+            message: "Identity-provider session could not be matched to a persisted Atlas session"
+          };
+        }
+
+        await touchAuthSession(persistedSession.id).catch(() => null);
+
+        return {
+          status: "ready",
+          actor: {
+            user: {
+              id: persistedSession.userId,
+              email: persistedSession.userEmail,
+              name: persistedSession.userName
+            },
+            organization: {
+              id: persistedSession.organizationId,
+              slug: persistedSession.organizationSlug,
+              name: persistedSession.organizationName,
+              kind: payload.selection.workspace
+            },
+            membership: {
+              id: persistedSession.membershipId,
+              role: payload.selection.role
+            },
+            workspace: payload.selection.workspace,
+            agentId: payload.selection.agentId,
+            source: "identity-provider",
+            providerMode: "identity-bridge",
+            sessionId: persistedSession.id,
+            principalOrganization: null,
+            supportAccess: null,
+            sessionIssuedAt: payload.issuedAt,
+            sessionExpiresAt: payload.expiresAt
+          },
+          selection: payload.selection
+        };
+      }
+
       const membership = await this.loadMembership({
         role: payload.selection.role,
         userEmail: payload.selection.userEmail,
@@ -155,7 +203,8 @@ export class ActorResolutionService {
         providerMode: authRuntime.providerMode === "identity-bridge" ? "identity-bridge" : "local-signed",
         agentId: payload.selection.agentId,
         issuedAt: payload.issuedAt,
-        expiresAt: payload.expiresAt
+        expiresAt: payload.expiresAt,
+        sessionId: null
       });
 
       if (!payload.supportAccess) {
@@ -217,51 +266,6 @@ export class ActorResolutionService {
     }
   }
 
-  private async resolveFromIdentityAssertion(rawAssertion: string): Promise<ActorResolutionResult> {
-    const verification = verifyAtlasIdentityAssertionToken(authRuntime.identityBridgeSecret, rawAssertion);
-    if (verification.status !== "ready") {
-      return {
-        status: "invalid",
-        message: verification.message
-      };
-    }
-
-    const { payload } = verification;
-
-    try {
-      const membership = await this.loadMembership({
-        role: payload.selection.role,
-        userEmail: payload.selection.userEmail,
-        organizationSlug: payload.selection.organizationSlug,
-        workspace: payload.selection.workspace
-      });
-
-      if (!membership) {
-        return {
-          status: "invalid",
-          message: "Identity assertion could not be resolved"
-        };
-      }
-
-      return {
-        status: "ready",
-        actor: this.createBaseActor(membership, {
-          source: "identity-bridge",
-          providerMode: "identity-bridge",
-          agentId: payload.selection.agentId,
-          issuedAt: payload.issuedAt,
-          expiresAt: payload.expiresAt
-        }),
-        selection: payload.selection
-      };
-    } catch (error) {
-      return {
-        status: "unavailable",
-        message: error instanceof Error ? error.message : "Actor resolution is temporarily unavailable"
-      };
-    }
-  }
-
   async resolveFromHeaders(headers: Record<string, string | string[] | undefined>): Promise<ActorResolutionResult> {
     const rawSignedSession = this.readSessionHeader(headers);
     const signedSessionToken = Array.isArray(rawSignedSession) ? rawSignedSession[0] : rawSignedSession;
@@ -270,27 +274,13 @@ export class ActorResolutionService {
       return this.resolveFromSignedSessionToken(signedSessionToken);
     }
 
-    const rawIdentityAssertion = this.readIdentityAssertionHeader(headers);
-    const identityAssertionToken = Array.isArray(rawIdentityAssertion) ? rawIdentityAssertion[0] : rawIdentityAssertion;
-
-    if (identityAssertionToken) {
-      return this.resolveFromIdentityAssertion(identityAssertionToken);
-    }
-
     return {
       status: "missing",
-      message:
-        authRuntime.providerMode === "identity-bridge"
-          ? "Missing identity assertion header"
-          : "Missing signed actor session header"
+      message: "Missing signed actor session header"
     };
   }
 
   readSessionHeader(headers: Record<string, string | string[] | undefined>) {
     return headers[atlasLocalSessionHeaderName];
-  }
-
-  readIdentityAssertionHeader(headers: Record<string, string | string[] | undefined>) {
-    return headers[atlasIdentityAssertionHeaderName];
   }
 }

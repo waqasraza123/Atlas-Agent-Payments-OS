@@ -4,7 +4,11 @@ import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { WorkflowFormField } from "@/components/workflow-form-field";
 import { WorkflowFormPanel } from "@/components/workflow-form-panel";
-import { createSupportAccessSessionAction, revokeSupportAccessGrantAction } from "../actions";
+import {
+  createSupportAccessSessionAction,
+  reviewSupportAccessGrantAction,
+  revokeSupportAccessGrantAction
+} from "../actions";
 
 export default async function OperatorSupportAccessPage() {
   const resolution = await resolveWorkspaceActor("OPERATOR");
@@ -35,6 +39,9 @@ export default async function OperatorSupportAccessPage() {
     }),
     listSupportAccessGrants(resolution.actor)
   ]);
+  const pendingGrants = grants.filter((grant) => grant.status === "PENDING_REVIEW");
+  const activeGrants = grants.filter((grant) => grant.status === "ACTIVE");
+  const reviewableGrants = pendingGrants.filter((grant) => grant.issuedByUserId !== resolution.actor.user.id);
 
   return (
     <div className="space-y-6">
@@ -62,15 +69,15 @@ export default async function OperatorSupportAccessPage() {
         <MetricCard
           label="Tracked grants"
           value={String(grants.length)}
-          detail="Issued support grants now persist for revoke, expiry, and later audit review."
+          detail="Support grants now persist for review, activation, revoke, and later audit inspection."
         />
       </section>
       <WorkflowFormPanel
-        eyebrow="Grant support scope"
-        title="Create a constrained support session"
-        description="The issued session keeps your operator identity but narrows the effective organization and workspace to one buyer or seller tenant."
+        eyebrow="Request support scope"
+        title="Request a constrained support grant"
+        description="Support access is now a reviewable operator grant. Atlas records the request first, then an operator admin or owner approves it before support mode can start."
         action={createSupportAccessSessionAction}
-        submitLabel="Enter support mode"
+        submitLabel="Request support scope"
       >
         <WorkflowFormField label="Target organization" hint="Choose the tenant that needs support investigation.">
           <select
@@ -125,17 +132,17 @@ export default async function OperatorSupportAccessPage() {
       />
       <section className="space-y-4">
         <PageHeader
-          eyebrow="Grant ledger"
-          title="Recent support grants"
-          description="Support grants remain reviewable after issuance so operator access can be revoked deliberately instead of relying only on cookie expiry."
+          eyebrow="Review queue"
+          title="Pending support reviews"
+          description="A second operator reviews support requests before Atlas allows tenant-scoped support mode."
         />
-        {grants.length === 0 ? (
+        {pendingGrants.length === 0 ? (
           <Panel className="p-5">
-            <p className="text-sm text-[var(--atlas-muted)]">No support grants have been issued in this environment yet.</p>
+            <p className="text-sm text-[var(--atlas-muted)]">No support grants are awaiting review in this environment.</p>
           </Panel>
         ) : (
           <div className="grid gap-4">
-            {grants.map((grant) => (
+            {pendingGrants.map((grant) => (
               <Panel key={grant.id} className="space-y-4 p-5">
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[var(--atlas-ink)]">
@@ -143,11 +150,110 @@ export default async function OperatorSupportAccessPage() {
                   </p>
                   <p className="text-sm text-[var(--atlas-muted)]">{grant.reason}</p>
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
-                    {grant.status} · issued by {grant.issuedByUserEmail} · expires {new Date(grant.expiresAt).toLocaleString()}
+                    {grant.status} · requested by {grant.issuedByUserEmail} · expires {new Date(grant.expiresAt).toLocaleString()}
                   </p>
                 </div>
-                {grant.status === "ACTIVE" ? (
-                  <form action={revokeSupportAccessGrantAction.bind(null, grant.id)} className="grid gap-3 md:grid-cols-[1fr_auto]">
+                {grant.latestReview ? (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    Last review: {grant.latestReview.decision} by {grant.latestReview.reviewerUserEmail}
+                  </p>
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">No review recorded yet.</p>
+                )}
+                {reviewableGrants.some((reviewableGrant) => reviewableGrant.id === grant.id) ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <form action={reviewSupportAccessGrantAction.bind(null, grant.id)} className="grid gap-3">
+                      <input type="hidden" name="decision" value="APPROVED" />
+                      <input
+                        type="text"
+                        name="reviewReason"
+                        minLength={12}
+                        placeholder="Approval reason for audit review"
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Approve grant
+                      </button>
+                    </form>
+                    <form action={reviewSupportAccessGrantAction.bind(null, grant.id)} className="grid gap-3">
+                      <input type="hidden" name="decision" value="REJECTED" />
+                      <input
+                        type="text"
+                        name="reviewReason"
+                        minLength={12}
+                        placeholder="Rejection reason for audit review"
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-warn)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Reject grant
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    {grant.issuedByUserId === resolution.actor.user.id
+                      ? "A different operator admin or owner must review your request."
+                      : "This pending grant is not reviewable from the current operator role."}
+                  </p>
+                )}
+              </Panel>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="space-y-4">
+        <PageHeader
+          eyebrow="Active grants"
+          title="Approved support access"
+          description="Approved grants can enter read-only support mode and can still be revoked deliberately when the investigation is complete."
+        />
+        {activeGrants.length === 0 ? (
+          <Panel className="p-5">
+            <p className="text-sm text-[var(--atlas-muted)]">No approved support grants are active right now.</p>
+          </Panel>
+        ) : (
+          <div className="grid gap-4">
+            {activeGrants.map((grant) => (
+              <Panel key={grant.id} className="space-y-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                    {grant.targetOrganizationName} ({grant.targetWorkspace})
+                  </p>
+                  <p className="text-sm text-[var(--atlas-muted)]">{grant.reason}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    active · requested by {grant.issuedByUserEmail} · expires {new Date(grant.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+                {grant.latestReview ? (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    Approved by {grant.latestReview.reviewerUserEmail} · reviewed {new Date(grant.latestReview.createdAt).toLocaleString()}
+                  </p>
+                ) : null}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {grant.issuedByUserId === resolution.actor.user.id ? (
+                    <form action={createSupportAccessSessionAction} className="grid gap-3">
+                      <input type="hidden" name="grantId" value={grant.id} />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Enter support mode
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                      Only the requesting operator can activate this approved grant.
+                    </p>
+                  )}
+                  <form action={revokeSupportAccessGrantAction.bind(null, grant.id)} className="grid gap-3">
                     <input
                       type="text"
                       name="revokeReason"
@@ -163,11 +269,7 @@ export default async function OperatorSupportAccessPage() {
                       Revoke grant
                     </button>
                   </form>
-                ) : (
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
-                    {grant.revokedReason ?? "Grant is no longer active."}
-                  </p>
-                )}
+                </div>
               </Panel>
             ))}
           </div>

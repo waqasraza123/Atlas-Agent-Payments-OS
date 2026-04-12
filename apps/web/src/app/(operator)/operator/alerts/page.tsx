@@ -16,7 +16,7 @@ export default async function OperatorAlertsPage() {
   }
 
   try {
-    const observability = await loadOperatorObservabilityData(resolution.selection);
+    const observability = await loadOperatorObservabilityData(resolution.actor, resolution.selection);
     const metrics = observability.metrics;
     const alerts = observability.alerts;
     const incidentReadiness = observability.incidentReadiness;
