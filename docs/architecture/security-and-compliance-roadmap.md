@@ -18,6 +18,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - organization switching discipline
 - secure internal operator access model
 - request correlation and runtime header discipline
+- deployment-environment validation for sensitive runtime paths
 
 ### Later maturity
 
@@ -103,3 +104,4 @@ These are placeholders for tracked future work, not current claims:
 - secrets management and rotation process
 - stronger operator access constraints
 - documented retention, export, and deletion behavior
+- environment and deployment controls must remain reviewable and validated per stage

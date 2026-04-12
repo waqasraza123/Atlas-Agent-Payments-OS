@@ -12,6 +12,10 @@ This runbook defines the repo-level operational baseline that now exists after t
 - API live, startup, and readiness endpoints under `/health`
 - release verification script through `pnpm verify:release`
 - runtime smoke verification script through `pnpm verify:ops`
+- environment-template validation through `pnpm verify:env`
+- release manifest generation through `pnpm release:manifest`
+- rollback-readiness verification through `pnpm verify:rollback`
+- repo-owned backup and restore scripts through `pnpm db:backup` and `pnpm db:restore`
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
 
@@ -21,7 +25,8 @@ Run this before a broader rollout candidate:
 
 1. `pnpm install`
 2. `pnpm db:generate`
-3. `pnpm verify:release`
+3. `pnpm verify:env`
+4. `pnpm verify:release`
 
 ## Runtime Smoke Verification
 
@@ -46,3 +51,4 @@ With the API running:
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
 - observability is currently structured logging plus readiness checks, not full tracing and alerting
+- backup and restore scripts exist, but scheduled backups and restore drills are still not automated

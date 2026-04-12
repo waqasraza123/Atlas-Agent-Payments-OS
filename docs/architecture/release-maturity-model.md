@@ -45,6 +45,7 @@ This document defines the release stages Atlas should move through and the go or
 - domain module boundaries exist
 - repeatable local and shared dev setup exists
 - release verification script and CI release gate exist
+- environment templates and release manifests are validated
 
 ### Ops readiness
 
@@ -79,6 +80,7 @@ This document defines the release stages Atlas should move through and the go or
 - incidents can be detected
 - backups and restore planning exist
 - release and rollback basics exist
+- repo-owned backup and restore commands exist
 
 ### Security readiness
 

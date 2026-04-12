@@ -1,5 +1,13 @@
 import { Socket } from "node:net";
-import { apiRuntime, appRuntime, atlasProduct, storageRuntime, workerRuntime } from "@atlas/config";
+import {
+  apiRuntime,
+  appRuntime,
+  atlasProduct,
+  createAtlasReleaseManifest,
+  storageRuntime,
+  validateAtlasRuntimeConfiguration,
+  workerRuntime
+} from "@atlas/config";
 import { prisma } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 
@@ -157,6 +165,9 @@ export class HealthService {
   }
 
   getStartup() {
+    const manifest = createAtlasReleaseManifest("api");
+    const validation = validateAtlasRuntimeConfiguration("api");
+
     return {
       status: "started",
       service: "api",
@@ -164,6 +175,10 @@ export class HealthService {
       appEnv: appRuntime.appEnv,
       releaseStage: appRuntime.releaseStage,
       baseUrl: apiRuntime.baseUrl,
+      revision: manifest.revision,
+      deploymentSlot: manifest.deploymentSlot,
+      configurationStatus: validation.ok ? "valid" : "invalid",
+      requiredVariables: validation.requiredVariables,
       dependencies: ["database", "redis", "object-storage"],
       verificationCommand: "pnpm verify:release",
       timestamp: this.createTimestamp()

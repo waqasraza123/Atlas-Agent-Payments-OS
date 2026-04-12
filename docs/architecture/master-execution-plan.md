@@ -30,7 +30,8 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - Phase 6 analytics, CSV export readiness, stronger filtering, and enterprise polish are now in place in repo scope through shared reporting contracts, guarded analytics APIs, filtered ledgers, and organization health surfaces.
 - Phase 7 programmable settlement extension is now in place in repo scope through organization wallet registry, governed programmable rail selection, supported chain config, operator wallet verification, and on-chain evidence mapped into payment and receipt records.
 - A first production-operations baseline is now in place in repo scope through structured runtime config, request correlation, readiness endpoints, release scripts, and CI release gating.
-- The next active implementation slice is deeper deployment, auth hardening, observability, rollback readiness, and release-maturity enforcement for broader rollout readiness.
+- A deployment and recovery baseline is now in place in repo scope through env-profile validation, release manifests, rollback-readiness checks, and backup/restore scripts.
+- The next active implementation slice is deeper auth hardening, observability, tenancy validation, and incident-response maturity for broader rollout readiness.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
@@ -385,8 +386,8 @@ A slice is done only when:
 
 The next safest implementation slice is now:
 
-- deployment and environment hardening from [production-operations-blueprint.md](./production-operations-blueprint.md)
-- release-maturity enforcement from [release-maturity-model.md](./release-maturity-model.md)
+- deeper observability and incident ownership from [production-operations-blueprint.md](./production-operations-blueprint.md)
 - auth and tenancy hardening from [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
+- broader release-stage enforcement from [release-maturity-model.md](./release-maturity-model.md)
 
-The focused v1 and programmable-settlement tracks are now complete in repo scope. A first operations baseline also exists. Future work should concentrate on deployment discipline, stronger observability, backup and restore, incident handling, environment isolation, stronger auth maturity, and release gating before broader real-world rollout.
+The focused v1 and programmable-settlement tracks are now complete in repo scope. An operations baseline and a deployment/recovery baseline also exist. Future work should concentrate on stronger observability, incident handling, environment isolation, auth maturity, tenancy validation, and release gating before broader real-world rollout.

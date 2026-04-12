@@ -26,9 +26,31 @@ function readBoolean(value: string | undefined, fallback: boolean) {
 }
 
 const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
+const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
+const atlasReleaseStages = [
+  "internal-concept-demo",
+  "functional-alpha",
+  "design-partner-pilot",
+  "private-beta",
+  "public-beta",
+  "ga",
+  "enterprise-rollout"
+] as const;
 
 function readLogLevel(value: string | undefined, fallback: AtlasLogLevel) {
   return atlasLogLevels.includes(value as AtlasLogLevel) ? (value as AtlasLogLevel) : fallback;
+}
+
+function readAppEnvironment(value: string | undefined) {
+  return atlasAppEnvironments.includes(value as AtlasAppEnvironment)
+    ? (value as AtlasAppEnvironment)
+    : "local";
+}
+
+function readReleaseStage(value: string | undefined) {
+  return atlasReleaseStages.includes(value as AtlasReleaseStage)
+    ? (value as AtlasReleaseStage)
+    : "functional-alpha";
 }
 
 export const atlasProduct = {
@@ -37,6 +59,9 @@ export const atlasProduct = {
 } as const;
 
 export type AtlasLogLevel = (typeof atlasLogLevels)[number];
+export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
+export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
+export type AtlasRuntimeService = "api" | "web" | "worker";
 
 export type AtlasStructuredLogPayload = {
   timestamp: string;
@@ -56,10 +81,16 @@ export const premiumSurfaces = [
 
 export const appRuntime = {
   nodeEnv: readText(process.env.NODE_ENV, "development"),
-  appEnv: readText(process.env.APP_ENV, "local"),
+  appEnv: readAppEnvironment(process.env.APP_ENV),
   logLevel: readLogLevel(process.env.LOG_LEVEL, "info"),
-  releaseStage: readText(process.env.RELEASE_STAGE, "functional-alpha"),
+  releaseStage: readReleaseStage(process.env.RELEASE_STAGE),
   healthcheckTimeoutMs: readNumber(process.env.HEALTHCHECK_TIMEOUT_MS, 2000)
+} as const;
+
+export const deploymentRuntime = {
+  revision: readText(process.env.APP_REVISION, "local-development"),
+  deploymentSlot: readText(process.env.DEPLOYMENT_SLOT, "local"),
+  backupDirectory: readText(process.env.DATABASE_BACKUP_DIR, "backups")
 } as const;
 
 export const apiRuntime = {
@@ -139,4 +170,140 @@ export function writeAtlasStructuredLog(
   }
 
   console.log(line);
+}
+
+export type AtlasRuntimeValidationIssue = {
+  variable: string;
+  message: string;
+};
+
+export type AtlasRuntimeValidationResult = {
+  service: AtlasRuntimeService;
+  appEnv: AtlasAppEnvironment;
+  ok: boolean;
+  requiredVariables: string[];
+  issues: AtlasRuntimeValidationIssue[];
+};
+
+export type AtlasReleaseManifest = {
+  product: string;
+  service: AtlasRuntimeService;
+  appEnv: AtlasAppEnvironment;
+  releaseStage: AtlasReleaseStage;
+  revision: string;
+  deploymentSlot: string;
+  generatedAt: string;
+  baseUrls: {
+    api: string;
+    web: string;
+  };
+  requiredVariables: string[];
+  commands: {
+    releaseVerification: string;
+    runtimeVerification: string;
+    backup: string;
+    restore: string;
+    rollbackReadiness: string;
+  };
+};
+
+function atlasBaseRuntimeVariables() {
+  return ["APP_ENV", "LOG_LEVEL", "RELEASE_STAGE", "HEALTHCHECK_TIMEOUT_MS"] as const;
+}
+
+function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
+  if (service === "api") {
+    return [
+      ...atlasBaseRuntimeVariables(),
+      "API_PORT",
+      "API_BASE_URL",
+      "NEXT_PUBLIC_APP_URL",
+      "DATABASE_URL",
+      "REDIS_URL",
+      "MINIO_ENDPOINT",
+      "MINIO_PORT",
+      "MINIO_ACCESS_KEY",
+      "MINIO_SECRET_KEY",
+      "MINIO_BUCKET_RECEIPTS"
+    ] as const;
+  }
+
+  if (service === "worker") {
+    return [...atlasBaseRuntimeVariables(), "REDIS_URL", "DATABASE_URL"] as const;
+  }
+
+  return [...atlasBaseRuntimeVariables(), "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
+}
+
+export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
+  return [...atlasServiceRuntimeVariables(service)];
+}
+
+export function validateAtlasRuntimeConfiguration(
+  service: AtlasRuntimeService,
+  env: Record<string, string | undefined> = process.env
+): AtlasRuntimeValidationResult {
+  const appEnv = readAppEnvironment(env.APP_ENV);
+  const requiredVariables = listAtlasRuntimeVariables(service);
+  const issues = requiredVariables.flatMap((variable) => {
+    const value = env[variable];
+    return value && value.trim().length > 0
+      ? []
+      : [
+          {
+            variable,
+            message: `${variable} is required for the ${service} runtime in ${appEnv}.`
+          }
+        ];
+  });
+
+  return {
+    service,
+    appEnv,
+    ok: issues.length === 0,
+    requiredVariables,
+    issues
+  };
+}
+
+export function assertAtlasRuntimeConfiguration(
+  service: AtlasRuntimeService,
+  env: Record<string, string | undefined> = process.env
+) {
+  const result = validateAtlasRuntimeConfiguration(service, env);
+
+  if (result.ok) {
+    return result;
+  }
+
+  throw new Error(
+    [`Invalid runtime configuration for ${service}.`, ...result.issues.map((issue) => issue.message)].join(" ")
+  );
+}
+
+export function createAtlasReleaseManifest(
+  service: AtlasRuntimeService,
+  env: Record<string, string | undefined> = process.env
+): AtlasReleaseManifest {
+  return {
+    product: atlasProduct.name,
+    service,
+    appEnv: readAppEnvironment(env.APP_ENV),
+    releaseStage: readReleaseStage(env.RELEASE_STAGE),
+    revision: readText(env.APP_REVISION, deploymentRuntime.revision),
+    deploymentSlot: readText(env.DEPLOYMENT_SLOT, deploymentRuntime.deploymentSlot),
+    generatedAt: new Date().toISOString(),
+    baseUrls: {
+      api: readText(env.API_BASE_URL, apiRuntime.baseUrl),
+      web: readText(env.NEXT_PUBLIC_APP_URL, webRuntime.baseUrl)
+    },
+    requiredVariables: listAtlasRuntimeVariables(service),
+    commands: {
+      releaseVerification: "pnpm verify:release",
+      runtimeVerification: "pnpm verify:ops",
+      backup: "pnpm db:backup",
+      restore: "pnpm db:restore <backup-file>",
+      rollbackReadiness: "pnpm verify:rollback"
+    }
+  };
 }

@@ -170,7 +170,8 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - release verification script and CI release gate exist
 - API liveness, startup, and readiness endpoints exist
 - request-correlation headers and structured runtime logging exist
-- deeper deployment automation, backup validation, and incident runbooks are still pending
+- env-profile validation, release manifests, rollback-readiness verification, and backup/restore scripts now exist
+- deeper deployment automation, restore drills, metrics, alerts, and incident runbooks are still pending
 
 ### Required before a production-grade focused v1 rollout
 

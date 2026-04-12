@@ -1,5 +1,6 @@
 import { Queue, Worker, type ConnectionOptions } from "bullmq";
 import { listAtlasQueueDefinitions } from "@atlas/domain";
+import { workerEnv } from "./env";
 import { log } from "./lib/logger";
 import { createRedisConnection } from "./lib/redis";
 import { getAtlasQueueProcessor } from "./processors";
@@ -91,7 +92,10 @@ async function main() {
 
   log("worker.bootstrap.completed", {
     redisUrl: connection.options.host ? `${connection.options.host}:${connection.options.port}` : "configured",
-    queues: bindings.map((binding) => binding.name)
+    queues: bindings.map((binding) => binding.name),
+    deploymentSlot: workerEnv.deploymentSlot,
+    revision: workerEnv.revision,
+    requiredVariables: workerEnv.requiredVariables.length
   });
 }
 

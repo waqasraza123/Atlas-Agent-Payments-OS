@@ -1095,8 +1095,13 @@ describe("atlas api e2e", () => {
     expect(startupResponse.body).toMatchObject({
       status: "started",
       service: "api",
-      verificationCommand: "pnpm verify:release"
+      verificationCommand: "pnpm verify:release",
+      revision: expect.any(String),
+      deploymentSlot: expect.any(String),
+      configurationStatus: "invalid",
+      requiredVariables: expect.any(Array)
     });
+    expect(startupResponse.body.requiredVariables).toContain("DATABASE_URL");
 
     expect(readinessResponse.status).toBe(200);
     expect(readinessResponse.body).toMatchObject({
