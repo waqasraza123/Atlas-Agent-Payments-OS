@@ -27,6 +27,8 @@
 - `pnpm dev:api` runs only the NestJS API.
 - `pnpm dev:worker` runs only the BullMQ worker.
 - `pnpm infra:down` stops local infra.
+- `pnpm verify:release` runs the current release-grade repo gate.
+- `pnpm verify:ops` checks API liveness, startup, readiness, and queue catalog once the API is running.
 
 ## Memory and performance guardrails
 

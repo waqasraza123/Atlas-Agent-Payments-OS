@@ -27,6 +27,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, richer receipt evidence, and reconciliation surfaces now exist through immutable payment attempts, buyer-triggered execution, buyer and operator receipt views, seller-visible payment detail, receipt truth updates, and operator-facing transaction inspection
 - Phase 6 analytics, CSV export readiness, multi-entity filtering, and enterprise-grade reporting surfaces now exist through shared analytics contracts, guarded reporting APIs, filtered buyer and seller ledgers, platform transaction reporting, and organization health views
 - Phase 7 programmable settlement extension now exists through organization wallet registry, supported chain runtime config, governed programmable rail selection, operator wallet verification flows, and on-chain evidence mapped into payment attempts and receipt records
+- Post-v1 rollout-hardening baseline now exists through structured runtime config, structured API and worker logs, request-correlation headers, live/startup/readiness health endpoints, release-verification scripts, and a GitHub Actions release gate
 
 ## Non-Negotiable Rules
 
@@ -46,6 +47,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Testing source of truth: `docs/architecture/testing-strategy.md`
 - Focused-v1 extension completion doc: `docs/backlog/phase-7-programmable-settlement-detailed.md`
 - Active next-track docs: `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
+- Current operations runbook: `docs/runbooks/production-operations-baseline.md`
 - Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow completed in repo scope
@@ -90,6 +92,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 5 is now complete in repo scope through operator case modeling, persistent operator notifications, reason-captured operator actions, operator overview and exception surfaces, and a filterable audit explorer
 - Phase 6 is now complete in repo scope through shared analytics contracts, guarded reporting APIs, CSV export flows, filtered buyer and seller ledgers, platform transaction reporting, and organization health views
 - Phase 7 is now complete in repo scope through programmable wallet registry, supported chain config, governed `PROGRAMMABLE_USDC` rail selection, operator wallet verification, and on-chain evidence propagation into payment and receipt records
+- Post-v1 operations baseline is now in place through runtime config discipline, request correlation, readiness endpoints, release scripts, and CI release gating
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -110,7 +113,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 6 analytics, export readiness, multi-entity filtering, and enterprise polish are now in place in repo scope
 - Phase 7 programmable settlement extension is now in place in repo scope through governed wallet registry and on-chain evidence mapping
 - The focused v1 and programmable-settlement extension tracks are complete in repo scope
-- The current active execution slice is post-v1 platform engineering, production operations, and security hardening for broader rollout readiness
+- A first post-v1 operations baseline is now in place in repo scope
+- The current active execution slice is deeper deployment, observability, rollback, auth hardening, and release-maturity work for broader rollout readiness
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -139,11 +143,12 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 - Phase 0 structure is now in place, but domain modules still remain mostly skeleton boundaries rather than full product workflows
 - Local actor resolution and real seed execution still depend on the repo-owned Postgres instance being reachable; current verification on this machine returned database access denial for `pnpm db:seed`
-- `pnpm build` currently validates the workspace through repo-wide typecheck only; API and worker still run natively via `tsx`
+- `pnpm build` currently validates the workspace through repo-wide typecheck only; the stronger rollout gate is now `pnpm verify:release`
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
 - The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, reason-captured interventions, and governed programmable settlement
+- The current rollout-hardening baseline adds request correlation, runtime health surfaces, structured logs, security headers, and CI release verification, but deeper deployment automation and auth hardening are still not in place
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra unless it directly serves the platform, operations, security, or release-maturity blueprints
@@ -157,6 +162,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `pnpm test`
 - `pnpm test:e2e`
 - `pnpm build`
+- `pnpm verify:release`
+- `pnpm verify:ops`
 - `pnpm --filter @atlas/web build`
 - `pnpm verify:phase0`
 - `pnpm db:seed`

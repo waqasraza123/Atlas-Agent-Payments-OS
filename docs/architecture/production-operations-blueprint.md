@@ -164,6 +164,14 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 
 ## Focused V1 Versus Full-Scale Expectation
 
+## Current Repo Status
+
+- structured runtime config baseline exists
+- release verification script and CI release gate exist
+- API liveness, startup, and readiness endpoints exist
+- request-correlation headers and structured runtime logging exist
+- deeper deployment automation, backup validation, and incident runbooks are still pending
+
 ### Required before a production-grade focused v1 rollout
 
 - environment separation

@@ -1073,6 +1073,41 @@ describe("atlas api e2e", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.status).toBe("ok");
+    expect(response.body.service).toBe("api");
+    expect(response.body.appEnv).toEqual(expect.any(String));
+    expect(response.headers["x-atlas-request-id"]).toEqual(expect.any(String));
+  });
+
+  it("serves live, startup, and readiness operations endpoints", async () => {
+    const liveResponse = await request(app.getHttpServer()).get("/health/live");
+    const startupResponse = await request(app.getHttpServer()).get("/health/startup");
+    const readinessResponse = await request(app.getHttpServer()).get("/health/ready");
+
+    expect(liveResponse.status).toBe(200);
+    expect(liveResponse.body).toMatchObject({
+      status: "ok",
+      service: "api",
+      appEnv: expect.any(String),
+      releaseStage: expect.any(String)
+    });
+
+    expect(startupResponse.status).toBe(200);
+    expect(startupResponse.body).toMatchObject({
+      status: "started",
+      service: "api",
+      verificationCommand: "pnpm verify:release"
+    });
+
+    expect(readinessResponse.status).toBe(200);
+    expect(readinessResponse.body).toMatchObject({
+      status: "ready",
+      service: "api",
+      checks: [
+        expect.objectContaining({ dependency: "database", status: "skipped" }),
+        expect.objectContaining({ dependency: "redis", status: "skipped" }),
+        expect.objectContaining({ dependency: "object-storage", status: "skipped" })
+      ]
+    });
   });
 
   it("lists the registered module map", async () => {

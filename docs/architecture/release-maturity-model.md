@@ -44,6 +44,7 @@ This document defines the release stages Atlas should move through and the go or
 
 - domain module boundaries exist
 - repeatable local and shared dev setup exists
+- release verification script and CI release gate exist
 
 ### Ops readiness
 

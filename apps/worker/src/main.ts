@@ -64,26 +64,40 @@ function createQueueBindings(connection: ConnectionOptions): AtlasQueueBinding[]
 
 async function main() {
   const connection = createRedisConnection();
+  await connection.ping();
   const bindings = createQueueBindings(connection);
+  await Promise.all(bindings.flatMap((binding) => [binding.queue.waitUntilReady(), binding.worker.waitUntilReady()]));
 
-  async function shutdown() {
+  async function shutdown(signal: string) {
+    log("worker.shutdown.started", {
+      signal,
+      queueCount: bindings.length
+    });
     await Promise.all(bindings.map(async (binding) => binding.worker.close()));
     await Promise.all(bindings.map(async (binding) => binding.queue.close()));
     await connection.quit();
+    log("worker.shutdown.completed", {
+      signal
+    });
     process.exit(0);
   }
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
 
-  log("booting worker", {
+  log("worker.bootstrap.completed", {
+    redisUrl: connection.options.host ? `${connection.options.host}:${connection.options.port}` : "configured",
     queues: bindings.map((binding) => binding.name)
   });
 }
 
 void main().catch((error) => {
-  log("worker bootstrap failed", {
+  log("worker.bootstrap.failed", {
     error: error instanceof Error ? error.message : String(error)
-  });
+  }, "error");
   process.exit(1);
 });

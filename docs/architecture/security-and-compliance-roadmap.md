@@ -17,6 +17,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - stronger session handling
 - organization switching discipline
 - secure internal operator access model
+- request correlation and runtime header discipline
 
 ### Later maturity
 
@@ -92,6 +93,7 @@ These are placeholders for tracked future work, not current claims:
 - region-specific data residency architecture
 - formal access review systems
 - broad public rollout security posture
+- hardened production auth beyond the current local-first and guarded internal baseline
 
 ## Must Be Done Before Broad Real-World Rollout
 

@@ -1,15 +1,30 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { apiRuntime, atlasProduct } from "@atlas/config";
+import { apiRuntime, atlasProduct, webRuntime } from "@atlas/config";
 import { AppModule } from "./app.module";
+import { logApiEvent } from "./lib/logger";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    cors: true
+    cors: {
+      origin: [webRuntime.baseUrl],
+      credentials: true
+    }
   });
 
+  app.enableShutdownHooks();
+
   await app.listen(apiRuntime.port);
-  console.log(`${atlasProduct.name} API listening on http://localhost:${apiRuntime.port}`);
+  logApiEvent("info", "bootstrap.completed", {
+    product: atlasProduct.name,
+    port: apiRuntime.port,
+    baseUrl: apiRuntime.baseUrl
+  });
 }
 
-bootstrap();
+void bootstrap().catch((error) => {
+  logApiEvent("error", "bootstrap.failed", {
+    error: error instanceof Error ? error.message : String(error)
+  });
+  process.exit(1);
+});

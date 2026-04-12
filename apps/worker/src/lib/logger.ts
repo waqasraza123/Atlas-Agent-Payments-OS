@@ -1,8 +1,5 @@
-export function log(message: string, context?: unknown) {
-  if (context === undefined) {
-    console.log(`[worker] ${message}`);
-    return;
-  }
+import { writeAtlasStructuredLog, type AtlasLogLevel } from "@atlas/config";
 
-  console.log(`[worker] ${message}`, context);
+export function log(message: string, context: Record<string, unknown> = {}, level: AtlasLogLevel = "info") {
+  writeAtlasStructuredLog("worker", level, message, context);
 }
