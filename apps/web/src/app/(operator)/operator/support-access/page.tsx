@@ -1,6 +1,7 @@
 import {
+  listIdentityProviderLinks,
   listIdentityProviderSessions,
-  listPlatformOrganizations,
+  listPlatformOrganizationsForActor,
   listSupportAccessGrants,
   listSupportAccessReviewCampaignCandidates,
   listSupportAccessReviewCampaigns,
@@ -16,6 +17,7 @@ import {
   createSupportAccessSessionAction,
   recertifySupportAccessGrantAction,
   resolveSupportAccessReviewCampaignItemAction,
+  updateIdentityProviderLinkLifecycleAction,
   revokeIdentityProviderSessionAction,
   reviewSupportAccessGrantAction,
   revokeSupportAccessGrantAction
@@ -28,8 +30,8 @@ export default async function OperatorSupportAccessPage() {
     return null;
   }
 
-  const [organizations, targetOrganizations, grants, campaignCandidates, campaigns, identitySessions] = await Promise.all([
-    listPlatformOrganizations().then((items) =>
+  const [organizations, targetOrganizations, grants, campaignCandidates, campaigns, identitySessions, identityLinks] = await Promise.all([
+    listPlatformOrganizationsForActor(resolution.actor).then((items) =>
       items.filter((organization) => organization.organizationKind === "BUYER" || organization.organizationKind === "SELLER")
     ),
     prisma.organization.findMany({
@@ -51,7 +53,8 @@ export default async function OperatorSupportAccessPage() {
     listSupportAccessGrants(resolution.actor),
     listSupportAccessReviewCampaignCandidates(resolution.actor),
     listSupportAccessReviewCampaigns(resolution.actor),
-    listIdentityProviderSessions(resolution.actor)
+    listIdentityProviderSessions(resolution.actor),
+    listIdentityProviderLinks(resolution.actor)
   ]);
   const pendingGrants = grants.filter((grant) => grant.status === "PENDING_REVIEW");
   const activeGrants = grants.filter((grant) => grant.status === "ACTIVE");
@@ -109,6 +112,11 @@ export default async function OperatorSupportAccessPage() {
           label="Live IdP sessions"
           value={String(identitySessions.length)}
           detail="External and bridged Atlas sessions can now be revoked directly from operator governance."
+        />
+        <MetricCard
+          label="Identity links"
+          value={String(identityLinks.length)}
+          detail="Provider identities now have explicit lifecycle status instead of being governed only through session revocation."
         />
       </section>
       <WorkflowFormPanel
@@ -435,6 +443,101 @@ export default async function OperatorSupportAccessPage() {
                     A different operator admin or owner must recertify this grant.
                   </p>
                 )}
+              </Panel>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="space-y-4">
+        <PageHeader
+          eyebrow="Identity links"
+          title="Provider identity lifecycle"
+          description="Suspend, reactivate, or permanently revoke tenant identity links when rollout-hardening or support review requires a stronger boundary than session revocation alone."
+        />
+        {identityLinks.length === 0 ? (
+          <Panel className="p-5">
+            <p className="text-sm text-[var(--atlas-muted)]">No buyer or seller identity links are active in the current environment.</p>
+          </Panel>
+        ) : (
+          <div className="grid gap-4">
+            {identityLinks.map((link) => (
+              <Panel key={link.id} className="space-y-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                    {link.userEmail} · {link.provider}
+                  </p>
+                  <p className="text-sm text-[var(--atlas-muted)]">
+                    {link.tenantOrganizations.map((organization) => `${organization.name} (${organization.kind})`).join(" · ") || "No buyer or seller memberships"}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    {link.status} · last auth {new Date(link.lastAuthenticatedAt).toLocaleString()} · {link.activeSessionCount} live sessions
+                  </p>
+                  {link.statusReason ? (
+                    <p className="text-sm text-[var(--atlas-muted)]">
+                      {link.statusReason}
+                      {link.statusChangedByUserEmail ? ` · ${link.statusChangedByUserEmail}` : ""}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {link.status === "ACTIVE" ? (
+                    <form action={updateIdentityProviderLinkLifecycleAction.bind(null, link.id)} className="grid gap-3">
+                      <input type="hidden" name="action" value="SUSPEND" />
+                      <input
+                        type="text"
+                        name="reason"
+                        minLength={12}
+                        placeholder="Reason for suspending this provider link"
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-warn)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Suspend link
+                      </button>
+                    </form>
+                  ) : null}
+                  {link.status === "SUSPENDED" ? (
+                    <form action={updateIdentityProviderLinkLifecycleAction.bind(null, link.id)} className="grid gap-3">
+                      <input type="hidden" name="action" value="REACTIVATE" />
+                      <input
+                        type="text"
+                        name="reason"
+                        minLength={12}
+                        placeholder="Reason for reactivating this provider link"
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Reactivate link
+                      </button>
+                    </form>
+                  ) : null}
+                  {link.status !== "REVOKED" ? (
+                    <form action={updateIdentityProviderLinkLifecycleAction.bind(null, link.id)} className="grid gap-3">
+                      <input type="hidden" name="action" value="REVOKE" />
+                      <input
+                        type="text"
+                        name="reason"
+                        minLength={12}
+                        placeholder="Reason for permanently revoking this provider link"
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-warn)] hover:text-[var(--atlas-ink)]"
+                      >
+                        Revoke link
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               </Panel>
             ))}
           </div>

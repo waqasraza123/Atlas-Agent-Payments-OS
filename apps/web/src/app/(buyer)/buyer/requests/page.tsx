@@ -1,4 +1,4 @@
-import { listBuyerAgents, listBuyerPolicies, listBuyerRequestAnalytics, prisma } from "@atlas/database";
+import { listBuyerAgents, listBuyerPolicies, listBuyerRequestAnalyticsForActor, prisma } from "@atlas/database";
 import { PageHeader, RecordListPanel } from "@atlas/ui";
 import { FilterPanel } from "@/components/filter-panel";
 import { ExportLinkGroup } from "@/components/export-link-group";
@@ -33,7 +33,7 @@ export default async function BuyerRequestsPage({ searchParams }: BuyerRequestsP
   const [agents, policies, requests, sellers] = await Promise.all([
     listBuyerAgents(resolution.actor.organization.id),
     listBuyerPolicies(resolution.actor.organization.id),
-    listBuyerRequestAnalytics(resolution.actor.organization.id, params),
+    listBuyerRequestAnalyticsForActor(resolution.actor, params),
     prisma.organization.findMany({
       where: {
         kind: "SELLER"

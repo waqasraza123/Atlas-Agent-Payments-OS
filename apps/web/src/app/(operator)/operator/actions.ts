@@ -11,6 +11,7 @@ import {
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
   performOperatorCaseAction,
+  updateIdentityProviderLinkLifecycle,
   revokeIdentityProviderSession,
   issueSupportAccessGrant,
   recertifySupportAccessGrant,
@@ -326,5 +327,29 @@ export async function revokeIdentityProviderSessionAction(sessionId: string, for
     );
   } catch (error) {
     redirectWithFeedback("/operator/support-access", "Identity session revoke failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateIdentityProviderLinkLifecycleAction(linkId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const result = await updateIdentityProviderLinkLifecycle(actor, linkId, {
+      action:
+        toTextValue(formData.get("action")) === "REVOKE"
+          ? "REVOKE"
+          : toTextValue(formData.get("action")) === "REACTIVATE"
+            ? "REACTIVATE"
+            : "SUSPEND",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Identity provider updated",
+      `Atlas set ${result.link.userEmail} to ${result.link.status.toLowerCase()} and revoked ${result.revokedSessionCount} active sessions.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Identity provider update failed", normalizeActionError(error), "error");
   }
 }

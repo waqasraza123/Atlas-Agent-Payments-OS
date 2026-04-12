@@ -1,5 +1,5 @@
 import { canAtlasActorExportData } from "@atlas/auth";
-import { exportBuyerRequestCsv } from "@atlas/database";
+import { exportBuyerRequestCsvForActor } from "@atlas/database";
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 
@@ -18,10 +18,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const csv = await exportBuyerRequestCsv(
-    resolution.actor.organization.id,
-    Object.fromEntries(request.nextUrl.searchParams.entries())
-  );
+  const csv = await exportBuyerRequestCsvForActor(resolution.actor, Object.fromEntries(request.nextUrl.searchParams.entries()));
 
   return new NextResponse(csv, {
     status: 200,

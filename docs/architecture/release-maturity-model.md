@@ -107,10 +107,12 @@ This document defines the release stages Atlas should move through and the go or
 - environment discipline is stronger
 - migrations and releases are controlled
 - promotion manifests and environment progression are enforced
+- release artifacts and digests are attached to promotion output
 
 ### Ops readiness
 
 - alerting, backup, rollback, and support workflows exist
+- restore-drill verification exists in repo-owned release checks
 
 ### Security readiness
 
@@ -140,10 +142,12 @@ This document defines the release stages Atlas should move through and the go or
 
 - ownership and alerting are explicit
 - key failure paths are recoverable
+- restore drills are rehearsed outside local-only development
 
 ### Security readiness
 
 - broader rollout risks are reviewed and acceptable
+- analytics, export, and support inspection paths stay tenant-scoped under support and provider-backed sessions
 
 ### Docs readiness
 

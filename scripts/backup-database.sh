@@ -20,4 +20,5 @@ target_path=${1:-"$backup_dir/atlas-${APP_ENV:-local}-$timestamp.sql"}
 
 mkdir -p "$(dirname "$target_path")"
 pg_dump --no-owner --no-privileges --file "$target_path" "$DATABASE_URL"
+pnpm exec tsx ./scripts/backup-manifest.ts write --file "$target_path" >/dev/null
 printf '%s\n' "$target_path"

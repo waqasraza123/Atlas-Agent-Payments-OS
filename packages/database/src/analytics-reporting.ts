@@ -18,7 +18,12 @@ import {
   type AtlasSellerRevenueAnalyticsRecord,
   type AtlasSellerRequestAnalyticsRecord
 } from "@atlas/domain";
-import type { AtlasActorContext } from "@atlas/auth";
+import {
+  canAtlasActorExportData,
+  canAtlasActorInspectAnalytics,
+  type AtlasActorContext
+} from "@atlas/auth";
+import type { OrganizationKind } from "@atlas/types";
 import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
@@ -34,6 +39,7 @@ export class AtlasAnalyticsReportingError extends Error {
 }
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
+type AtlasAnalyticsAccessMode = "inspect" | "export";
 
 type RequestAnalyticsRow = Prisma.SpendRequestGetPayload<{
   include: {
@@ -92,6 +98,45 @@ function normalizeValidationError(error: unknown): never {
   }
 
   throw error;
+}
+
+function assertTenantAnalyticsActor(
+  actor: AtlasActorContext,
+  input: {
+    organizationId: string;
+    workspace: OrganizationKind;
+    accessMode: AtlasAnalyticsAccessMode;
+  }
+) {
+  if (actor.workspace !== input.workspace || actor.organization.kind !== input.workspace) {
+    throw new AtlasAnalyticsReportingError("Actor workspace does not match the requested tenant analytics scope.", "forbidden");
+  }
+
+  if (actor.organization.id !== input.organizationId) {
+    throw new AtlasAnalyticsReportingError("Actor tenant scope does not match the requested analytics organization.", "forbidden");
+  }
+
+  if (input.accessMode === "inspect" && !canAtlasActorInspectAnalytics(actor)) {
+    throw new AtlasAnalyticsReportingError("Support sessions cannot inspect analytics from this route.", "forbidden");
+  }
+
+  if (input.accessMode === "export" && !canAtlasActorExportData(actor)) {
+    throw new AtlasAnalyticsReportingError("Support sessions cannot export tenant data.", "forbidden");
+  }
+}
+
+function assertPlatformAnalyticsActor(actor: AtlasActorContext, accessMode: AtlasAnalyticsAccessMode) {
+  if (actor.workspace !== "OPERATOR" || actor.organization.kind !== "OPERATOR") {
+    throw new AtlasAnalyticsReportingError("Only operator actors can inspect platform analytics.", "forbidden");
+  }
+
+  if (accessMode === "inspect" && !canAtlasActorInspectAnalytics(actor)) {
+    throw new AtlasAnalyticsReportingError("Support sessions cannot inspect platform analytics.", "forbidden");
+  }
+
+  if (accessMode === "export" && !canAtlasActorExportData(actor)) {
+    throw new AtlasAnalyticsReportingError("Support sessions cannot export operator data.", "forbidden");
+  }
 }
 
 function asJsonObject(value: Prisma.JsonValue | null) {
@@ -762,6 +807,16 @@ export async function getBuyerAnalytics(organizationId: string, client: Database
   };
 }
 
+export async function getBuyerAnalyticsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "BUYER",
+    accessMode: "inspect"
+  });
+
+  return getBuyerAnalytics(actor.organization.id, client);
+}
+
 export async function listBuyerRequestAnalytics(
   organizationId: string,
   rawFilters: Record<string, string | string[] | undefined> = {},
@@ -775,6 +830,20 @@ export async function listBuyerRequestAnalytics(
   } catch (error) {
     normalizeValidationError(error);
   }
+}
+
+export async function listBuyerRequestAnalyticsForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "BUYER",
+    accessMode: "inspect"
+  });
+
+  return listBuyerRequestAnalytics(actor.organization.id, rawFilters, client);
 }
 
 export async function listBuyerActivityAnalytics(
@@ -829,6 +898,20 @@ export async function listBuyerActivityAnalytics(
   }
 }
 
+export async function listBuyerActivityAnalyticsForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "BUYER",
+    accessMode: "inspect"
+  });
+
+  return listBuyerActivityAnalytics(actor.organization.id, rawFilters, client);
+}
+
 export async function exportBuyerRequestCsv(
   organizationId: string,
   rawFilters: Record<string, string | string[] | undefined> = {},
@@ -856,6 +939,20 @@ export async function exportBuyerRequestCsv(
       sellerOrganizationName: row.sellerOrganizationName ?? ""
     }))
   );
+}
+
+export async function exportBuyerRequestCsvForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "BUYER",
+    accessMode: "export"
+  });
+
+  return exportBuyerRequestCsv(actor.organization.id, rawFilters, client);
 }
 
 export async function getSellerRevenueAnalytics(
@@ -921,6 +1018,16 @@ export async function getSellerRevenueAnalytics(
   };
 }
 
+export async function getSellerRevenueAnalyticsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "SELLER",
+    accessMode: "inspect"
+  });
+
+  return getSellerRevenueAnalytics(actor.organization.id, client);
+}
+
 export async function listSellerRequestAnalytics(
   organizationId: string,
   rawFilters: Record<string, string | string[] | undefined> = {},
@@ -934,6 +1041,20 @@ export async function listSellerRequestAnalytics(
   } catch (error) {
     normalizeValidationError(error);
   }
+}
+
+export async function listSellerRequestAnalyticsForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "SELLER",
+    accessMode: "inspect"
+  });
+
+  return listSellerRequestAnalytics(actor.organization.id, rawFilters, client);
 }
 
 export async function exportSellerRequestCsv(
@@ -963,6 +1084,20 @@ export async function exportSellerRequestCsv(
       fulfillmentStatus: row.fulfillmentStatus ?? ""
     }))
   );
+}
+
+export async function exportSellerRequestCsvForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertTenantAnalyticsActor(actor, {
+    organizationId: actor.organization.id,
+    workspace: "SELLER",
+    accessMode: "export"
+  });
+
+  return exportSellerRequestCsv(actor.organization.id, rawFilters, client);
 }
 
 export async function getPlatformAnalytics(client: DatabaseClient = prisma): Promise<AtlasPlatformAnalyticsRecord> {
@@ -1046,6 +1181,11 @@ export async function getPlatformAnalytics(client: DatabaseClient = prisma): Pro
   };
 }
 
+export async function getPlatformAnalyticsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertPlatformAnalyticsActor(actor, "inspect");
+  return getPlatformAnalytics(client);
+}
+
 export async function listPlatformTransactions(
   rawFilters: Record<string, string | string[] | undefined> = {},
   client: DatabaseClient = prisma
@@ -1058,6 +1198,15 @@ export async function listPlatformTransactions(
   } catch (error) {
     normalizeValidationError(error);
   }
+}
+
+export async function listPlatformTransactionsForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertPlatformAnalyticsActor(actor, "inspect");
+  return listPlatformTransactions(rawFilters, client);
 }
 
 export async function listPlatformOrganizations(client: DatabaseClient = prisma): Promise<AtlasOrganizationHealthRecord[]> {
@@ -1142,6 +1291,11 @@ export async function listPlatformOrganizations(client: DatabaseClient = prisma)
   }));
 }
 
+export async function listPlatformOrganizationsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertPlatformAnalyticsActor(actor, "inspect");
+  return listPlatformOrganizations(client);
+}
+
 export async function exportPlatformTransactionCsv(
   rawFilters: Record<string, string | string[] | undefined> = {},
   client: DatabaseClient = prisma
@@ -1174,3 +1328,11 @@ export async function exportPlatformTransactionCsv(
   );
 }
 
+export async function exportPlatformTransactionCsvForActor(
+  actor: AtlasActorContext,
+  rawFilters: Record<string, string | string[] | undefined> = {},
+  client: DatabaseClient = prisma
+) {
+  assertPlatformAnalyticsActor(actor, "export");
+  return exportPlatformTransactionCsv(rawFilters, client);
+}

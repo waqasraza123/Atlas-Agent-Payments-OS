@@ -1,4 +1,4 @@
-import { getPlatformAnalytics } from "@atlas/database";
+import { getPlatformAnalyticsForActor } from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import {
@@ -16,7 +16,10 @@ export default async function OperatorPage() {
     return null;
   }
 
-  const [overview, analytics] = await Promise.all([loadOperatorOverviewData(resolution.actor), getPlatformAnalytics()]);
+  const [overview, analytics] = await Promise.all([
+    loadOperatorOverviewData(resolution.actor),
+    getPlatformAnalyticsForActor(resolution.actor)
+  ]);
   const recentCaseItems = createOperatorCaseListItems(overview.recentCases);
   const recentNotificationItems = createOperatorNotificationItems(overview.recentNotifications);
   const recentAuditItems = createOperatorAuditItems(overview.recentAuditEvents);

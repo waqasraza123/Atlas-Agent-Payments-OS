@@ -20,4 +20,9 @@ if [ ! -x ./scripts/backup-database.sh ] || [ ! -x ./scripts/restore-database.sh
   exit 1
 fi
 
+if [ ! -x ./scripts/verify-restore-drill.sh ]; then
+  echo "Restore-drill verification script must be executable." >&2
+  exit 1
+fi
+
 printf '%s\n' "$latest_migration"

@@ -1,31 +1,26 @@
-import { canAtlasActorExportData, canAtlasActorInspectAnalytics, type AtlasActorContext } from "@atlas/auth";
 import {
-  exportBuyerRequestCsv,
-  exportSellerRequestCsv,
-  exportPlatformTransactionCsv,
-  getBuyerAnalytics,
-  getPlatformAnalytics,
-  getSellerRevenueAnalytics,
-  listBuyerActivityAnalytics,
-  listBuyerRequestAnalytics,
-  listPlatformOrganizations,
-  listPlatformTransactions,
-  listSellerRequestAnalytics
+  exportBuyerRequestCsvForActor,
+  exportPlatformTransactionCsvForActor,
+  exportSellerRequestCsvForActor,
+  getBuyerAnalyticsForActor,
+  getPlatformAnalyticsForActor,
+  getSellerRevenueAnalyticsForActor,
+  listBuyerActivityAnalyticsForActor,
+  listBuyerRequestAnalyticsForActor,
+  listPlatformOrganizationsForActor,
+  listPlatformTransactionsForActor,
+  listSellerRequestAnalyticsForActor
 } from "@atlas/database";
+import type { AtlasActorContext } from "@atlas/auth";
 import { Injectable } from "@nestjs/common";
 import { rethrowAnalyticsReportingError } from "../shared/workflow-error";
-import { ForbiddenException } from "@nestjs/common";
 
 @Injectable()
 export class AnalyticsService {
   async getBuyerOverview(actor: AtlasActorContext) {
-    if (!canAtlasActorInspectAnalytics(actor)) {
-      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
-    }
-
     try {
       return {
-        item: await getBuyerAnalytics(actor.organization.id)
+        item: await getBuyerAnalyticsForActor(actor)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
@@ -33,13 +28,9 @@ export class AnalyticsService {
   }
 
   async listBuyerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
-    if (!canAtlasActorInspectAnalytics(actor)) {
-      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
-    }
-
     try {
       return {
-        items: await listBuyerRequestAnalytics(actor.organization.id, query)
+        items: await listBuyerRequestAnalyticsForActor(actor, query)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
@@ -47,13 +38,9 @@ export class AnalyticsService {
   }
 
   async listBuyerActivity(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
-    if (!canAtlasActorInspectAnalytics(actor)) {
-      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
-    }
-
     try {
       return {
-        items: await listBuyerActivityAnalytics(actor.organization.id, query)
+        items: await listBuyerActivityAnalyticsForActor(actor, query)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
@@ -61,25 +48,17 @@ export class AnalyticsService {
   }
 
   async exportBuyerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
-    if (!canAtlasActorExportData(actor)) {
-      throw new ForbiddenException("Support sessions cannot export tenant data.");
-    }
-
     try {
-      return exportBuyerRequestCsv(actor.organization.id, query);
+      return exportBuyerRequestCsvForActor(actor, query);
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }
   }
 
   async getSellerOverview(actor: AtlasActorContext) {
-    if (!canAtlasActorInspectAnalytics(actor)) {
-      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
-    }
-
     try {
       return {
-        item: await getSellerRevenueAnalytics(actor.organization.id)
+        item: await getSellerRevenueAnalyticsForActor(actor)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
@@ -87,13 +66,9 @@ export class AnalyticsService {
   }
 
   async listSellerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
-    if (!canAtlasActorInspectAnalytics(actor)) {
-      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
-    }
-
     try {
       return {
-        items: await listSellerRequestAnalytics(actor.organization.id, query)
+        items: await listSellerRequestAnalyticsForActor(actor, query)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
@@ -101,50 +76,46 @@ export class AnalyticsService {
   }
 
   async exportSellerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
-    if (!canAtlasActorExportData(actor)) {
-      throw new ForbiddenException("Support sessions cannot export tenant data.");
-    }
-
     try {
-      return exportSellerRequestCsv(actor.organization.id, query);
+      return exportSellerRequestCsvForActor(actor, query);
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }
   }
 
-  async getPlatformOverview() {
+  async getPlatformOverview(actor: AtlasActorContext) {
     try {
       return {
-        item: await getPlatformAnalytics()
+        item: await getPlatformAnalyticsForActor(actor)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }
   }
 
-  async listPlatformTransactions(query: Record<string, string | string[] | undefined>) {
+  async listPlatformTransactions(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
     try {
       return {
-        items: await listPlatformTransactions(query)
+        items: await listPlatformTransactionsForActor(actor, query)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }
   }
 
-  async listPlatformOrganizations() {
+  async listPlatformOrganizations(actor: AtlasActorContext) {
     try {
       return {
-        items: await listPlatformOrganizations()
+        items: await listPlatformOrganizationsForActor(actor)
       };
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }
   }
 
-  async exportPlatformTransactions(query: Record<string, string | string[] | undefined>) {
+  async exportPlatformTransactions(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
     try {
-      return exportPlatformTransactionCsv(query);
+      return exportPlatformTransactionCsvForActor(actor, query);
     } catch (error) {
       rethrowAnalyticsReportingError(error);
     }

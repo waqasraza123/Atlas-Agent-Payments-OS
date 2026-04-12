@@ -1,4 +1,8 @@
-import { getPlatformAnalytics, listPlatformOrganizations, listProgrammableSettlementOrganizations } from "@atlas/database";
+import {
+  getPlatformAnalyticsForActor,
+  listPlatformOrganizationsForActor,
+  listProgrammableSettlementOrganizations
+} from "@atlas/database";
 import { MetricCard, PageHeader, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { formatDateTimeLabel, formatHoursLabel } from "@/lib/formatters";
@@ -11,8 +15,8 @@ export default async function OperatorOrganizationsPage() {
   }
 
   const [analytics, organizations, programmableOrganizations] = await Promise.all([
-    getPlatformAnalytics(),
-    listPlatformOrganizations(),
+    getPlatformAnalyticsForActor(resolution.actor),
+    listPlatformOrganizationsForActor(resolution.actor),
     listProgrammableSettlementOrganizations()
   ]);
   return (

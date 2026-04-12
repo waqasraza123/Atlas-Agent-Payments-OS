@@ -29,6 +29,7 @@ These files are templates only. Real secrets must come from a secret manager or 
 4. Capture a database backup before applying schema changes.
 5. Promote the same revision forward from development to staging to production.
 6. Store the generated promotion manifest with the release record for later rollback and incident review.
+7. Treat the generated promotion bundle as the release artifact manifest for the environment handoff.
 
 ## Expected Metadata
 
@@ -37,7 +38,9 @@ These files are templates only. Real secrets must come from a secret manager or 
 - `APP_REVISION`
 - `DEPLOYMENT_SLOT`
 - `DATABASE_BACKUP_DIR`
+- `RELEASE_ARTIFACT_ID`
+- `RELEASE_ARTIFACT_SHA256`
 
 ## Current Limitation
 
-The repo now validates environment shape, release metadata, and promotion-manifest generation, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.
+The repo now validates environment shape, release metadata, promotion-manifest generation, and artifact-bound promotion bundles, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.

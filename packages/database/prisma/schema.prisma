@@ -181,6 +181,12 @@ enum SupportAccessReviewCampaignItemStatus {
   REVOKED
 }
 
+enum IdentityProviderLinkStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -193,6 +199,7 @@ model User {
   name            String?
   memberships     Membership[]
   identityProviderLinks IdentityProviderLink[]
+  managedIdentityProviderLinks IdentityProviderLink[] @relation("IdentityProviderLinkStatusChangedByUser")
   authSessions    AuthSession[]
   approvals       Approval[]
   auditEvents     AuditEvent[]
@@ -247,17 +254,23 @@ model Membership {
 }
 
 model IdentityProviderLink {
-  id                 String   @id @default(cuid())
+  id                 String                   @id @default(cuid())
   provider           String
   subject            String
   userId             String
+  status             IdentityProviderLinkStatus @default(ACTIVE)
+  statusReason       String?
+  statusChangedAt    DateTime?
+  statusChangedByUserId String?
   metadata           Json?
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  linkedAt           DateTime @default(now())
-  lastAuthenticatedAt DateTime @default(now())
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statusChangedByUser User?                   @relation("IdentityProviderLinkStatusChangedByUser", fields: [statusChangedByUserId], references: [id], onDelete: SetNull)
+  linkedAt           DateTime                 @default(now())
+  lastAuthenticatedAt DateTime                @default(now())
 
   @@unique([provider, subject])
   @@index([userId, provider])
+  @@index([status, lastAuthenticatedAt])
 }
 
 model AuthSession {

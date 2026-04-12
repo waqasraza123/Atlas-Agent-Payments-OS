@@ -120,6 +120,23 @@ async function createAuditEvent(
   });
 }
 
+async function loadIdentityProviderLink(
+  client: DatabaseClient,
+  input: {
+    provider: string;
+    subject: string;
+  }
+) {
+  return client.identityProviderLink.findUnique({
+    where: {
+      provider_subject: {
+        provider: input.provider,
+        subject: input.subject
+      }
+    }
+  });
+}
+
 export async function exchangeIdentityAssertionForSession(
   input: {
     selection: AtlasLocalSessionSelection;
@@ -213,13 +230,9 @@ async function exchangeIdentitySession(
     throw new AtlasAuthSessionWorkflowError("Identity exchange could not resolve an Atlas membership.", "not_found");
   }
 
-  const existingLink = await client.identityProviderLink.findUnique({
-    where: {
-      provider_subject: {
-        provider,
-        subject
-      }
-    }
+  const existingLink = await loadIdentityProviderLink(client, {
+    provider,
+    subject
   });
 
   if (existingLink && existingLink.userId !== membership.user.id) {
@@ -229,31 +242,41 @@ async function exchangeIdentitySession(
     );
   }
 
+  if (existingLink && existingLink.status !== "ACTIVE") {
+    throw new AtlasAuthSessionWorkflowError(
+      "The supplied identity is not currently allowed to exchange into an Atlas session.",
+      "forbidden"
+    );
+  }
+
   const session = await client.$transaction(async (transaction) => {
-    await transaction.identityProviderLink.upsert({
-      where: {
-        provider_subject: {
+    if (existingLink) {
+      await transaction.identityProviderLink.update({
+        where: {
+          id: existingLink.id
+        },
+        data: {
+          lastAuthenticatedAt: new Date(),
+          metadata: {
+            userEmail: membership.user.email,
+            userName: input.userName
+          }
+        }
+      });
+    } else {
+      await transaction.identityProviderLink.create({
+        data: {
           provider,
-          subject
+          subject,
+          userId: membership.user.id,
+          status: "ACTIVE",
+          metadata: {
+            userEmail: membership.user.email,
+            userName: input.userName
+          }
         }
-      },
-      update: {
-        lastAuthenticatedAt: new Date(),
-        metadata: {
-          userEmail: membership.user.email,
-          userName: input.userName
-        }
-      },
-      create: {
-        provider,
-        subject,
-        userId: membership.user.id,
-        metadata: {
-          userEmail: membership.user.email,
-          userName: input.userName
-        }
-      }
-    });
+      });
+    }
 
     const createdSession = await transaction.authSession.create({
       data: {
@@ -320,6 +343,21 @@ export async function loadAuthSessionById(sessionId: string, client: DatabaseCli
 
   if (session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
     return null;
+  }
+
+  if (session.source === "IDENTITY_PROVIDER") {
+    if (!session.provider || !session.providerSubject) {
+      return null;
+    }
+
+    const identityProviderLink = await loadIdentityProviderLink(client, {
+      provider: session.provider,
+      subject: session.providerSubject
+    });
+
+    if (!identityProviderLink || identityProviderLink.status !== "ACTIVE") {
+      return null;
+    }
   }
 
   return mapPersistedAuthSession(session);

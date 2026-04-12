@@ -1,4 +1,4 @@
-import { listPlatformTransactions } from "@atlas/database";
+import { listPlatformTransactionsForActor } from "@atlas/database";
 import { PageHeader, RecordListPanel } from "@atlas/ui";
 import { ExportLinkGroup } from "@/components/export-link-group";
 import { FilterPanel } from "@/components/filter-panel";
@@ -25,7 +25,7 @@ export default async function OperatorTransactionsPage({ searchParams }: Operato
   }
 
   const params = await searchParams;
-  const transactions = await listPlatformTransactions(params);
+  const transactions = await listPlatformTransactionsForActor(resolution.actor, params);
   const query = readSearchParam(params.query) ?? "";
   const requestStatus = readSearchParam(params.requestStatus) ?? "";
   const paymentStatus = readSearchParam(params.paymentStatus) ?? "";
@@ -130,4 +130,3 @@ export default async function OperatorTransactionsPage({ searchParams }: Operato
     </div>
   );
 }
-

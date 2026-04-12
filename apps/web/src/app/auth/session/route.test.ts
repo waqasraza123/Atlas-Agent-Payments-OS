@@ -11,6 +11,17 @@ import { DELETE, POST } from "./route";
 
 const exchangeIdentityAssertionForSessionMock = vi.fn();
 const exchangeExternalIdentityForSessionMock = vi.fn();
+const AtlasAuthSessionWorkflowErrorMock = vi.hoisted(
+  () =>
+    class AtlasAuthSessionWorkflowError extends Error {
+      constructor(
+        message: string,
+        readonly code: "bad_request" | "not_found" | "forbidden" | "conflict"
+      ) {
+        super(message);
+      }
+    }
+);
 const externalOidcKeyPair = generateKeyPairSync("rsa", {
   modulusLength: 2048
 });
@@ -19,6 +30,7 @@ const externalOidcPublicJwk = externalOidcKeyPair.publicKey.export({
 }) as Record<string, unknown>;
 
 vi.mock("@atlas/database", () => ({
+  AtlasAuthSessionWorkflowError: AtlasAuthSessionWorkflowErrorMock,
   exchangeIdentityAssertionForSession: exchangeIdentityAssertionForSessionMock,
   exchangeExternalIdentityForSession: exchangeExternalIdentityForSessionMock
 }));
@@ -243,5 +255,66 @@ describe("local session route", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/buyer");
     expect(response.cookies.get(atlasLocalSessionCookieName)?.value).toBeTruthy();
     expect(exchangeExternalIdentityForSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a forbidden response when an external identity link is suspended", async () => {
+    vi.stubEnv("AUTH_PROVIDER_MODE", "external-oidc");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_ISSUER", "https://id.atlas.example");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_AUDIENCE", "atlas-agent-payments-os");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_PROVIDER", "okta-design-partner");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_JWKS_JSON", JSON.stringify({
+      keys: [
+        {
+          ...externalOidcPublicJwk,
+          kid: "atlas-test-key"
+        }
+      ]
+    }));
+    vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "480");
+    exchangeExternalIdentityForSessionMock.mockRejectedValue(
+      new AtlasAuthSessionWorkflowErrorMock(
+        "The supplied identity is not currently allowed to exchange into an Atlas session.",
+        "forbidden"
+      )
+    );
+
+    const { POST: exchangePost } = await import("../provider-exchange/route");
+    const identityToken = createAtlasExternalIdentityTokenForSelection(
+      externalOidcKeyPair.privateKey.export({
+        format: "pem",
+        type: "pkcs8"
+      }).toString(),
+      {
+        profileKey: null,
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      {
+        issuer: "https://id.atlas.example",
+        audience: "atlas-agent-payments-os",
+        provider: "okta-design-partner",
+        subject: "subject-disabled",
+        userName: "Buyer Admin",
+        issuedAt: "2026-04-12T00:00:00.000Z",
+        expiresAt: "2027-04-12T08:00:00.000Z",
+        keyId: "atlas-test-key"
+      }
+    );
+
+    const formData = new FormData();
+    formData.set("identityToken", identityToken);
+    formData.set("redirectTo", "/buyer");
+
+    const response = await exchangePost(
+      new Request("http://localhost:3000/auth/provider-exchange", {
+        method: "POST",
+        body: formData
+      })
+    );
+
+    expect(response.status).toBe(403);
   });
 });

@@ -18,6 +18,7 @@ Requirements:
 
 - `DATABASE_URL` must be set
 - `pg_dump` must be installed
+- a backup integrity manifest is written alongside each backup file
 
 ## Restore
 
@@ -34,11 +35,22 @@ Requirements:
 - `DATABASE_URL` must be set
 - `psql` must be installed
 - restore confirmation env vars must be explicit
+- if a `<backup-file>.manifest.json` file exists it must pass integrity verification before restore
 
 ## Operational Rule
 
 Take a backup before any release that includes schema or durable lifecycle changes.
 
+## Restore Drill
+
+Run:
+
+1. `pnpm verify:restore-drill`
+
+Optional execution mode:
+
+1. `ATLAS_RESTORE_DRILL_EXECUTE=true ATLAS_RESTORE_DRILL_DATABASE_URL=<database-url> pnpm verify:restore-drill`
+
 ## Current Limitation
 
-The repo now owns the scripts and safety checks, but backup scheduling and restore drills still need a real deployment environment and documented ownership.
+The repo now owns the scripts, integrity checks, and dry-run restore-drill verification, but backup scheduling and non-local restore drills still need a real deployment environment and documented ownership.

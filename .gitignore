@@ -12,3 +12,4 @@ docs/_local/
 packages/database/src/generated
 backups/
 release-manifests/
+restore-drills/

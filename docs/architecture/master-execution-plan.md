@@ -32,7 +32,7 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - A first production-operations baseline is now in place in repo scope through structured runtime config, request correlation, readiness endpoints, release scripts, and CI release gating.
 - A deployment and recovery baseline is now in place in repo scope through env-profile validation, release manifests, rollback-readiness checks, and backup/restore scripts.
 - An observability and incident-response baseline is now in place in repo scope through API runtime metrics, operator alerting surfaces, worker queue runtime metrics, and incident runbooks.
-- The next active implementation slice is restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting, export, and support inspection paths, direct IdP lifecycle controls beyond session exchange, and formal access-review operations for broader rollout readiness.
+- The next active implementation slice is direct external identity provisioning and deprovisioning, stricter tenancy audit coverage across reporting and support paths, real-environment restore drills, secret rotation execution, and deployment automation tied to release promotion.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
@@ -393,4 +393,4 @@ The next safest implementation slice is now:
 - auth and tenancy hardening from [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
 - broader release-stage enforcement from [release-maturity-model.md](./release-maturity-model.md)
 
-The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, observability/incident, signed-session, direct external OIDC exchange into persisted Atlas sessions, campaign-driven access review, provider-session revocation, and reviewable support-access baselines also exist. Future work should concentrate on deeper tenancy validation, environment isolation, restore-drill verification, direct IdP lifecycle controls beyond session exchange, and stronger deployment artifact enforcement before broader real-world rollout.
+The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, observability/incident, signed-session, direct external OIDC exchange into persisted Atlas sessions, campaign-driven access review, provider-session revocation, identity-link lifecycle governance, actor-scoped reporting/export enforcement, restore-drill verification, and artifact-bound promotion manifests also exist. Future work should concentrate on direct external identity provisioning, deeper tenancy audit coverage, real-environment restore drills, secret rotation execution, and stronger deployment automation before broader real-world rollout.

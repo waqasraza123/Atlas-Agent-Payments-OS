@@ -11,3 +11,4 @@ pnpm test:e2e
 pnpm build
 pnpm --filter @atlas/web build
 pnpm verify:rollback
+pnpm verify:restore-drill

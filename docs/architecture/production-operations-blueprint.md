@@ -174,7 +174,8 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - env-profile validation, release manifests, rollback-readiness verification, and backup/restore scripts now exist
 - API metrics, operator observability routes, and incident runbooks now exist
 - signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and recertifiable support-access grants, campaign-driven review automation, provider-session revocation, and promotion-manifest automation now exist
-- deeper deployment automation, restore drills, external alert dispatch, long-term metrics retention, direct IdP lifecycle controls beyond session exchange, and secret rotation execution are still pending
+- actor-scoped reporting and export enforcement, restore-drill verification, backup integrity manifests, and artifact-bound promotion bundles now exist
+- deeper deployment automation, real-environment restore drills, external alert dispatch, long-term metrics retention, direct external identity provisioning, and secret rotation execution are still pending
 
 ### Required before a production-grade focused v1 rollout
 
@@ -195,4 +196,4 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - multi-region or tenant-specific environment strategies
 - highly automated disaster recovery
 - deeper capacity and cost governance
-- direct external identity-provider lifecycle controls beyond the current external OIDC exchange path
+- direct external identity-provider provisioning and deprovisioning beyond the current external OIDC exchange and lifecycle-governance path

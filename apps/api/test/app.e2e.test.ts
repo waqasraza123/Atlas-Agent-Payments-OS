@@ -994,16 +994,27 @@ vi.mock("@atlas/database", async () => {
     performOperatorCaseAction: databaseMock.performOperatorCaseAction,
     listOperatorAuditEvents: databaseMock.listOperatorAuditEvents,
     getBuyerAnalytics: databaseMock.getBuyerAnalytics,
+    getBuyerAnalyticsForActor: databaseMock.getBuyerAnalytics,
     listBuyerRequestAnalytics: databaseMock.listBuyerRequestAnalytics,
+    listBuyerRequestAnalyticsForActor: databaseMock.listBuyerRequestAnalytics,
     listBuyerActivityAnalytics: databaseMock.listBuyerActivityAnalytics,
+    listBuyerActivityAnalyticsForActor: databaseMock.listBuyerActivityAnalytics,
     exportBuyerRequestCsv: databaseMock.exportBuyerRequestCsv,
+    exportBuyerRequestCsvForActor: databaseMock.exportBuyerRequestCsv,
     getSellerRevenueAnalytics: databaseMock.getSellerRevenueAnalytics,
+    getSellerRevenueAnalyticsForActor: databaseMock.getSellerRevenueAnalytics,
     listSellerRequestAnalytics: databaseMock.listSellerRequestAnalytics,
+    listSellerRequestAnalyticsForActor: databaseMock.listSellerRequestAnalytics,
     exportSellerRequestCsv: databaseMock.exportSellerRequestCsv,
+    exportSellerRequestCsvForActor: databaseMock.exportSellerRequestCsv,
     getPlatformAnalytics: databaseMock.getPlatformAnalytics,
+    getPlatformAnalyticsForActor: databaseMock.getPlatformAnalytics,
     listPlatformTransactions: databaseMock.listPlatformTransactions,
+    listPlatformTransactionsForActor: databaseMock.listPlatformTransactions,
     listPlatformOrganizations: databaseMock.listPlatformOrganizations,
-    exportPlatformTransactionCsv: databaseMock.exportPlatformTransactionCsv
+    listPlatformOrganizationsForActor: databaseMock.listPlatformOrganizations,
+    exportPlatformTransactionCsv: databaseMock.exportPlatformTransactionCsv,
+    exportPlatformTransactionCsvForActor: databaseMock.exportPlatformTransactionCsv
   };
 });
 

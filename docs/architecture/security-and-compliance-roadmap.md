@@ -27,7 +27,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - enterprise SSO
 - SCIM or directory provisioning if justified later
 - stronger admin and support access review operations
-- direct external identity-provider lifecycle management beyond the current external OIDC exchange and persisted-session baseline
+- direct external identity-provider provisioning and deprovisioning beyond the current exchange and lifecycle-governance baseline
 
 ## Authorization Maturity Path
 
@@ -52,6 +52,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - support tooling must not silently bypass tenant rules
 - support tooling must carry explicit principal and target-tenant context
 - analytics, exports, and search must remain tenancy-aware
+- reporting and export enforcement should live in shared backend workflows, not only in route-level guards
 
 ## Auditability Requirements
 
@@ -98,10 +99,10 @@ These are placeholders for tracked future work, not current claims:
 - enterprise SSO
 - advanced compliance program claims
 - region-specific data residency architecture
-- formal access review systems beyond the current campaign-driven support grant baseline
+- formal directory provisioning and deprovisioning beyond the current campaign-driven support grant and identity-link governance baseline
 - broad public rollout security posture
 - hardened production auth beyond the current local-first, signed-session, and external OIDC exchange baseline
-- direct external identity-provider lifecycle controls beyond the current external OIDC exchange and persisted-session baseline
+- direct external identity-provider provisioning and deprovisioning beyond the current external OIDC exchange, persisted-session, and identity-link lifecycle baseline
 
 ## Must Be Done Before Broad Real-World Rollout
 
@@ -112,5 +113,6 @@ These are placeholders for tracked future work, not current claims:
 - secrets management and rotation process
 - stronger operator access constraints
 - support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
+- real-environment restore drills and secret rotation execution
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

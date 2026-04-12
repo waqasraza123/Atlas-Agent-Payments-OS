@@ -1,7 +1,12 @@
 import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import { authRuntime } from "@atlas/config";
 import type { OrganizationKind } from "@atlas/types";
-import { Prisma, type PrismaClient, type SupportAccessGrantStatus } from "./generated/client/index.js";
+import {
+  Prisma,
+  type IdentityProviderLinkStatus,
+  type PrismaClient,
+  type SupportAccessGrantStatus
+} from "./generated/client/index.js";
 import { prisma } from "./client";
 import { AtlasAuthSessionWorkflowError, loadAuthSessionById, mapPersistedAuthSession } from "./auth-sessions";
 import {
@@ -110,6 +115,31 @@ export type AtlasIdentityProviderSessionRecord = {
   lastSeenAt: string;
   revokedAt: string | null;
 };
+
+export type AtlasIdentityProviderLinkRecord = {
+  id: string;
+  provider: string;
+  subject: string;
+  userId: string;
+  userEmail: string;
+  userName: string | null;
+  status: IdentityProviderLinkStatus;
+  statusReason: string | null;
+  statusChangedAt: string | null;
+  statusChangedByUserEmail: string | null;
+  lastAuthenticatedAt: string;
+  linkedAt: string;
+  tenantOrganizations: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    kind: OrganizationKind;
+    role: string;
+  }>;
+  activeSessionCount: number;
+};
+
+type AtlasIdentityProviderLinkAction = "SUSPEND" | "REACTIVATE" | "REVOKE";
 
 function assertGovernanceActor(actor: AtlasActorContext) {
   if (actor.workspace !== "OPERATOR" || actor.organization.kind !== "OPERATOR") {
@@ -229,6 +259,61 @@ function mapIdentityProviderSession(session: NonNullable<Awaited<ReturnType<type
     lastSeenAt: session.lastSeenAt,
     revokedAt: session.revokedAt
   } satisfies AtlasIdentityProviderSessionRecord;
+}
+
+function mapIdentityProviderLink(input: {
+  id: string;
+  provider: string;
+  subject: string;
+  status: IdentityProviderLinkStatus;
+  statusReason: string | null;
+  statusChangedAt: Date | null;
+  linkedAt: Date;
+  lastAuthenticatedAt: Date;
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    memberships: Array<{
+      id: string;
+      role: string;
+      organization: {
+        id: string;
+        slug: string;
+        name: string;
+        kind: OrganizationKind;
+      };
+    }>;
+  };
+  statusChangedByUser: {
+    email: string;
+  } | null;
+  activeSessionCount: number;
+}) {
+  return {
+    id: input.id,
+    provider: input.provider,
+    subject: input.subject,
+    userId: input.user.id,
+    userEmail: input.user.email,
+    userName: input.user.name,
+    status: input.status,
+    statusReason: input.statusReason,
+    statusChangedAt: input.statusChangedAt?.toISOString() ?? null,
+    statusChangedByUserEmail: input.statusChangedByUser?.email ?? null,
+    lastAuthenticatedAt: input.lastAuthenticatedAt.toISOString(),
+    linkedAt: input.linkedAt.toISOString(),
+    tenantOrganizations: input.user.memberships
+      .filter((membership) => membership.organization.kind === "BUYER" || membership.organization.kind === "SELLER")
+      .map((membership) => ({
+        id: membership.organization.id,
+        slug: membership.organization.slug,
+        name: membership.organization.name,
+        kind: membership.organization.kind,
+        role: membership.role
+      })),
+    activeSessionCount: input.activeSessionCount
+  } satisfies AtlasIdentityProviderLinkRecord;
 }
 
 async function createAuditEvent(
@@ -569,6 +654,240 @@ export async function listIdentityProviderSessions(
       organizationKind: session.organization.kind
     })
   );
+}
+
+export async function listIdentityProviderLinks(
+  actor: AtlasActorContext,
+  client: DatabaseClient = prisma
+) {
+  assertGovernanceActor(actor);
+  const links = await client.identityProviderLink.findMany({
+    where: {
+      user: {
+        memberships: {
+          some: {
+            organization: {
+              kind: {
+                in: ["BUYER", "SELLER"]
+              }
+            }
+          }
+        }
+      }
+    },
+    include: {
+      user: {
+        include: {
+          memberships: {
+            include: {
+              organization: true
+            }
+          }
+        }
+      },
+      statusChangedByUser: {
+        select: {
+          email: true
+        }
+      }
+    },
+    orderBy: [
+      {
+        status: "asc"
+      },
+      {
+        lastAuthenticatedAt: "desc"
+      }
+    ]
+  });
+
+  const activeSessions = await client.authSession.findMany({
+    where: {
+      source: "IDENTITY_PROVIDER",
+      revokedAt: null,
+      expiresAt: {
+        gt: new Date()
+      }
+    },
+    select: {
+      provider: true,
+      providerSubject: true
+    }
+  });
+
+  const activeSessionCounts = new Map<string, number>();
+  for (const session of activeSessions) {
+    const key = `${session.provider ?? ""}:${session.providerSubject ?? ""}`;
+    activeSessionCounts.set(key, (activeSessionCounts.get(key) ?? 0) + 1);
+  }
+
+  return links.map((link) =>
+    mapIdentityProviderLink({
+      ...link,
+      activeSessionCount: activeSessionCounts.get(`${link.provider}:${link.subject}`) ?? 0
+    })
+  );
+}
+
+export async function updateIdentityProviderLinkLifecycle(
+  actor: AtlasActorContext,
+  linkId: string,
+  input: {
+    action: AtlasIdentityProviderLinkAction;
+    reason: string;
+  },
+  client: PrismaClient = prisma
+) {
+  assertGovernanceActor(actor);
+  const reason = assertGovernanceReason(input.reason, "Identity-provider action reason");
+
+  return client.$transaction(async (transaction) => {
+    const link = await transaction.identityProviderLink.findUnique({
+      where: {
+        id: linkId
+      },
+      include: {
+        user: {
+          include: {
+            memberships: {
+              include: {
+                organization: true
+              }
+            }
+          }
+        },
+        statusChangedByUser: {
+          select: {
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!link) {
+      throw new AtlasAuthSessionWorkflowError("Identity-provider link was not found.", "not_found");
+    }
+
+    const tenantMemberships = link.user.memberships.filter(
+      (membership) => membership.organization.kind === "BUYER" || membership.organization.kind === "SELLER"
+    );
+
+    if (tenantMemberships.length === 0) {
+      throw new AtlasAuthSessionWorkflowError("Only buyer and seller identity links can be governed here.", "forbidden");
+    }
+
+    if (input.action === "SUSPEND" && link.status !== "ACTIVE") {
+      throw new AtlasAuthSessionWorkflowError("Only active identity-provider links can be suspended.", "conflict");
+    }
+
+    if (input.action === "REACTIVATE" && link.status !== "SUSPENDED") {
+      throw new AtlasAuthSessionWorkflowError("Only suspended identity-provider links can be reactivated.", "conflict");
+    }
+
+    if (input.action === "REVOKE" && link.status === "REVOKED") {
+      throw new AtlasAuthSessionWorkflowError("Identity-provider link is already revoked.", "conflict");
+    }
+
+    const nextStatus =
+      input.action === "SUSPEND"
+        ? "SUSPENDED"
+        : input.action === "REACTIVATE"
+          ? "ACTIVE"
+          : "REVOKED";
+
+    const updatedLink = await transaction.identityProviderLink.update({
+      where: {
+        id: link.id
+      },
+      data: {
+        status: nextStatus,
+        statusReason: reason,
+        statusChangedAt: new Date(),
+        statusChangedByUserId: actor.user.id
+      },
+      include: {
+        user: {
+          include: {
+            memberships: {
+              include: {
+                organization: true
+              }
+            }
+          }
+        },
+        statusChangedByUser: {
+          select: {
+            email: true
+          }
+        }
+      }
+    });
+
+    let revokedSessionCount = 0;
+
+    if (input.action !== "REACTIVATE") {
+      const activeSessions = await transaction.authSession.findMany({
+        where: {
+          source: "IDENTITY_PROVIDER",
+          provider: link.provider,
+          providerSubject: link.subject,
+          revokedAt: null,
+          expiresAt: {
+            gt: new Date()
+          }
+        },
+        select: {
+          id: true,
+          metadata: true
+        }
+      });
+
+      revokedSessionCount = activeSessions.length;
+
+      for (const session of activeSessions) {
+        const metadata =
+          session.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
+            ? (session.metadata as Prisma.JsonObject)
+            : {};
+
+        await transaction.authSession.update({
+          where: {
+            id: session.id
+          },
+          data: {
+            revokedAt: new Date(),
+            metadata: {
+              ...metadata,
+              revokedByUserId: actor.user.id,
+              revokeReason: reason,
+              identityProviderAction: input.action,
+              identityProviderLinkId: link.id
+            }
+          }
+        });
+      }
+    }
+
+    await createAuditEvent(transaction, actor, {
+      targetId: updatedLink.id,
+      eventType: `identity_provider_link.${input.action.toLowerCase()}`,
+      payload: {
+        provider: updatedLink.provider,
+        subject: updatedLink.subject,
+        status: updatedLink.status,
+        reason,
+        revokedSessionCount
+      }
+    });
+
+    return {
+      link: mapIdentityProviderLink({
+        ...updatedLink,
+        activeSessionCount: 0
+      }),
+      revokedSessionCount
+    } as const;
+  });
 }
 
 export async function revokeIdentityProviderSession(

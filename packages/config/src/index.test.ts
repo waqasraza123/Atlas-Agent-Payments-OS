@@ -32,6 +32,10 @@ describe("atlas config", () => {
     expect(authRuntime.providerMode).toBe("local-signed");
     expect(authRuntime.sessionSigningSecret).toBe("atlas-local-session-secret");
     expect(deploymentRuntime.revision).toBe("local-development");
+    expect(deploymentRuntime.releaseArtifactId).toBe("local-artifact");
+    expect(deploymentRuntime.releaseArtifactSha256).toBe(
+      "0000000000000000000000000000000000000000000000000000000000000000"
+    );
     expect(webRuntime.baseUrl).toBe("http://localhost:3000");
     expect(workerRuntime.redisUrl).toBe("redis://localhost:6379");
     expect(paymentRuntime.stripeEnabled).toBe(false);
@@ -85,6 +89,8 @@ describe("atlas config", () => {
     vi.stubEnv("API_BASE_URL", "https://api.atlas.local");
     vi.stubEnv("APP_REVISION", "rev-123");
     vi.stubEnv("DEPLOYMENT_SLOT", "blue");
+    vi.stubEnv("RELEASE_ARTIFACT_ID", "atlas-staging-build");
+    vi.stubEnv("RELEASE_ARTIFACT_SHA256", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     vi.stubEnv("DATABASE_URL", "postgresql://atlas:atlas@127.0.0.1:5432/atlas");
     vi.stubEnv("API_PORT", "4105");
     vi.stubEnv("REDIS_URL", "redis://127.0.0.1:6380");
@@ -139,6 +145,10 @@ describe("atlas config", () => {
     expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
     expect(deploymentRuntime.revision).toBe("rev-123");
     expect(deploymentRuntime.deploymentSlot).toBe("blue");
+    expect(deploymentRuntime.releaseArtifactId).toBe("atlas-staging-build");
+    expect(deploymentRuntime.releaseArtifactSha256).toBe(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
     expect(workerRuntime.redisUrl).toBe("redis://127.0.0.1:6380");
     expect(paymentRuntime.stripeEnabled).toBe(true);
     expect(paymentRuntime.stripeSecretKey).toBe("sk_test_atlas");
@@ -159,7 +169,11 @@ describe("atlas config", () => {
       appEnv: "staging",
       authProviderMode: "identity-bridge",
       revision: "rev-123",
-      deploymentSlot: "blue"
+      deploymentSlot: "blue",
+      artifact: {
+        id: "atlas-staging-build",
+        sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
     });
     expect(() => assertAtlasRuntimeConfiguration("worker")).not.toThrow();
     expect(validateAtlasPromotionReadiness("staging")).toEqual([]);
@@ -184,6 +198,10 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator-admin@atlas.local");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_LOOKAHEAD_HOURS", "12");
+    vi.stubEnv("APP_REVISION", "production-build");
+    vi.stubEnv("DEPLOYMENT_SLOT", "blue");
+    vi.stubEnv("RELEASE_ARTIFACT_ID", "atlas-production-build");
+    vi.stubEnv("RELEASE_ARTIFACT_SHA256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     vi.stubEnv("HEALTHCHECK_TIMEOUT_MS", "2000");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.example");
     vi.stubEnv("API_BASE_URL", "https://api.atlas.example");
@@ -251,5 +269,18 @@ describe("atlas config", () => {
         AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS: ""
       })
     ).toContain("Promotion to production requires AUTH_PROVIDER_MODE=external-oidc.");
+
+    expect(
+      validateAtlasPromotionReadiness("staging", {
+        AUTH_PROVIDER_MODE: "external-oidc",
+        APP_REVISION: "local-development",
+        RELEASE_ARTIFACT_ID: "local-artifact",
+        RELEASE_ARTIFACT_SHA256: "bad-digest"
+      })
+    ).toEqual([
+      "Promotion to staging requires APP_REVISION to identify a non-local release.",
+      "Promotion to staging requires RELEASE_ARTIFACT_ID to identify the release artifact.",
+      "Promotion to staging requires RELEASE_ARTIFACT_SHA256 to be a 64-character artifact digest."
+    ]);
   });
 });

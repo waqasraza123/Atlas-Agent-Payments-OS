@@ -32,6 +32,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Post-v1 rollout-hardening baseline now exists through structured runtime config, structured API and worker logs, request-correlation headers, live/startup/readiness health endpoints, release-verification scripts, and a GitHub Actions release gate
 - Deployment and recovery baseline now exists through environment-specific sample files, runtime env validation, release-manifest generation, promotion-manifest automation, rollback-readiness verification, and repo-owned database backup and restore scripts
 - Observability and incident-response baseline now exists through API runtime metrics, operator observability routes, operator alert and incident-readiness surfaces, worker queue runtime metrics, and repo-owned incident runbooks
+- Restore-drill verification and deployment artifact enforcement now exist through repo-owned restore-drill scripts, backup integrity manifests, artifact digest validation, and promotion bundles tied to release metadata
+- Stricter tenancy validation now exists across analytics, reporting exports, and support inspection paths through actor-aware reporting wrappers and support-mode export blocking
+- Direct identity-provider lifecycle governance now exists through persisted provider links with suspend, reactivate, and revoke controls plus provider-session revocation from the operator support surface
 
 ## Non-Negotiable Rules
 
@@ -61,7 +64,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 5: operator controls and exceptions completed in repo scope
 - Phase 6: analytics and enterprise polish completed in repo scope
 - Phase 7: programmable settlement extension completed in repo scope
-- Next active implementation track: restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting, export, and support inspection paths, direct IdP lifecycle controls beyond session exchange, and formal access-review operations for broader rollout readiness
+- Next active implementation track: direct external identity provisioning and deprovisioning, stricter tenancy audit coverage across reporting and support paths, real-environment restore drills, secret rotation execution, and deployment automation tied to real environment promotion
 
 ## Completed Major Slices
 
@@ -123,11 +126,14 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - A first post-v1 operations baseline is now in place in repo scope
 - A deployment and recovery baseline is now in place in repo scope
 - An observability and incident-response baseline is now in place in repo scope
-- The current active execution slice is restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting, export, and support inspection paths, direct IdP lifecycle controls beyond the current session-exchange boundary, and formal access-review operations for broader rollout readiness
+- The current active execution slice is direct external identity provisioning and deprovisioning, stricter tenancy audit coverage across reporting and support paths, real-environment restore drills, secret rotation execution, and deployment automation tied to environment promotion
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships plus signed local session tokens carried in the shared session cookie and the `x-atlas-local-session` request header contract
 - The broader rollout baseline now supports direct external OIDC token verification, exchange into persisted Atlas sessions, provider-mode runtime enforcement, and signed session verification against stored auth-session records
 - Internal support access is now tenant-targeted, persisted, reviewable, activatable, revocable, recertifiable, campaign-driven, and read-only, while operator governance can also revoke active provider-backed tenant sessions from one surface
+- Identity-provider links now have persisted lifecycle status and can be suspended, reactivated, or revoked independently from session revocation
+- Reporting, analytics, and CSV export paths now enforce actor-scoped tenant boundaries directly at the shared database workflow layer
+- Release promotion now carries artifact-bound promotion bundles, and backup/restore workflows now verify file integrity and dry-run restore drills through repo-owned scripts
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
 - Policy evaluation results now persist on `SpendRequest.evaluationResult`, and idempotency keys persist on `SpendRequest.idempotencyKey`
 - Buyer workflow writes currently use shared domain validation plus Prisma-backed transaction helpers reused by both API and web
@@ -135,15 +141,15 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 ## Deferred / Not Yet Implemented
 
-- Direct external identity-provider lifecycle beyond the current JWKS-backed external OIDC exchange and persisted session baseline
+- Direct external identity-provider provisioning and deprovisioning beyond the current lifecycle governance baseline
 - Richer policy version history beyond the current integer version increment and stored rule snapshots
 - Stripe webhook ingestion and settlement confirmation beyond the current payment-intent baseline
 - Broader export packaging, richer audit bundle workflows, and deeper self-serve analytics customization beyond the current CSV baseline
 - Receipt artifact generation beyond JSON-backed receipt truth
 - Configurable analytics and broader reporting automation
-- Full release-engineering implementation for multi-environment deployment and rollback discipline
+- Full release-engineering implementation for multi-environment deployment execution, environment promotion, and rollback discipline
 - Full tracing, external alert dispatch, long-term metrics retention, and incident-response automation
-- Broader auth maturity, SSO, external IdP lifecycle controls, and deeper tenant-isolation hardening beyond the current signed-session and external OIDC exchange baseline
+- Broader auth maturity, SSO, external IdP provisioning and deprovisioning, and deeper tenant-isolation hardening beyond the current signed-session and lifecycle-governance baseline
 - Production-ready Stripe webhook ingestion and settlement confirmation lifecycle
 - Broader support tooling, compliance workstreams, and enterprise deployment controls
 - Browser-level interaction tests beyond current HTTP and route-level smoke coverage
@@ -160,7 +166,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
 - The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, reason-captured interventions, and governed programmable settlement
-- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, explicit activation, recertification support, campaign-driven access review, identity-session revocation, promotion-manifest generation, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting and export paths, and direct IdP lifecycle controls are still not in place
+- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, explicit activation, recertification support, campaign-driven access review, identity-session revocation, identity-link lifecycle governance, actor-scoped reporting and export enforcement, promotion-manifest generation, artifact-bound release metadata, backup integrity manifests, restore-drill verification, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but direct external identity provisioning, deeper tenancy audit coverage, secret rotation execution, and real-environment restore drills are still not in place
 - Database backup and restore scripts now exist, but scheduled backups, restore drills, and cloud deployment automation are still not in place
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
@@ -178,6 +184,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - `pnpm verify:env`
 - `pnpm verify:release`
 - `pnpm verify:rollback`
+- `pnpm verify:restore-drill`
 - `pnpm verify:ops`
 - `curl -s http://localhost:4000/health/metrics`
 - `pnpm --filter @atlas/web build`

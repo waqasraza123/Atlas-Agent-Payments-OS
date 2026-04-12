@@ -54,6 +54,7 @@
     "verify:phase0": "pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
     "verify:env": "pnpm exec tsx ./scripts/validate-env.ts --file .env.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.development.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.staging.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.production.example --service api --service web --service worker",
     "verify:rollback": "sh ./scripts/verify-rollback-readiness.sh",
+    "verify:restore-drill": "sh ./scripts/verify-restore-drill.sh",
     "verify:release": "sh ./scripts/verify-release.sh",
     "verify:ops": "sh ./scripts/verify-ops.sh",
     "release:manifest": "pnpm exec tsx ./scripts/create-release-manifest.ts --service api",

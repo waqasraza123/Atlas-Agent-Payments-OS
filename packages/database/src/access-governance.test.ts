@@ -2,8 +2,10 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { describe, expect, it, vi } from "vitest";
 import {
   createSupportAccessReviewCampaign,
+  listIdentityProviderLinks,
   listSupportAccessReviewCampaignCandidates,
   revokeIdentityProviderSession,
+  updateIdentityProviderLinkLifecycle,
   resolveSupportAccessReviewCampaignItem
 } from "./access-governance";
 
@@ -432,6 +434,14 @@ describe("access governance workflow", () => {
           }
         }))
       },
+      identityProviderLink: {
+        findUnique: vi.fn(async () => ({
+          id: "link-1",
+          provider: "okta-production",
+          subject: "subject-1",
+          status: "ACTIVE"
+        }))
+      },
       $transaction: vi.fn(async (callback: (input: typeof transaction) => Promise<unknown>) => callback(transaction))
     } as const;
 
@@ -445,6 +455,158 @@ describe("access governance workflow", () => {
     );
 
     expect(session.revokedAt).toBeTruthy();
+    expect(transaction.authSession.update).toHaveBeenCalled();
+  });
+
+  it("lists tenant-bound identity-provider links with active session counts", async () => {
+    const actor = createOperatorActor();
+    const client = {
+      identityProviderLink: {
+        findMany: vi.fn(async () => [
+          {
+            id: "link-1",
+            provider: "okta-production",
+            subject: "subject-1",
+            status: "ACTIVE",
+            statusReason: null,
+            statusChangedAt: null,
+            linkedAt: new Date("2026-04-12T00:00:00.000Z"),
+            lastAuthenticatedAt: new Date("2026-04-12T01:00:00.000Z"),
+            user: {
+              id: "user-buyer",
+              email: "buyer-admin@atlas.local",
+              name: "Buyer Admin",
+              memberships: [
+                {
+                  id: "membership-buyer",
+                  role: "ADMIN",
+                  organization: {
+                    id: "org-buyer",
+                    slug: "atlas-demo-buyer",
+                    name: "Atlas Demo Buyer",
+                    kind: "BUYER"
+                  }
+                }
+              ]
+            },
+            statusChangedByUser: null
+          }
+        ])
+      },
+      authSession: {
+        findMany: vi.fn(async () => [
+          {
+            provider: "okta-production",
+            providerSubject: "subject-1"
+          }
+        ])
+      }
+    } as const;
+
+    const links = await listIdentityProviderLinks(actor, client as never);
+
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      id: "link-1",
+      status: "ACTIVE",
+      activeSessionCount: 1
+    });
+  });
+
+  it("suspends an identity-provider link and revokes live sessions", async () => {
+    const actor = createOperatorActor();
+    const transaction = {
+      identityProviderLink: {
+        findUnique: vi.fn(async () => ({
+          id: "link-1",
+          provider: "okta-production",
+          subject: "subject-1",
+          status: "ACTIVE",
+          statusReason: null,
+          statusChangedAt: null,
+          linkedAt: new Date("2026-04-12T00:00:00.000Z"),
+          lastAuthenticatedAt: new Date("2026-04-12T01:00:00.000Z"),
+          user: {
+            id: "user-buyer",
+            email: "buyer-admin@atlas.local",
+            name: "Buyer Admin",
+            memberships: [
+              {
+                id: "membership-buyer",
+                role: "ADMIN",
+                organization: {
+                  id: "org-buyer",
+                  slug: "atlas-demo-buyer",
+                  name: "Atlas Demo Buyer",
+                  kind: "BUYER"
+                }
+              }
+            ]
+          },
+          statusChangedByUser: null
+        })),
+        update: vi.fn(async () => ({
+          id: "link-1",
+          provider: "okta-production",
+          subject: "subject-1",
+          status: "SUSPENDED",
+          statusReason: "Suspend buyer identity while tenancy review completes.",
+          statusChangedAt: new Date("2026-04-12T02:00:00.000Z"),
+          linkedAt: new Date("2026-04-12T00:00:00.000Z"),
+          lastAuthenticatedAt: new Date("2026-04-12T01:00:00.000Z"),
+          user: {
+            id: "user-buyer",
+            email: "buyer-admin@atlas.local",
+            name: "Buyer Admin",
+            memberships: [
+              {
+                id: "membership-buyer",
+                role: "ADMIN",
+                organization: {
+                  id: "org-buyer",
+                  slug: "atlas-demo-buyer",
+                  name: "Atlas Demo Buyer",
+                  kind: "BUYER"
+                }
+              }
+            ]
+          },
+          statusChangedByUser: {
+            email: actor.user.email
+          }
+        }))
+      },
+      authSession: {
+        findMany: vi.fn(async () => [
+          {
+            id: "session-1",
+            metadata: {
+              issuedAt: "2026-04-12T00:00:00.000Z"
+            }
+          }
+        ]),
+        update: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    };
+    const client = {
+      $transaction: vi.fn(async (callback: (input: typeof transaction) => Promise<unknown>) => callback(transaction))
+    } as const;
+
+    const result = await updateIdentityProviderLinkLifecycle(
+      actor,
+      "link-1",
+      {
+        action: "SUSPEND",
+        reason: "Suspend buyer identity while tenancy review completes."
+      },
+      client as never
+    );
+
+    expect(result.link.status).toBe("SUSPENDED");
+    expect(result.revokedSessionCount).toBe(1);
     expect(transaction.authSession.update).toHaveBeenCalled();
   });
 });

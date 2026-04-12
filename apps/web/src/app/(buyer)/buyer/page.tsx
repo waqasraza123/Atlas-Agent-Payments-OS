@@ -1,4 +1,8 @@
-import { getBuyerAnalytics, listBuyerActivityAnalytics, listBuyerRequestAnalytics } from "@atlas/database";
+import {
+  getBuyerAnalyticsForActor,
+  listBuyerActivityAnalyticsForActor,
+  listBuyerRequestAnalyticsForActor
+} from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { ExportLinkGroup } from "@/components/export-link-group";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -13,11 +17,11 @@ export default async function BuyerPage() {
   }
 
   const [analytics, requests, activity] = await Promise.all([
-    getBuyerAnalytics(resolution.actor.organization.id),
-    listBuyerRequestAnalytics(resolution.actor.organization.id, {
+    getBuyerAnalyticsForActor(resolution.actor),
+    listBuyerRequestAnalyticsForActor(resolution.actor, {
       riskLevel: "attention"
     }),
-    listBuyerActivityAnalytics(resolution.actor.organization.id, {})
+    listBuyerActivityAnalyticsForActor(resolution.actor, {})
   ]);
 
   return (
@@ -173,4 +177,3 @@ export default async function BuyerPage() {
     </div>
   );
 }
-

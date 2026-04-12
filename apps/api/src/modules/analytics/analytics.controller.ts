@@ -57,20 +57,20 @@ export class AnalyticsController {
 
   @Get("platform/overview")
   @RequireWorkspace("OPERATOR")
-  getPlatformOverview() {
-    return this.analyticsService.getPlatformOverview();
+  getPlatformOverview(@CurrentActor() actor: AtlasActorContext) {
+    return this.analyticsService.getPlatformOverview(actor);
   }
 
   @Get("platform/transactions")
   @RequireWorkspace("OPERATOR")
-  listPlatformTransactions(@Query() query: Record<string, string | string[] | undefined>) {
-    return this.analyticsService.listPlatformTransactions(query);
+  listPlatformTransactions(@CurrentActor() actor: AtlasActorContext, @Query() query: Record<string, string | string[] | undefined>) {
+    return this.analyticsService.listPlatformTransactions(actor, query);
   }
 
   @Get("platform/organizations")
   @RequireWorkspace("OPERATOR")
-  listPlatformOrganizations() {
-    return this.analyticsService.listPlatformOrganizations();
+  listPlatformOrganizations(@CurrentActor() actor: AtlasActorContext) {
+    return this.analyticsService.listPlatformOrganizations(actor);
   }
 
   @Get("platform/transactions.csv")
@@ -78,8 +78,7 @@ export class AnalyticsController {
   @RequireRoles("OWNER", "ADMIN", "OPERATOR", "FINANCE")
   @Header("Content-Type", "text/csv; charset=utf-8")
   @Header("Content-Disposition", 'attachment; filename="platform-transactions.csv"')
-  exportPlatformTransactions(@Query() query: Record<string, string | string[] | undefined>) {
-    return this.analyticsService.exportPlatformTransactions(query);
+  exportPlatformTransactions(@CurrentActor() actor: AtlasActorContext, @Query() query: Record<string, string | string[] | undefined>) {
+    return this.analyticsService.exportPlatformTransactions(actor, query);
   }
 }
-

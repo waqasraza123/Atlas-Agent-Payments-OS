@@ -1,4 +1,4 @@
-import { listBuyerActivityAnalytics } from "@atlas/database";
+import { listBuyerActivityAnalyticsForActor } from "@atlas/database";
 import { PageHeader, RecordListPanel } from "@atlas/ui";
 import { FilterPanel } from "@/components/filter-panel";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -22,7 +22,7 @@ export default async function BuyerActivityPage({ searchParams }: BuyerActivityP
   }
 
   const params = await searchParams;
-  const items = await listBuyerActivityAnalytics(resolution.actor.organization.id, params);
+  const items = await listBuyerActivityAnalyticsForActor(resolution.actor, params);
   const query = readSearchParam(params.query) ?? "";
   const eventType = readSearchParam(params.eventType) ?? "";
   const targetType = readSearchParam(params.targetType) ?? "";
@@ -61,4 +61,3 @@ export default async function BuyerActivityPage({ searchParams }: BuyerActivityP
     </div>
   );
 }
-

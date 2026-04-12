@@ -1,4 +1,4 @@
-import { getSellerRevenueAnalytics } from "@atlas/database";
+import { getSellerRevenueAnalyticsForActor } from "@atlas/database";
 import { MetricCard, PageHeader, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { formatCurrencyMinor } from "@/lib/formatters";
@@ -10,7 +10,7 @@ export default async function SellerCustomersPage() {
     return null;
   }
 
-  const analytics = await getSellerRevenueAnalytics(resolution.actor.organization.id);
+  const analytics = await getSellerRevenueAnalyticsForActor(resolution.actor);
 
   return (
     <div className="space-y-6">
@@ -75,4 +75,3 @@ export default async function SellerCustomersPage() {
     </div>
   );
 }
-

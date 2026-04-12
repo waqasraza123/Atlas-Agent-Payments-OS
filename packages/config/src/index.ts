@@ -106,7 +106,12 @@ export const appRuntime = {
 export const deploymentRuntime = {
   revision: readText(process.env.APP_REVISION, "local-development"),
   deploymentSlot: readText(process.env.DEPLOYMENT_SLOT, "local"),
-  backupDirectory: readText(process.env.DATABASE_BACKUP_DIR, "backups")
+  backupDirectory: readText(process.env.DATABASE_BACKUP_DIR, "backups"),
+  releaseArtifactId: readText(process.env.RELEASE_ARTIFACT_ID, "local-artifact"),
+  releaseArtifactSha256: readText(
+    process.env.RELEASE_ARTIFACT_SHA256,
+    "0000000000000000000000000000000000000000000000000000000000000000"
+  )
 } as const;
 
 export const authRuntime = {
@@ -226,6 +231,10 @@ export type AtlasReleaseManifest = {
   authProviderMode: AtlasIdentityProviderMode;
   revision: string;
   deploymentSlot: string;
+  artifact: {
+    id: string;
+    sha256: string;
+  };
   generatedAt: string;
   baseUrls: {
     api: string;
@@ -291,6 +300,9 @@ export function validateAtlasRuntimeConfiguration(
   const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
   const requiredVariables = [
     ...listAtlasRuntimeVariables(service),
+    ...(appEnv !== "local"
+      ? ["APP_REVISION", "DEPLOYMENT_SLOT", "RELEASE_ARTIFACT_ID", "RELEASE_ARTIFACT_SHA256"]
+      : []),
     ...(service !== "worker" && providerMode === "identity-bridge"
       ? ["AUTH_IDENTITY_BRIDGE_SECRET", "AUTH_IDENTITY_BRIDGE_PROVIDER", "AUTH_IDENTITY_SESSION_TTL_MINUTES"]
       : []),
@@ -352,6 +364,10 @@ export function createAtlasReleaseManifest(
     authProviderMode: readIdentityProviderMode(env.AUTH_PROVIDER_MODE),
     revision: readText(env.APP_REVISION, deploymentRuntime.revision),
     deploymentSlot: readText(env.DEPLOYMENT_SLOT, deploymentRuntime.deploymentSlot),
+    artifact: {
+      id: readText(env.RELEASE_ARTIFACT_ID, deploymentRuntime.releaseArtifactId),
+      sha256: readText(env.RELEASE_ARTIFACT_SHA256, deploymentRuntime.releaseArtifactSha256)
+    },
     generatedAt: new Date().toISOString(),
     baseUrls: {
       api: readText(env.API_BASE_URL, apiRuntime.baseUrl),
@@ -399,6 +415,22 @@ export function validateAtlasPromotionReadiness(
 
   if (toEnv === "production" && readNumber(env.AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS, 0) <= 0) {
     issues.push("Promotion to production requires AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS to be explicitly configured.");
+  }
+
+  const revision = readText(env.APP_REVISION, deploymentRuntime.revision);
+  const artifactId = readText(env.RELEASE_ARTIFACT_ID, deploymentRuntime.releaseArtifactId);
+  const artifactSha256 = readText(env.RELEASE_ARTIFACT_SHA256, deploymentRuntime.releaseArtifactSha256);
+
+  if ((toEnv === "staging" || toEnv === "production") && revision === "local-development") {
+    issues.push(`Promotion to ${toEnv} requires APP_REVISION to identify a non-local release.`);
+  }
+
+  if ((toEnv === "staging" || toEnv === "production") && artifactId === "local-artifact") {
+    issues.push(`Promotion to ${toEnv} requires RELEASE_ARTIFACT_ID to identify the release artifact.`);
+  }
+
+  if ((toEnv === "staging" || toEnv === "production") && !/^[a-f0-9]{64}$/i.test(artifactSha256)) {
+    issues.push(`Promotion to ${toEnv} requires RELEASE_ARTIFACT_SHA256 to be a 64-character artifact digest.`);
   }
 
   return issues;

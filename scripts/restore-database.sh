@@ -36,4 +36,8 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ -f "${backup_file}.manifest.json" ]; then
+  pnpm exec tsx ./scripts/backup-manifest.ts verify --file "$backup_file" >/dev/null
+fi
+
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$backup_file"

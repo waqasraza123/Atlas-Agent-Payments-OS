@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -74,7 +75,7 @@ async function main() {
   const manifestPaths = services.map((service) => {
     const manifest = createAtlasReleaseManifest(service, environment);
     const outputPath = join(outputDirectory, `${service}.json`);
-    writeFileSync(outputPath, `${JSON.stringify({
+    const payload = `${JSON.stringify({
       promotion: {
         fromEnv,
         toEnv,
@@ -82,11 +83,40 @@ async function main() {
         envFile
       },
       manifest
-    }, null, 2)}\n`, "utf8");
-    return outputPath;
+    }, null, 2)}\n`;
+    writeFileSync(outputPath, payload, "utf8");
+    return {
+      service,
+      outputPath,
+      sha256: createHash("sha256").update(payload).digest("hex")
+    };
   });
 
-  process.stdout.write(`${manifestPaths.join("\n")}\n`);
+  const promotionBundlePath = join(outputDirectory, "promotion.json");
+  writeFileSync(
+    promotionBundlePath,
+    `${JSON.stringify(
+      {
+        promotion: {
+          fromEnv,
+          toEnv,
+          createdAt: new Date().toISOString(),
+          envFile
+        },
+        artifact: {
+          id: environment.RELEASE_ARTIFACT_ID,
+          sha256: environment.RELEASE_ARTIFACT_SHA256
+        },
+        revision: environment.APP_REVISION,
+        services: manifestPaths
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  process.stdout.write(`${[...manifestPaths.map((manifest) => manifest.outputPath), promotionBundlePath].join("\n")}\n`);
 }
 
 void main().catch((error) => {

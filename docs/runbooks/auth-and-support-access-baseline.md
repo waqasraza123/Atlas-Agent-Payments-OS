@@ -73,11 +73,14 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - operator governance can open review campaigns for due or recertification-required grants
 - review campaign items can recertify or revoke existing grants
 - operator governance can revoke active provider-backed tenant sessions from the same surface
+- operator governance can suspend, reactivate, or revoke persisted provider identity links from the same surface
+- support-mode sessions are blocked from CSV export and actor-scoped reporting paths that would bypass tenant-safe inspection rules
 
 ## Current Gaps
 
 - no external approval workflow outside Atlas for issuing support grants
 - no direct provisioning integration with an external IdP yet
+- no automated directory deprovisioning or SCIM lifecycle yet
 
 ## Verification Commands
 
@@ -89,6 +92,6 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
-- tighten tenancy validation across analytics, export, and support inspection paths
-- add direct external IdP lifecycle controls beyond the current exchange boundary
-- add formal access-review operations beyond the current operator-driven campaign baseline
+- add direct external identity provisioning and deprovisioning
+- add stricter tenancy audit coverage across analytics, export, and support inspection paths
+- add operational access-review checks and restore-drill execution outside local-only workflows
