@@ -9,10 +9,12 @@ import {
   isOperatorCaseSeverity,
   isOperatorCaseStatus,
   isPaymentRail,
+  isProgrammableSettlementChain,
   isOrganizationKind,
   isPaymentStatus,
   isReceiptStatus,
   isSpendRequestStatus,
+  isWalletVerificationStatus,
   membershipRoleLabels,
   notificationStatuses,
   operatorActionTypes,
@@ -22,6 +24,8 @@ import {
   organizationKindLabels,
   paymentRails,
   paymentStatuses,
+  programmableSettlementChainLabels,
+  programmableSettlementChains,
   receiptStatuses,
   spendRequestStatuses
 } from "./index";
@@ -45,12 +49,16 @@ describe("atlas shared types", () => {
     expect(operatorCaseStatuses.every((status) => isOperatorCaseStatus(status))).toBe(true);
     expect(operatorActionTypes.every((action) => isOperatorActionType(action))).toBe(true);
     expect(notificationStatuses.every((status) => isNotificationStatus(status))).toBe(true);
+    expect(programmableSettlementChains.every((chain) => isProgrammableSettlementChain(chain))).toBe(true);
+    expect(isWalletVerificationStatus("VERIFIED")).toBe(true);
     expect(isPaymentStatus("SETTLED")).toBe(false);
     expect(isPaymentRail("BTC")).toBe(false);
+    expect(isProgrammableSettlementChain("ETHEREUM")).toBe(false);
   });
 
   it("keeps display labels aligned to durable kinds and roles", () => {
     expect(organizationKindLabels.BUYER).toBe("Buyer");
     expect(membershipRoleLabels.ADMIN).toBe("Admin");
+    expect(programmableSettlementChainLabels.BASE_SEPOLIA).toBe("Base Sepolia");
   });
 });

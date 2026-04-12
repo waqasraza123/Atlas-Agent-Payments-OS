@@ -1,9 +1,12 @@
 "use server";
 
 import {
+  AtlasProgrammableSettlementError,
   AtlasSellerWorkflowError,
+  createOrganizationWallet,
   createSellerService,
   recordSellerRequestFulfillment,
+  updateOrganizationProgrammableSettlementSettings,
   updateSellerService
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
@@ -41,7 +44,7 @@ async function requireSellerActor() {
 }
 
 function normalizeActionError(error: unknown) {
-  if (error instanceof AtlasSellerWorkflowError) {
+  if (error instanceof AtlasSellerWorkflowError || error instanceof AtlasProgrammableSettlementError) {
     return error.message;
   }
 
@@ -129,5 +132,56 @@ export async function recordSellerRequestFulfillmentAction(requestId: string, fo
     );
   } catch (error) {
     redirectWithFeedback("/seller/requests", "Fulfillment update failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function createSellerProgrammableWalletAction(formData: FormData) {
+  const actor = await requireSellerActor();
+
+  try {
+    await createOrganizationWallet(actor, {
+      label: toTextValue(formData.get("label")),
+      address: toTextValue(formData.get("address")),
+      ownershipLabel: toTextValue(formData.get("ownershipLabel")),
+      chain: toTextValue(formData.get("chain")),
+      isDefault: formData.get("isDefault") === "on"
+    });
+
+    revalidatePath("/seller");
+    revalidatePath("/seller/wallets");
+    redirectWithFeedback(
+      "/seller/wallets",
+      "Wallet registered",
+      "The seller wallet entry is now part of the programmable-settlement registry and awaits verification."
+    );
+  } catch (error) {
+    redirectWithFeedback("/seller/wallets", "Wallet registration failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateSellerProgrammableSettlementSettingsAction(formData: FormData) {
+  const actor = await requireSellerActor();
+
+  try {
+    const allowedRails = [
+      formData.get("allowInternalSimulated") === "on" ? "INTERNAL_SIMULATED" : null,
+      formData.get("allowStripe") === "on" ? "STRIPE" : null,
+      formData.get("allowProgrammableUsdc") === "on" ? "PROGRAMMABLE_USDC" : null
+    ].filter((value): value is "INTERNAL_SIMULATED" | "STRIPE" | "PROGRAMMABLE_USDC" => Boolean(value));
+
+    await updateOrganizationProgrammableSettlementSettings(actor, {
+      allowedRails,
+      preferredRail: toTextValue(formData.get("preferredRail")) || null
+    });
+
+    revalidatePath("/seller");
+    revalidatePath("/seller/wallets");
+    redirectWithFeedback(
+      "/seller/wallets",
+      "Settlement settings updated",
+      "Seller programmable-settlement governance was updated successfully."
+    );
+  } catch (error) {
+    redirectWithFeedback("/seller/wallets", "Settlement settings failed", normalizeActionError(error), "error");
   }
 }

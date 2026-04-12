@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { paymentRails, paymentStatuses, receiptStatuses, type PaymentRail, type PaymentStatus, type ReceiptStatus } from "@atlas/types";
+import {
+  createAtlasProgrammableSettlementEvidenceSummary,
+  formatAtlasProgrammableChainLabel
+} from "./programmable-settlement";
 
 export const atlasPaymentExecutionSchema = z.object({
   rail: z.enum(paymentRails).default("INTERNAL_SIMULATED")
@@ -42,6 +46,9 @@ export type AtlasPaymentAttemptRecord = {
   reference: string | null;
   providerStatus: string | null;
   evidence: Record<string, unknown> | null;
+  chainLabel: string | null;
+  transactionHash: string | null;
+  confirmations: number | null;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
@@ -67,6 +74,12 @@ export type AtlasPaymentIntentRecord = {
   sellerFulfillmentStatus: AtlasPaymentSellerFulfillmentStatus;
   retryEligible: boolean;
   reconciliationState: AtlasPaymentReconciliationState;
+  chainLabel: string | null;
+  assetSymbol: string | null;
+  transactionHash: string | null;
+  confirmations: number | null;
+  buyerWalletAddress: string | null;
+  sellerWalletAddress: string | null;
   createdAt: string;
   updatedAt: string;
   attempts: AtlasPaymentAttemptRecord[];
@@ -94,6 +107,12 @@ export type AtlasReceiptRecord = {
   providerStatus: string | null;
   attemptCount: number;
   reconciliationState: AtlasPaymentReconciliationState;
+  chainLabel: string | null;
+  assetSymbol: string | null;
+  transactionHash: string | null;
+  confirmations: number | null;
+  buyerWalletAddress: string | null;
+  sellerWalletAddress: string | null;
   evidenceSummary: string[];
   createdAt: string;
   updatedAt: string;
@@ -109,7 +128,15 @@ export type AtlasSimulatedPaymentScenario = {
 };
 
 export function formatAtlasPaymentRailLabel(rail: PaymentRail) {
-  return rail === "INTERNAL_SIMULATED" ? "Internal Simulated" : "Stripe";
+  if (rail === "INTERNAL_SIMULATED") {
+    return "Internal Simulated";
+  }
+
+  if (rail === "STRIPE") {
+    return "Stripe";
+  }
+
+  return "Programmable USDC";
 }
 
 export function formatAtlasPaymentStatusLabel(status: PaymentStatus) {
@@ -285,6 +312,12 @@ export function summarizeAtlasReceiptEvidence(input: {
   sellerFulfillmentStatus: AtlasPaymentSellerFulfillmentStatus;
   storageKey: string | null;
   attemptCount: number;
+  chainLabel?: string | null;
+  assetSymbol?: string | null;
+  transactionHash?: string | null;
+  confirmations?: number | null;
+  buyerWalletAddress?: string | null;
+  sellerWalletAddress?: string | null;
 }) {
   const summary = [
     `Reconciliation ${formatAtlasPaymentReconciliationStateLabel(input.reconciliationState)}`,
@@ -296,7 +329,36 @@ export function summarizeAtlasReceiptEvidence(input: {
     input.sellerFulfillmentStatus ? `Seller ${formatAtlasPaymentSellerFulfillmentLabel(input.sellerFulfillmentStatus)}` : null
   ];
 
-  return summary.filter((value): value is string => Boolean(value));
+  return [
+    ...summary.filter((value): value is string => Boolean(value)),
+    ...createAtlasProgrammableSettlementEvidenceSummary({
+      chainLabel: input.chainLabel ?? null,
+      assetSymbol: input.assetSymbol ?? null,
+      transactionHash: input.transactionHash ?? null,
+      confirmations: input.confirmations ?? null,
+      buyerWalletAddress: input.buyerWalletAddress ?? null,
+      sellerWalletAddress: input.sellerWalletAddress ?? null
+    })
+  ];
+}
+
+export function extractAtlasProgrammableSettlementEvidence(evidence: Record<string, unknown> | null) {
+  const chain = typeof evidence?.chain === "string" ? evidence.chain : null;
+  const chainLabel = chain === "BASE_SEPOLIA" || chain === "BASE_MAINNET" ? formatAtlasProgrammableChainLabel(chain) : null;
+  const assetSymbol = typeof evidence?.assetSymbol === "string" ? evidence.assetSymbol : null;
+  const transactionHash = typeof evidence?.transactionHash === "string" ? evidence.transactionHash : null;
+  const confirmations = typeof evidence?.confirmations === "number" ? evidence.confirmations : null;
+  const buyerWalletAddress = typeof evidence?.buyerWalletAddress === "string" ? evidence.buyerWalletAddress : null;
+  const sellerWalletAddress = typeof evidence?.sellerWalletAddress === "string" ? evidence.sellerWalletAddress : null;
+
+  return {
+    chainLabel,
+    assetSymbol,
+    transactionHash,
+    confirmations,
+    buyerWalletAddress,
+    sellerWalletAddress
+  };
 }
 
 export function isAtlasStripePaymentIntentStatus(value: string): value is AtlasStripePaymentIntentStatus {

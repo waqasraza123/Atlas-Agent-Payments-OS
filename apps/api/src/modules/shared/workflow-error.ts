@@ -3,6 +3,7 @@ import {
   AtlasBuyerWorkflowError,
   AtlasOperatorWorkflowError,
   AtlasPaymentsWorkflowError,
+  AtlasProgrammableSettlementError,
   AtlasSellerWorkflowError
 } from "@atlas/database";
 import {
@@ -44,6 +45,14 @@ export function rethrowPaymentsWorkflowError(error: unknown): never {
   rethrowAtlasWorkflowError(error);
 }
 
+export function rethrowProgrammableSettlementError(error: unknown): never {
+  if (!(error instanceof AtlasProgrammableSettlementError)) {
+    throw error;
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
 export function rethrowOperatorWorkflowError(error: unknown): never {
   if (!(error instanceof AtlasOperatorWorkflowError)) {
     throw error;
@@ -58,6 +67,7 @@ function rethrowAtlasWorkflowError(
     | AtlasBuyerWorkflowError
     | AtlasSellerWorkflowError
     | AtlasPaymentsWorkflowError
+    | AtlasProgrammableSettlementError
     | AtlasOperatorWorkflowError
 ): never {
   if (error.code === "bad_request") {

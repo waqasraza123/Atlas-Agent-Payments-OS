@@ -11,6 +11,7 @@ import { OrganizationsModule } from "./modules/organizations/organizations.modul
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PlatformModule } from "./modules/platform/platform.module";
 import { PoliciesModule } from "./modules/policies/policies.module";
+import { ProgrammableSettlementModule } from "./modules/programmable-settlement/programmable-settlement.module";
 import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { RequestsModule } from "./modules/requests/requests.module";
 import { SellersModule } from "./modules/sellers/sellers.module";
@@ -32,6 +33,7 @@ import { ServicesModule } from "./modules/services/services.module";
     SellersModule,
     ServicesModule,
     PaymentsModule,
+    ProgrammableSettlementModule,
     ReceiptsModule,
     OperatorControlsModule
   ]

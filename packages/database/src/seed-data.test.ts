@@ -5,6 +5,8 @@ import {
   atlasSeedApprovals,
   atlasSeedAuditEvents,
   atlasSeedMemberships,
+  atlasSeedOrganizations,
+  atlasSeedOrganizationWallets,
   atlasSeedPaymentAttempts,
   atlasSeedPayments,
   atlasSeedReceipts,
@@ -56,6 +58,14 @@ describe("atlas seed data", () => {
         atlasSeedPayments.some((payment) => payment.requestId === attempt.requestId && payment.rail === attempt.rail)
       )
     ).toBe(true);
+  });
+
+  it("keeps programmable-settlement wallets aligned to seeded organizations", () => {
+    const organizationSlugs = new Set(atlasSeedOrganizations.map((organization) => organization.slug));
+
+    expect(atlasSeedOrganizationWallets.length).toBeGreaterThanOrEqual(2);
+    expect(atlasSeedOrganizationWallets.every((wallet) => organizationSlugs.has(wallet.organizationSlug))).toBe(true);
+    expect(atlasSeedOrganizationWallets.some((wallet) => wallet.verificationStatus === "VERIFIED")).toBe(true);
   });
 
   it("keeps audit history tied to scenario-driven request lifecycles", () => {

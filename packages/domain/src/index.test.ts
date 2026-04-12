@@ -23,7 +23,8 @@ describe("atlas domain registry", () => {
       "/buyer/requests",
       "/buyer/approvals",
       "/buyer/receipts",
-      "/buyer/activity"
+      "/buyer/activity",
+      "/buyer/wallets"
     ]);
   });
 
@@ -35,6 +36,7 @@ describe("atlas domain registry", () => {
 
   it("creates API domain snapshots with actor context", () => {
     expect(getAtlasApiDomainDefinition("payments").ownerWorkspaces).toEqual(["BUYER", "SELLER", "OPERATOR"]);
+    expect(getAtlasApiDomainDefinition("programmable-settlement").routePrefix).toBe("/programmable-settlement");
 
     expect(
       createAtlasApiDomainSnapshot("payments", {

@@ -4,12 +4,15 @@ import {
   createBuyerAgent,
   createBuyerPolicy,
   createBuyerRequest,
+  createOrganizationWallet,
   decideBuyerApproval,
   executeBuyerPayment,
+  updateOrganizationProgrammableSettlementSettings,
   updateBuyerAgent,
   updateBuyerPolicy,
   AtlasBuyerWorkflowError,
-  AtlasPaymentsWorkflowError
+  AtlasPaymentsWorkflowError,
+  AtlasProgrammableSettlementError
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -60,7 +63,11 @@ async function requireBuyerActor() {
 }
 
 function normalizeActionError(error: unknown) {
-  if (error instanceof AtlasBuyerWorkflowError || error instanceof AtlasPaymentsWorkflowError) {
+  if (
+    error instanceof AtlasBuyerWorkflowError ||
+    error instanceof AtlasPaymentsWorkflowError ||
+    error instanceof AtlasProgrammableSettlementError
+  ) {
     return error.message;
   }
 
@@ -252,5 +259,54 @@ export async function executeBuyerPaymentAction(requestId: string, formData: For
       normalizeActionError(error),
       "error"
     );
+  }
+}
+
+export async function createBuyerProgrammableWalletAction(formData: FormData) {
+  const actor = await requireBuyerActor();
+
+  try {
+    await createOrganizationWallet(actor, {
+      label: toTextValue(formData.get("label")),
+      address: toTextValue(formData.get("address")),
+      ownershipLabel: toTextValue(formData.get("ownershipLabel")),
+      chain: toTextValue(formData.get("chain")),
+      isDefault: toBooleanValue(formData.get("isDefault"))
+    });
+    revalidatePath("/buyer");
+    revalidatePath("/buyer/wallets");
+    redirectWithFeedback(
+      "/buyer/wallets",
+      "Wallet registered",
+      "The wallet entry is now part of the buyer programmable-settlement registry and awaits verification."
+    );
+  } catch (error) {
+    redirectWithFeedback("/buyer/wallets", "Wallet registration failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateBuyerProgrammableSettlementSettingsAction(formData: FormData) {
+  const actor = await requireBuyerActor();
+
+  try {
+    const allowedRails = [
+      toBooleanValue(formData.get("allowInternalSimulated")) ? "INTERNAL_SIMULATED" : null,
+      toBooleanValue(formData.get("allowStripe")) ? "STRIPE" : null,
+      toBooleanValue(formData.get("allowProgrammableUsdc")) ? "PROGRAMMABLE_USDC" : null
+    ].filter((value): value is "INTERNAL_SIMULATED" | "STRIPE" | "PROGRAMMABLE_USDC" => Boolean(value));
+
+    await updateOrganizationProgrammableSettlementSettings(actor, {
+      allowedRails,
+      preferredRail: toNullableTextValue(formData.get("preferredRail"))
+    });
+    revalidatePath("/buyer");
+    revalidatePath("/buyer/wallets");
+    redirectWithFeedback(
+      "/buyer/wallets",
+      "Settlement settings updated",
+      "Buyer rail governance now reflects the latest programmable-settlement policy."
+    );
+  } catch (error) {
+    redirectWithFeedback("/buyer/wallets", "Settlement settings failed", normalizeActionError(error), "error");
   }
 }

@@ -87,6 +87,7 @@ export {
   atlasStripePaymentIntentStatuses,
   deriveAtlasPaymentReconciliationState,
   determineAtlasSimulatedPaymentScenario,
+  extractAtlasProgrammableSettlementEvidence,
   formatAtlasPaymentRailLabel,
   formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
@@ -110,6 +111,24 @@ export {
   type AtlasSimulatedPaymentScenario,
   type AtlasStripePaymentIntentStatus
 } from "./payments-workflow";
+export {
+  atlasProgrammableSettlementSettingsSchema,
+  atlasProgrammableWalletCreateSchema,
+  atlasProgrammableWalletVerificationSchema,
+  createAtlasProgrammableSettlementEvidenceSummary,
+  createAtlasProgrammableSettlementSettings,
+  deriveAtlasProgrammableSettlementReadiness,
+  formatAtlasProgrammableChainLabel,
+  formatAtlasWalletVerificationStatusLabel,
+  normalizeAtlasWalletAddress,
+  type AtlasOrganizationProgrammableSettlementRecord,
+  type AtlasOrganizationWalletRecord,
+  type AtlasProgrammableChainRecord,
+  type AtlasProgrammableSettlementReadiness,
+  type AtlasProgrammableSettlementSettings,
+  type AtlasProgrammableWalletCreateInput,
+  type AtlasProgrammableWalletVerificationInput
+} from "./programmable-settlement";
 export {
   atlasSellerFulfillmentStatuses,
   atlasSellerRequestFulfillmentSchema,
@@ -147,6 +166,7 @@ export type AtlasWorkspaceSurfaceKey =
   | "approvals"
   | "receipts"
   | "activity"
+  | "wallets"
   | "services"
   | "payments"
   | "customers"
@@ -187,6 +207,7 @@ export type AtlasApiDomainKey =
   | "services"
   | "payments"
   | "receipts"
+  | "programmable-settlement"
   | "analytics"
   | "operator-controls";
 
@@ -299,6 +320,15 @@ const buyerWorkspaceDefinition: AtlasWorkspaceDefinition = {
       detail: "This becomes the request and receipt activity lens in later phases.",
       href: "/buyer/activity",
       status: "available"
+    },
+    {
+      key: "wallets",
+      label: "Settlement",
+      title: "Programmable settlement",
+      description: "Register organization wallets, govern allowed rails, and inspect readiness for programmable USDC settlement.",
+      detail: "Phase 7 extends the payment abstraction without changing the off-chain product wedge.",
+      href: "/buyer/wallets",
+      status: "available"
     }
   ]
 };
@@ -363,6 +393,15 @@ const sellerWorkspaceDefinition: AtlasWorkspaceDefinition = {
       description: "Review the delivery boundary that will later carry seller fulfillment and reconciliation signals.",
       detail: "Phase 3 and 4 will turn this shell into a real webhook surface.",
       href: "/seller/webhooks",
+      status: "available"
+    },
+    {
+      key: "wallets",
+      label: "Settlement",
+      title: "Programmable settlement",
+      description: "Register seller settlement wallets, govern programmable-rail readiness, and expose chain-aware payout posture.",
+      detail: "Phase 7 keeps programmable settlement governed instead of making it the product identity.",
+      href: "/seller/wallets",
       status: "available"
     }
   ]
@@ -547,6 +586,16 @@ export const atlasApiDomainDefinitions: Record<AtlasApiDomainKey, AtlasApiDomain
     ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
     category: "shared",
     nextPhase: "Phase 4",
+    readiness: "skeleton"
+  },
+  "programmable-settlement": {
+    key: "programmable-settlement",
+    title: "Programmable settlement",
+    description: "Governed wallet registry and programmable-rail control boundary for on-chain evidence and rail restrictions.",
+    routePrefix: "/programmable-settlement",
+    ownerWorkspaces: ["BUYER", "SELLER", "OPERATOR"],
+    category: "shared",
+    nextPhase: "Phase 7",
     readiness: "skeleton"
   },
   receipts: {

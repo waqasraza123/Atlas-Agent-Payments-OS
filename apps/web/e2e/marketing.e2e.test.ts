@@ -192,6 +192,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the buyer programmable settlement route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/buyer/wallets`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Buyer programmable settlement") ||
+        html.includes("Choose a buyer session to continue") ||
+        html.includes("Buyer context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the buyer request csv export route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/buyer/requests/export.csv`);
     const text = await response.text();
@@ -259,6 +271,18 @@ describe("marketing e2e", () => {
     expect(response.status).toBe(200);
     expect(
       html.includes("Inbound request monitoring baseline") ||
+        html.includes("Choose a seller session to continue") ||
+        html.includes("Seller context could not be resolved")
+    ).toBe(true);
+  });
+
+  it("serves the seller programmable settlement route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/seller/wallets`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Seller programmable settlement") ||
         html.includes("Choose a seller session to continue") ||
         html.includes("Seller context could not be resolved")
     ).toBe(true);

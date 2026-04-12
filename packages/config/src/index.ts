@@ -8,6 +8,18 @@ function readOptionalText(value: string | undefined) {
   return normalized && normalized.length > 0 ? normalized : null;
 }
 
+function readBoolean(value: string | undefined, fallback: boolean) {
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return fallback;
+}
+
 export const atlasProduct = {
   name: "Atlas Agent Payments OS",
   summary: "Premium controls for managed AI agent spend across paid APIs and digital services."
@@ -31,6 +43,17 @@ export const paymentRuntime = {
   stripeSecretKey: readOptionalText(process.env.STRIPE_SECRET_KEY),
   stripeWebhookSecret: readOptionalText(process.env.STRIPE_WEBHOOK_SECRET),
   stripeEnabled: Boolean(readOptionalText(process.env.STRIPE_SECRET_KEY))
+} as const;
+
+export const programmableSettlementRuntime = {
+  enabled: readBoolean(process.env.PROGRAMMABLE_SETTLEMENT_ENABLED, false),
+  chainKey: process.env.PROGRAMMABLE_SETTLEMENT_CHAIN_KEY ?? "BASE_SEPOLIA",
+  chainId: readNumber(process.env.PROGRAMMABLE_SETTLEMENT_CHAIN_ID, 84532),
+  networkName: process.env.PROGRAMMABLE_SETTLEMENT_NETWORK_NAME ?? "Base Sepolia",
+  assetSymbol: process.env.PROGRAMMABLE_SETTLEMENT_ASSET_SYMBOL ?? "USDC",
+  explorerBaseUrl:
+    process.env.PROGRAMMABLE_SETTLEMENT_EXPLORER_BASE_URL ?? "https://sepolia.basescan.org/tx/",
+  requiredConfirmations: readNumber(process.env.PROGRAMMABLE_SETTLEMENT_REQUIRED_CONFIRMATIONS, 2)
 } as const;
 
 export const storageRuntime = {

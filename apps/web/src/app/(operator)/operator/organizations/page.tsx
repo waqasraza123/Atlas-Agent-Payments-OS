@@ -1,4 +1,4 @@
-import { getPlatformAnalytics, listPlatformOrganizations } from "@atlas/database";
+import { getPlatformAnalytics, listPlatformOrganizations, listProgrammableSettlementOrganizations } from "@atlas/database";
 import { MetricCard, PageHeader, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { formatDateTimeLabel, formatHoursLabel } from "@/lib/formatters";
@@ -10,8 +10,11 @@ export default async function OperatorOrganizationsPage() {
     return null;
   }
 
-  const [analytics, organizations] = await Promise.all([getPlatformAnalytics(), listPlatformOrganizations()]);
-
+  const [analytics, organizations, programmableOrganizations] = await Promise.all([
+    getPlatformAnalytics(),
+    listPlatformOrganizations(),
+    listProgrammableSettlementOrganizations()
+  ]);
   return (
     <div className="space-y-6">
       <PageHeader
@@ -41,7 +44,23 @@ export default async function OperatorOrganizationsPage() {
         emptyTitle="No organizations available"
         emptyDescription="Organization health will appear once the platform has seeded or runtime tenants."
       />
+      <RecordListPanel
+        eyebrow="Programmable settlement"
+        title="Wallet and rail readiness"
+        description="Operator review now includes wallet verification posture and programmable-rail governance for buyer and seller organizations."
+        items={programmableOrganizations.map((organization) => ({
+          id: `${organization.organizationId}-programmable`,
+          title: organization.organizationName,
+          description: `${organization.organizationKind} · ${organization.wallets.length} wallets · ${organization.supportedChain.label}`,
+          detail:
+            organization.readiness.reasons[0] ??
+            `${organization.settings.allowedRails.join(", ")} · ${organization.wallets.filter((wallet) => wallet.verificationStatus === "VERIFIED").length} verified`,
+          statusLabel: organization.readiness.ready ? "Ready" : "Blocked",
+          statusTone: organization.readiness.ready ? "success" : "warning"
+        }))}
+        emptyTitle="No programmable-settlement organizations"
+        emptyDescription="Programmable settlement posture will appear once buyer and seller organizations exist."
+      />
     </div>
   );
 }
-

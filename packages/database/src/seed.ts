@@ -4,6 +4,7 @@ import {
   atlasSeedApprovals,
   atlasSeedAuditEvents,
   atlasSeedMemberships,
+  atlasSeedOrganizationWallets,
   atlasSeedPaymentAttempts,
   atlasSeedOrganizations,
   atlasSeedPayments,
@@ -25,12 +26,14 @@ async function ensureOrganizations() {
       },
       update: {
         name: organization.name,
-        kind: organization.kind
+        kind: organization.kind,
+        metadata: organization.metadata ?? Prisma.JsonNull
       },
       create: {
         slug: organization.slug,
         name: organization.name,
-        kind: organization.kind
+        kind: organization.kind,
+        metadata: organization.metadata ?? Prisma.JsonNull
       }
     });
   }
@@ -102,6 +105,46 @@ async function ensureMemberships(args: {
         userId,
         organizationId,
         role: membership.role
+      }
+    });
+  }
+}
+
+async function ensureOrganizationWallets(organizationIdsBySlug: Map<string, string>) {
+  for (const wallet of atlasSeedOrganizationWallets) {
+    const organizationId = organizationIdsBySlug.get(wallet.organizationSlug);
+
+    if (!organizationId) {
+      throw new Error(`Missing organization for wallet ${wallet.id}`);
+    }
+
+    await prisma.organizationWallet.upsert({
+      where: {
+        organizationId_chain_address: {
+          organizationId,
+          chain: wallet.chain,
+          address: wallet.address
+        }
+      },
+      update: {
+        label: wallet.label,
+        ownershipLabel: wallet.ownershipLabel,
+        verificationStatus: wallet.verificationStatus,
+        verificationNote: wallet.verificationNote,
+        isDefault: wallet.isDefault,
+        metadata: wallet.metadata ?? Prisma.JsonNull
+      },
+      create: {
+        id: wallet.id,
+        organizationId,
+        chain: wallet.chain,
+        address: wallet.address,
+        label: wallet.label,
+        ownershipLabel: wallet.ownershipLabel,
+        verificationStatus: wallet.verificationStatus,
+        verificationNote: wallet.verificationNote,
+        isDefault: wallet.isDefault,
+        metadata: wallet.metadata ?? Prisma.JsonNull
       }
     });
   }
@@ -458,6 +501,7 @@ async function main() {
   const lookups = await createLookupMaps();
 
   await ensureMemberships(lookups);
+  await ensureOrganizationWallets(lookups.organizationIdsBySlug);
   await ensurePolicies(lookups.organizationIdsBySlug);
   await ensureAgents(lookups.organizationIdsBySlug);
   await ensureServices(lookups.organizationIdsBySlug);

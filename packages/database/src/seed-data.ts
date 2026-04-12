@@ -9,11 +9,13 @@ import type {
   PaymentRail,
   PaymentStatus,
   PolicyStatus,
+  ProgrammableSettlementChain,
   ServicePricingModel,
   ServiceStatus,
   ServiceVisibilityMode,
   ReceiptStatus,
-  SpendRequestStatus
+  SpendRequestStatus,
+  WalletVerificationStatus
 } from "@atlas/types";
 
 export const atlasSeedScenarioKey = `${demoScenarioKey}-foundation`;
@@ -24,6 +26,7 @@ export type AtlasSeedOrganizationDefinition = {
   slug: string;
   name: string;
   kind: OrganizationKind;
+  metadata?: AtlasSeedJsonValue | null;
 };
 
 export type AtlasSeedUserDefinition = {
@@ -121,6 +124,19 @@ export type AtlasSeedPaymentAttemptDefinition = {
   errorMessage: string | null;
 };
 
+export type AtlasSeedOrganizationWalletDefinition = {
+  id: string;
+  organizationSlug: string;
+  chain: ProgrammableSettlementChain;
+  address: string;
+  label: string;
+  ownershipLabel: string;
+  verificationStatus: WalletVerificationStatus;
+  verificationNote: string | null;
+  isDefault: boolean;
+  metadata: AtlasSeedJsonValue | null;
+};
+
 export type AtlasSeedReceiptDefinition = {
   requestId: string;
   organizationSlug: string;
@@ -163,27 +179,52 @@ export const atlasSeedOrganizations: AtlasSeedOrganizationDefinition[] = [
   {
     slug: "atlas-demo-buyer",
     name: "Atlas Demo Buyer",
-    kind: "BUYER"
+    kind: "BUYER",
+    metadata: {
+      programmableSettlement: {
+        allowedRails: ["INTERNAL_SIMULATED", "STRIPE", "PROGRAMMABLE_USDC"],
+        preferredRail: "PROGRAMMABLE_USDC"
+      }
+    }
   },
   {
     slug: "atlas-demo-seller",
     name: "Atlas Demo Seller",
-    kind: "SELLER"
+    kind: "SELLER",
+    metadata: {
+      programmableSettlement: {
+        allowedRails: ["INTERNAL_SIMULATED", "STRIPE", "PROGRAMMABLE_USDC"],
+        preferredRail: "PROGRAMMABLE_USDC"
+      }
+    }
   },
   {
     slug: "atlas-demo-operator",
     name: "Atlas Demo Operator",
-    kind: "OPERATOR"
+    kind: "OPERATOR",
+    metadata: null
   },
   {
     slug: "northstar-research",
     name: "Northstar Research",
-    kind: "BUYER"
+    kind: "BUYER",
+    metadata: {
+      programmableSettlement: {
+        allowedRails: ["INTERNAL_SIMULATED", "STRIPE"],
+        preferredRail: "STRIPE"
+      }
+    }
   },
   {
     slug: "lighthouse-data",
     name: "Lighthouse Data",
-    kind: "SELLER"
+    kind: "SELLER",
+    metadata: {
+      programmableSettlement: {
+        allowedRails: ["INTERNAL_SIMULATED", "STRIPE"],
+        preferredRail: "STRIPE"
+      }
+    }
   }
 ];
 
@@ -253,6 +294,65 @@ export const atlasSeedMemberships: AtlasSeedMembershipDefinition[] = [
     userEmail: "northstar-owner@atlas.local",
     organizationSlug: "northstar-research",
     role: "OWNER"
+  }
+];
+
+export const atlasSeedOrganizationWallets: AtlasSeedOrganizationWalletDefinition[] = [
+  {
+    id: "wallet-atlas-demo-buyer-primary",
+    organizationSlug: "atlas-demo-buyer",
+    chain: "BASE_SEPOLIA",
+    address: "0x1111111111111111111111111111111111111111",
+    label: "Buyer Treasury",
+    ownershipLabel: "Atlas Demo Buyer Treasury",
+    verificationStatus: "VERIFIED",
+    verificationNote: "Seeded treasury wallet is verified for programmable settlement demos.",
+    isDefault: true,
+    metadata: {
+      seeded: true
+    }
+  },
+  {
+    id: "wallet-atlas-demo-seller-primary",
+    organizationSlug: "atlas-demo-seller",
+    chain: "BASE_SEPOLIA",
+    address: "0x2222222222222222222222222222222222222222",
+    label: "Seller Settlement",
+    ownershipLabel: "Atlas Demo Seller Settlement",
+    verificationStatus: "VERIFIED",
+    verificationNote: "Seeded seller wallet is verified for programmable settlement demos.",
+    isDefault: true,
+    metadata: {
+      seeded: true
+    }
+  },
+  {
+    id: "wallet-northstar-pending",
+    organizationSlug: "northstar-research",
+    chain: "BASE_SEPOLIA",
+    address: "0x3333333333333333333333333333333333333333",
+    label: "Northstar Treasury",
+    ownershipLabel: "Northstar Research Treasury",
+    verificationStatus: "PENDING",
+    verificationNote: "Awaiting operator verification.",
+    isDefault: true,
+    metadata: {
+      seeded: true
+    }
+  },
+  {
+    id: "wallet-lighthouse-pending",
+    organizationSlug: "lighthouse-data",
+    chain: "BASE_SEPOLIA",
+    address: "0x4444444444444444444444444444444444444444",
+    label: "Lighthouse Settlement",
+    ownershipLabel: "Lighthouse Data Settlement",
+    verificationStatus: "PENDING",
+    verificationNote: "Awaiting operator verification.",
+    isDefault: true,
+    metadata: {
+      seeded: true
+    }
   }
 ];
 
@@ -676,6 +776,79 @@ export const atlasSeedSpendRequests: AtlasSeedSpendRequestDefinition[] = [
     }
   },
   {
+    id: "phase-7-request-programmable-completed",
+    organizationSlug: "atlas-demo-buyer",
+    sellerOrganizationSlug: "atlas-demo-seller",
+    agentId: "phase-0-procurement-agent",
+    policyId: "phase-0-low-risk-policy",
+    serviceKey: "benchmark-api",
+    idempotencyKey: "seed-programmable-usdc-benchmark",
+    title: "Programmable USDC benchmark settlement",
+    purpose: "Settle a benchmark API session over the governed programmable USDC rail.",
+    amountMinor: 900,
+    currency: "USD",
+    serviceCategory: "api-access",
+    status: "COMPLETED",
+    evaluationResult: {
+      outcome: "allow_auto_approved",
+      status: "APPROVED",
+      approvalStatus: "APPROVED",
+      matchedPolicyId: "phase-0-low-risk-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request amount is within the policy auto-approval threshold."],
+      requiresApproval: false,
+      autoApproved: true
+    },
+    requestPayload: {
+      service: "benchmark-api",
+      serviceKey: "benchmark-api",
+      plan: "programmable-usdc"
+    },
+    metadata: {
+      scenarioKey: "programmable-settlement-completed",
+      scenarioLabel: "Programmable USDC settlement completed",
+      sellerFulfillment: {
+        fulfillmentStatus: "DELIVERED",
+        note: "Seller delivered the programmable-settlement benchmark session.",
+        recordedAt: "2026-04-11T08:15:00.000Z"
+      }
+    }
+  },
+  {
+    id: "phase-7-request-programmable-pending",
+    organizationSlug: "atlas-demo-buyer",
+    sellerOrganizationSlug: "atlas-demo-seller",
+    agentId: "phase-0-market-intel-agent",
+    policyId: "phase-0-finance-policy",
+    serviceKey: "vendor-intelligence-report",
+    idempotencyKey: "seed-programmable-usdc-pending",
+    title: "Programmable USDC pending confirmation",
+    purpose: "Exercise programmable settlement with confirmations still pending.",
+    amountMinor: 6200,
+    currency: "USD",
+    serviceCategory: "digital-service",
+    status: "EXECUTING",
+    evaluationResult: {
+      outcome: "allow_requires_approval",
+      status: "SUBMITTED",
+      approvalStatus: "PENDING",
+      matchedPolicyId: "phase-0-finance-policy",
+      matchedPolicyVersion: 1,
+      reasons: ["The request is allowed but requires a human approval before execution."],
+      requiresApproval: true,
+      autoApproved: false
+    },
+    requestPayload: {
+      service: "vendor-intelligence-report",
+      serviceKey: "vendor-intelligence-report",
+      reportType: "counterparty-risk"
+    },
+    metadata: {
+      scenarioKey: "programmable-settlement-pending",
+      scenarioLabel: "Programmable USDC confirmation pending"
+    }
+  },
+  {
     id: "phase-0-request-failed",
     organizationSlug: "atlas-demo-buyer",
     sellerOrganizationSlug: "atlas-demo-seller",
@@ -829,6 +1002,18 @@ export const atlasSeedApprovals: AtlasSeedApprovalDefinition[] = [
     decisionReason: "Foundation demo seed"
   },
   {
+    requestId: "phase-7-request-programmable-completed",
+    approverEmail: "owner@atlas.local",
+    status: "APPROVED",
+    decisionReason: "Programmable settlement is allowed for the benchmark flow"
+  },
+  {
+    requestId: "phase-7-request-programmable-pending",
+    approverEmail: "finance@atlas.local",
+    status: "APPROVED",
+    decisionReason: "Approved for programmable settlement confirmation coverage"
+  },
+  {
     requestId: "phase-0-request-failed",
     approverEmail: "finance@atlas.local",
     status: "APPROVED",
@@ -895,6 +1080,50 @@ export const atlasSeedPayments: AtlasSeedPaymentDefinition[] = [
     currency: "USD",
     metadata: {
       scenarioKey: "completed-success"
+    }
+  },
+  {
+    requestId: "phase-7-request-programmable-completed",
+    organizationSlug: "atlas-demo-buyer",
+    sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "PROGRAMMABLE_USDC",
+    provider: "programmable-usdc",
+    reference: "0x7777777777777777777777777777777777777777777777777777777777777777",
+    status: "CAPTURED",
+    amountMinor: 900,
+    currency: "USD",
+    metadata: {
+      scenarioKey: "programmable-settlement-completed",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x7777777777777777777777777777777777777777777777777777777777777777",
+      confirmations: 2,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222",
+      providerStatus: "confirmed"
+    }
+  },
+  {
+    requestId: "phase-7-request-programmable-pending",
+    organizationSlug: "atlas-demo-buyer",
+    sellerOrganizationSlug: "atlas-demo-seller",
+    rail: "PROGRAMMABLE_USDC",
+    provider: "programmable-usdc",
+    reference: "0x8888888888888888888888888888888888888888888888888888888888888888",
+    status: "AUTHORIZED",
+    amountMinor: 6200,
+    currency: "USD",
+    metadata: {
+      scenarioKey: "programmable-settlement-pending",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x8888888888888888888888888888888888888888888888888888888888888888",
+      confirmations: 0,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222",
+      providerStatus: "pending_confirmations"
     }
   },
   {
@@ -982,6 +1211,46 @@ export const atlasSeedPaymentAttempts: AtlasSeedPaymentAttemptDefinition[] = [
     errorMessage: null
   },
   {
+    requestId: "phase-7-request-programmable-completed",
+    attemptNumber: 1,
+    rail: "PROGRAMMABLE_USDC",
+    status: "CAPTURED",
+    reference: "0x7777777777777777777777777777777777777777777777777777777777777777",
+    evidence: {
+      scenarioKey: "programmable-settlement-completed",
+      providerStatus: "confirmed",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x7777777777777777777777777777777777777777777777777777777777777777",
+      confirmations: 2,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222"
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
+    requestId: "phase-7-request-programmable-pending",
+    attemptNumber: 1,
+    rail: "PROGRAMMABLE_USDC",
+    status: "AUTHORIZED",
+    reference: "0x8888888888888888888888888888888888888888888888888888888888888888",
+    evidence: {
+      scenarioKey: "programmable-settlement-pending",
+      providerStatus: "pending_confirmations",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x8888888888888888888888888888888888888888888888888888888888888888",
+      confirmations: 0,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222"
+    },
+    errorCode: null,
+    errorMessage: null
+  },
+  {
     requestId: "phase-0-request-failed",
     attemptNumber: 1,
     rail: "INTERNAL_SIMULATED",
@@ -1041,6 +1310,49 @@ export const atlasSeedReceipts: AtlasSeedReceiptDefinition[] = [
     status: "AVAILABLE",
     metadata: {
       scenarioKey: "completed-success"
+    }
+  },
+  {
+    requestId: "phase-7-request-programmable-completed",
+    organizationSlug: "atlas-demo-buyer",
+    storageKey: "receipts/phase-7-request-programmable-completed.json",
+    contentType: "application/json",
+    status: "AVAILABLE",
+    metadata: {
+      scenarioKey: "programmable-settlement-completed",
+      rail: "PROGRAMMABLE_USDC",
+      providerStatus: "confirmed",
+      paymentStatus: "CAPTURED",
+      paymentReference: "0x7777777777777777777777777777777777777777777777777777777777777777",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x7777777777777777777777777777777777777777777777777777777777777777",
+      confirmations: 2,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222",
+      sellerFulfillmentStatus: "DELIVERED"
+    }
+  },
+  {
+    requestId: "phase-7-request-programmable-pending",
+    organizationSlug: "atlas-demo-buyer",
+    storageKey: "receipts/phase-7-request-programmable-pending.json",
+    contentType: "application/json",
+    status: "PENDING",
+    metadata: {
+      scenarioKey: "programmable-settlement-pending",
+      rail: "PROGRAMMABLE_USDC",
+      providerStatus: "pending_confirmations",
+      paymentStatus: "AUTHORIZED",
+      paymentReference: "0x8888888888888888888888888888888888888888888888888888888888888888",
+      chain: "BASE_SEPOLIA",
+      chainId: 84532,
+      assetSymbol: "USDC",
+      transactionHash: "0x8888888888888888888888888888888888888888888888888888888888888888",
+      confirmations: 0,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222"
     }
   },
   {

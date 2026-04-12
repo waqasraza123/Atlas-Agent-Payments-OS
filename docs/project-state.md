@@ -26,6 +26,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 3 seller workflow baseline and fulfillment path now exist through seller service records, seller request outcome recording, and seller-side analytics summaries
 - Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, richer receipt evidence, and reconciliation surfaces now exist through immutable payment attempts, buyer-triggered execution, buyer and operator receipt views, seller-visible payment detail, receipt truth updates, and operator-facing transaction inspection
 - Phase 6 analytics, CSV export readiness, multi-entity filtering, and enterprise-grade reporting surfaces now exist through shared analytics contracts, guarded reporting APIs, filtered buyer and seller ledgers, platform transaction reporting, and organization health views
+- Phase 7 programmable settlement extension now exists through organization wallet registry, supported chain runtime config, governed programmable rail selection, operator wallet verification flows, and on-chain evidence mapped into payment attempts and receipt records
 
 ## Non-Negotiable Rules
 
@@ -43,7 +44,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Execution source of truth: `docs/architecture/master-execution-plan.md`
 - Full-scale blueprint docs: `docs/architecture/full-scale-product-blueprint.md`, `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Testing source of truth: `docs/architecture/testing-strategy.md`
-- Active detailed phase doc: `docs/backlog/phase-7-programmable-settlement-detailed.md`
+- Focused-v1 extension completion doc: `docs/backlog/phase-7-programmable-settlement-detailed.md`
+- Active next-track docs: `docs/architecture/production-operations-blueprint.md`, `docs/architecture/security-and-compliance-roadmap.md`, `docs/architecture/release-maturity-model.md`
 - Phase 0: foundation hardening and real application baseline completed in repo scope
 - Phase 1: premium demo foundation
 - Phase 2: core buyer workflow completed in repo scope
@@ -51,7 +53,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 4: payments and receipts completed in repo scope
 - Phase 5: operator controls and exceptions completed in repo scope
 - Phase 6: analytics and enterprise polish completed in repo scope
-- Phase 7: programmable settlement extension
+- Phase 7: programmable settlement extension completed in repo scope
+- Next active implementation track: production operations, release maturity, and security hardening for broader rollout readiness
 
 ## Completed Major Slices
 
@@ -86,6 +89,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 4 is now complete in repo scope through shared payment rail contracts, internal simulated settlement, Stripe payment-intent creation behind config gates, immutable payment attempts, retry hardening, richer receipt evidence, buyer and operator receipt surfaces, payment and receipt API routes, request-linked receipt truth updates, and broader reconciliation posture
 - Phase 5 is now complete in repo scope through operator case modeling, persistent operator notifications, reason-captured operator actions, operator overview and exception surfaces, and a filterable audit explorer
 - Phase 6 is now complete in repo scope through shared analytics contracts, guarded reporting APIs, CSV export flows, filtered buyer and seller ledgers, platform transaction reporting, and organization health views
+- Phase 7 is now complete in repo scope through programmable wallet registry, supported chain config, governed `PROGRAMMABLE_USDC` rail selection, operator wallet verification, and on-chain evidence propagation into payment and receipt records
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -104,7 +108,9 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 3 is now complete in repo scope through seller catalog management, inbound request monitoring, seller fulfillment recording, and seller analytics summaries
 - Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, richer receipt evidence, and broader reconciliation views are now in place in repo scope
 - Phase 6 analytics, export readiness, multi-entity filtering, and enterprise polish are now in place in repo scope
-- The current active execution slice is Phase 7: programmable settlement extension
+- Phase 7 programmable settlement extension is now in place in repo scope through governed wallet registry and on-chain evidence mapping
+- The focused v1 and programmable-settlement extension tracks are complete in repo scope
+- The current active execution slice is post-v1 platform engineering, production operations, and security hardening for broader rollout readiness
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships, a shared local session cookie, and the `x-atlas-local-session` request header contract
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
@@ -120,7 +126,11 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Broader export packaging, richer audit bundle workflows, and deeper self-serve analytics customization beyond the current CSV baseline
 - Receipt artifact generation beyond JSON-backed receipt truth
 - Configurable analytics and broader reporting automation
-- Onchain settlement support
+- Full release-engineering implementation for multi-environment deployment and rollback discipline
+- Full observability, backup, restore, and incident-response automation
+- Broader auth maturity, SSO, and tenant-isolation hardening beyond the current local-first baseline
+- Production-ready Stripe webhook ingestion and settlement confirmation lifecycle
+- Broader support tooling, compliance workstreams, and enterprise deployment controls
 - Browser-level interaction tests beyond current HTTP and route-level smoke coverage
 - Seeded database integration tests against a reliably provisioned local database
 - Broader automated coverage across every seller and operator detail route
@@ -133,10 +143,10 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Current web e2e remains route and HTTP smoke coverage rather than full browser automation
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
-- The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, and reason-captured interventions, but programmable settlement and Phase 7 governance remain the next major product gaps
+- The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, reason-captured interventions, and governed programmable settlement
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
-- Future tasks should avoid widening the stack or introducing extra infra before the Phase 2 buyer control loop is fully stabilized
+- Future tasks should avoid widening the stack or introducing extra infra unless it directly serves the platform, operations, security, or release-maturity blueprints
 
 ## Standard Verification
 

@@ -1,6 +1,8 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { paymentRuntime } from "@atlas/config";
+import { createHash } from "node:crypto";
+import { paymentRuntime, programmableSettlementRuntime } from "@atlas/config";
 import {
+  extractAtlasProgrammableSettlementEvidence,
   atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
   deriveAtlasPaymentReconciliationState,
@@ -19,6 +21,12 @@ import {
 } from "@atlas/domain";
 import Stripe from "stripe";
 import { ZodError } from "zod";
+import {
+  AtlasProgrammableSettlementError,
+  getAtlasOrganizationProgrammableSettlementSettingsFromMetadata,
+  getAtlasSupportedProgrammableSettlementChain,
+  getDefaultVerifiedOrganizationWallet
+} from "./programmable-settlement";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
 
@@ -47,7 +55,11 @@ type PaymentExecutionResolution = {
 let atlasStripeClient: Stripe | null | undefined;
 
 function normalizeValidationError(error: unknown): never {
-  if (error instanceof AtlasPaymentsWorkflowError) {
+  if (error instanceof AtlasPaymentsWorkflowError || error instanceof AtlasProgrammableSettlementError) {
+    if (error instanceof AtlasProgrammableSettlementError) {
+      throw new AtlasPaymentsWorkflowError(error.message, error.code);
+    }
+
     throw error;
   }
 
@@ -133,6 +145,25 @@ function extractLatestAttemptProviderStatus(attempts: Array<{ evidence: Prisma.J
   return null;
 }
 
+function extractLatestProgrammableEvidence(attempts: Array<{ evidence: Prisma.JsonValue | null }>) {
+  for (const attempt of attempts) {
+    const programmableEvidence = extractAtlasProgrammableSettlementEvidence(asJsonObject(attempt.evidence));
+
+    if (programmableEvidence.transactionHash || programmableEvidence.chainLabel) {
+      return programmableEvidence;
+    }
+  }
+
+  return {
+    chainLabel: null,
+    assetSymbol: null,
+    transactionHash: null,
+    confirmations: null,
+    buyerWalletAddress: null,
+    sellerWalletAddress: null
+  };
+}
+
 function mapPaymentAttemptRecord(attempt: {
   id: string;
   paymentId: string;
@@ -145,6 +176,8 @@ function mapPaymentAttemptRecord(attempt: {
   errorMessage: string | null;
   createdAt: Date;
 }): AtlasPaymentAttemptRecord {
+  const programmableEvidence = extractAtlasProgrammableSettlementEvidence(asJsonObject(attempt.evidence));
+
   return {
     id: attempt.id,
     paymentId: attempt.paymentId,
@@ -154,6 +187,9 @@ function mapPaymentAttemptRecord(attempt: {
     reference: attempt.reference,
     providerStatus: extractProviderStatus(attempt.evidence),
     evidence: asJsonObject(attempt.evidence),
+    chainLabel: programmableEvidence.chainLabel,
+    transactionHash: programmableEvidence.transactionHash,
+    confirmations: programmableEvidence.confirmations,
     errorCode: attempt.errorCode,
     errorMessage: attempt.errorMessage,
     createdAt: attempt.createdAt.toISOString()
@@ -200,6 +236,7 @@ function mapPaymentIntentRecord(payment: {
   const latestAttempt = attempts[0] ?? null;
   const sellerFulfillmentStatus = extractSellerFulfillmentStatus(payment.request.metadata);
   const receiptStatus = payment.request.receipt?.status as AtlasPaymentIntentRecord["receiptStatus"];
+  const programmableEvidence = extractLatestProgrammableEvidence(payment.attempts);
 
   return {
     id: payment.id,
@@ -226,6 +263,12 @@ function mapPaymentIntentRecord(payment: {
       receiptStatus: receiptStatus ?? null,
       sellerFulfillmentStatus
     }),
+    chainLabel: programmableEvidence.chainLabel,
+    assetSymbol: programmableEvidence.assetSymbol,
+    transactionHash: programmableEvidence.transactionHash,
+    confirmations: programmableEvidence.confirmations,
+    buyerWalletAddress: programmableEvidence.buyerWalletAddress,
+    sellerWalletAddress: programmableEvidence.sellerWalletAddress,
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
     attempts
@@ -279,6 +322,15 @@ function mapReceiptRecord(receipt: {
     (typeof metadata?.providerStatus === "string" ? metadata.providerStatus : null) ||
     (typeof paymentMetadata?.latestProviderStatus === "string" ? paymentMetadata.latestProviderStatus : null) ||
     extractLatestAttemptProviderStatus(receipt.request.payment?.attempts ?? []);
+  const receiptProgrammableEvidence = extractAtlasProgrammableSettlementEvidence(metadata);
+  const paymentProgrammableEvidence = extractAtlasProgrammableSettlementEvidence(paymentMetadata);
+  const latestProgrammableEvidence = extractLatestProgrammableEvidence(receipt.request.payment?.attempts ?? []);
+  const programmableEvidence =
+    receiptProgrammableEvidence.transactionHash || receiptProgrammableEvidence.chainLabel
+      ? receiptProgrammableEvidence
+      : paymentProgrammableEvidence.transactionHash || paymentProgrammableEvidence.chainLabel
+        ? paymentProgrammableEvidence
+        : latestProgrammableEvidence;
   const attemptCount = receipt.request.payment?.attempts.length ?? 0;
   const reconciliationState = deriveAtlasPaymentReconciliationState({
     requestStatus: receipt.request.status,
@@ -309,6 +361,12 @@ function mapReceiptRecord(receipt: {
     providerStatus,
     attemptCount,
     reconciliationState,
+    chainLabel: programmableEvidence.chainLabel,
+    assetSymbol: programmableEvidence.assetSymbol,
+    transactionHash: programmableEvidence.transactionHash,
+    confirmations: programmableEvidence.confirmations,
+    buyerWalletAddress: programmableEvidence.buyerWalletAddress,
+    sellerWalletAddress: programmableEvidence.sellerWalletAddress,
     evidenceSummary: summarizeAtlasReceiptEvidence({
       reconciliationState,
       paymentReference,
@@ -316,7 +374,13 @@ function mapReceiptRecord(receipt: {
       paymentStatus: paymentStatus as AtlasReceiptRecord["paymentStatus"],
       sellerFulfillmentStatus,
       storageKey: receipt.storageKey,
-      attemptCount
+      attemptCount,
+      chainLabel: programmableEvidence.chainLabel,
+      assetSymbol: programmableEvidence.assetSymbol,
+      transactionHash: programmableEvidence.transactionHash,
+      confirmations: programmableEvidence.confirmations,
+      buyerWalletAddress: programmableEvidence.buyerWalletAddress,
+      sellerWalletAddress: programmableEvidence.sellerWalletAddress
     }),
     createdAt: receipt.createdAt.toISOString(),
     updatedAt: receipt.updatedAt.toISOString()
@@ -424,6 +488,58 @@ async function executeStripeRail(input: {
     errorCode: null,
     errorMessage: null
   };
+}
+
+async function executeProgrammableUsdcRail(input: {
+  requestId: string;
+  requestStatus: string;
+  buyerSettingsAllowedProgrammable: boolean;
+  buyerWallet: {
+    address: string;
+  };
+  sellerWallet: {
+    address: string;
+  };
+  attemptNumber: number;
+}) {
+  if (!programmableSettlementRuntime.enabled) {
+    throw new AtlasPaymentsWorkflowError("Programmable settlement is not enabled in this environment.", "bad_request");
+  }
+
+  if (!input.buyerSettingsAllowedProgrammable) {
+    throw new AtlasPaymentsWorkflowError(
+      "The buyer organization has not allowed the programmable USDC rail.",
+      "conflict"
+    );
+  }
+
+  const supportedChain = getAtlasSupportedProgrammableSettlementChain();
+  const rawHash = createHash("sha256")
+    .update(`${supportedChain.key}:${input.requestId}:${input.attemptNumber}`)
+    .digest("hex");
+  const transactionHash = `0x${rawHash}`;
+  const settlementIsFinal = input.requestStatus !== "EXECUTING";
+
+  return {
+    provider: "programmable-usdc",
+    reference: transactionHash,
+    normalizedStatus: settlementIsFinal ? "CAPTURED" : "AUTHORIZED",
+    providerStatus: settlementIsFinal ? "confirmed" : "pending_confirmations",
+    evidence: {
+      chain: supportedChain.key,
+      chainId: supportedChain.chainId,
+      chainLabel: supportedChain.label,
+      networkName: supportedChain.networkName,
+      assetSymbol: supportedChain.assetSymbol,
+      transactionHash,
+      confirmations: settlementIsFinal ? supportedChain.requiredConfirmations : 0,
+      buyerWalletAddress: input.buyerWallet.address,
+      sellerWalletAddress: input.sellerWallet.address,
+      explorerUrl: `${supportedChain.explorerBaseUrl}${transactionHash}`
+    },
+    errorCode: null,
+    errorMessage: null
+  } satisfies PaymentExecutionResolution;
 }
 
 export async function listPaymentIntents(actor: AtlasActorContext, client: DatabaseClient = prisma) {
@@ -758,7 +874,8 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
           organization: {
             select: {
               id: true,
-              name: true
+              name: true,
+              metadata: true
             }
           },
           sellerOrganization: {
@@ -837,6 +954,32 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
       const scenarioKey = extractScenarioKey(request.metadata);
       const sellerFulfillmentStatus = extractSellerFulfillmentStatus(request.metadata);
       const attemptNumber = (request.payment?.attempts[0]?.attemptNumber ?? 0) + 1;
+      const buyerSettlementSettings = getAtlasOrganizationProgrammableSettlementSettingsFromMetadata(
+        request.organization.metadata
+      );
+      const buyerVerifiedWallet =
+        input.rail === "PROGRAMMABLE_USDC"
+          ? await getDefaultVerifiedOrganizationWallet(request.organizationId, transaction)
+          : null;
+      const sellerVerifiedWallet =
+        input.rail === "PROGRAMMABLE_USDC" && request.sellerOrganizationId
+          ? await getDefaultVerifiedOrganizationWallet(request.sellerOrganizationId, transaction)
+          : null;
+
+      if (input.rail === "PROGRAMMABLE_USDC" && !buyerVerifiedWallet) {
+        throw new AtlasPaymentsWorkflowError(
+          "The buyer organization needs a verified default wallet before programmable settlement can execute.",
+          "conflict"
+        );
+      }
+
+      if (input.rail === "PROGRAMMABLE_USDC" && !sellerVerifiedWallet) {
+        throw new AtlasPaymentsWorkflowError(
+          "The seller organization needs a verified default wallet before programmable settlement can execute.",
+          "conflict"
+        );
+      }
+
       const execution =
         input.rail === "STRIPE"
           ? await executeStripeRail({
@@ -847,6 +990,19 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
               currency: request.currency,
               attemptNumber
             })
+          : input.rail === "PROGRAMMABLE_USDC"
+            ? await executeProgrammableUsdcRail({
+                requestId: request.id,
+                requestStatus: request.status,
+                buyerSettingsAllowedProgrammable: buyerSettlementSettings.allowedRails.includes("PROGRAMMABLE_USDC"),
+                buyerWallet: {
+                  address: buyerVerifiedWallet?.address ?? ""
+                },
+                sellerWallet: {
+                  address: sellerVerifiedWallet?.address ?? ""
+                },
+                attemptNumber
+              })
           : await executeInternalSimulatedRail({
               requestId: request.id,
               requestStatus: request.status,
@@ -961,7 +1117,8 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
         latestReference: execution.reference,
         latestOutcome: execution.normalizedStatus,
         latestProviderStatus: execution.providerStatus,
-        latestEvidence: asInputJsonValue(execution.evidence)
+        latestEvidence: asInputJsonValue(execution.evidence),
+        ...execution.evidence
       } satisfies Prisma.InputJsonObject;
       const receiptMetadata = {
         scenarioKey,
@@ -970,7 +1127,8 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
         paymentStatus: execution.normalizedStatus,
         providerStatus: execution.providerStatus,
         sellerFulfillmentStatus,
-        attemptNumber
+        attemptNumber,
+        ...execution.evidence
       } satisfies Prisma.InputJsonObject;
 
       await transaction.payment.update({

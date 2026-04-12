@@ -28,7 +28,8 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - Phase 4 payment rail abstraction, internal simulated settlement, Stripe baseline, retry lifecycle hardening, richer receipt evidence, and broader reconciliation views are now in place in repo scope.
 - Phase 5 operator controls and exceptions are now in place in repo scope through operator case modeling, persistent notifications, reason-captured actions, and a filterable audit explorer.
 - Phase 6 analytics, CSV export readiness, stronger filtering, and enterprise polish are now in place in repo scope through shared reporting contracts, guarded analytics APIs, filtered ledgers, and organization health surfaces.
-- The next active implementation slice is Phase 7: programmable settlement extension.
+- Phase 7 programmable settlement extension is now in place in repo scope through organization wallet registry, governed programmable rail selection, supported chain config, operator wallet verification, and on-chain evidence mapped into payment and receipt records.
+- The next active implementation slice is production operations, release maturity, and security hardening for broader rollout readiness.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
@@ -284,6 +285,10 @@ Required platform and operations work in or near this phase:
 - chain-specific monitoring
 - stronger financial evidence normalization
 
+Repo status:
+
+- Phase 7 is now complete in repo scope.
+
 ## Operational Readiness Gates By Release Stage
 
 ### Internal concept demo
@@ -377,10 +382,10 @@ A slice is done only when:
 
 ## Exact Recommendation From Current Repository State
 
-The next safest implementation slice is still:
+The next safest implementation slice is now:
 
-- Phase 0.2 auth and actor-context baseline
-- followed by Phase 0.3 shared workspace shell primitives and protected buyer, seller, and operator shells
-- then Phase 0.4 API domain module skeletons
+- production operations baseline from [production-operations-blueprint.md](./production-operations-blueprint.md)
+- release-maturity hardening from [release-maturity-model.md](./release-maturity-model.md)
+- security and compliance baseline from [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
 
-Do not start platform hardening code or compliance-heavy work before the actor model, route gating, and real product shell exist. The blueprint docs should guide later release readiness, not distract from the current Phase 0 implementation order.
+The focused v1 and programmable-settlement tracks are now complete in repo scope. Future work should concentrate on deployment discipline, observability, backup and restore, incident handling, environment isolation, stronger auth maturity, and release gating before broader real-world rollout.

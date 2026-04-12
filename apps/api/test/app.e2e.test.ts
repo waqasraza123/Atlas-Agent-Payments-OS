@@ -6,7 +6,12 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { ActorResolutionService } from "../src/modules/actor/actor.service";
-import { AtlasAnalyticsReportingError, AtlasBuyerWorkflowError, AtlasPaymentsWorkflowError } from "@atlas/database";
+import {
+  AtlasAnalyticsReportingError,
+  AtlasBuyerWorkflowError,
+  AtlasPaymentsWorkflowError,
+  AtlasProgrammableSettlementError
+} from "@atlas/database";
 
 const databaseMock = vi.hoisted(() => ({
   listBuyerAgents: vi.fn(async () => []),
@@ -798,7 +803,151 @@ const databaseMock = vi.hoisted(() => ({
       lastActivityAt: new Date().toISOString()
     }
   ]),
-  exportPlatformTransactionCsv: vi.fn(async () => "Request ID,Request Title\nrequest-created,Created Request")
+  exportPlatformTransactionCsv: vi.fn(async () => "Request ID,Request Title\nrequest-created,Created Request"),
+  getOrganizationProgrammableSettlement: vi.fn(async () => ({
+    organizationId: "org-buyer",
+    organizationName: "Atlas Demo Buyer",
+    organizationSlug: "atlas-demo-buyer",
+    organizationKind: "BUYER",
+    settings: {
+      allowedRails: ["INTERNAL_SIMULATED", "STRIPE", "PROGRAMMABLE_USDC"],
+      preferredRail: "PROGRAMMABLE_USDC"
+    },
+    supportedChain: {
+      key: "BASE_SEPOLIA",
+      chainId: 84532,
+      label: "Base Sepolia",
+      networkName: "Base Sepolia",
+      assetSymbol: "USDC",
+      explorerBaseUrl: "https://sepolia.basescan.org/tx/",
+      requiredConfirmations: 2,
+      enabled: true
+    },
+    wallets: [
+      {
+        id: "wallet-buyer-primary",
+        organizationId: "org-buyer",
+        organizationName: "Atlas Demo Buyer",
+        organizationKind: "BUYER",
+        label: "Buyer Treasury",
+        address: "0x1111111111111111111111111111111111111111",
+        chain: "BASE_SEPOLIA",
+        chainLabel: "Base Sepolia",
+        verificationStatus: "VERIFIED",
+        ownershipLabel: "Atlas Demo Buyer Treasury",
+        isDefault: true,
+        verificationNote: "Verified for programmable settlement.",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ],
+    readiness: {
+      ready: true,
+      reasons: []
+    }
+  })),
+  listOrganizationWallets: vi.fn(async () => [
+    {
+      id: "wallet-buyer-primary",
+      organizationId: "org-buyer",
+      organizationName: "Atlas Demo Buyer",
+      organizationKind: "BUYER",
+      label: "Buyer Treasury",
+      address: "0x1111111111111111111111111111111111111111",
+      chain: "BASE_SEPOLIA",
+      chainLabel: "Base Sepolia",
+      verificationStatus: "VERIFIED",
+      ownershipLabel: "Atlas Demo Buyer Treasury",
+      isDefault: true,
+      verificationNote: "Verified for programmable settlement.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ]),
+  createOrganizationWallet: vi.fn(async () => ({
+    id: "wallet-created",
+    organizationId: "org-buyer",
+    organizationName: "Atlas Demo Buyer",
+    organizationKind: "BUYER",
+    label: "New Wallet",
+    address: "0x5555555555555555555555555555555555555555",
+    chain: "BASE_SEPOLIA",
+    chainLabel: "Base Sepolia",
+    verificationStatus: "PENDING",
+    ownershipLabel: "New Treasury Wallet",
+    isDefault: false,
+    verificationNote: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  })),
+  updateOrganizationProgrammableSettlementSettings: vi.fn(async () => ({
+    organizationId: "org-buyer",
+    organizationName: "Atlas Demo Buyer",
+    organizationSlug: "atlas-demo-buyer",
+    organizationKind: "BUYER",
+    settings: {
+      allowedRails: ["INTERNAL_SIMULATED", "PROGRAMMABLE_USDC"],
+      preferredRail: "PROGRAMMABLE_USDC"
+    },
+    supportedChain: {
+      key: "BASE_SEPOLIA",
+      chainId: 84532,
+      label: "Base Sepolia",
+      networkName: "Base Sepolia",
+      assetSymbol: "USDC",
+      explorerBaseUrl: "https://sepolia.basescan.org/tx/",
+      requiredConfirmations: 2,
+      enabled: true
+    },
+    wallets: [],
+    readiness: {
+      ready: false,
+      reasons: ["A verified default organization wallet is required."]
+    }
+  })),
+  listProgrammableSettlementOrganizations: vi.fn(async () => [
+    {
+      organizationId: "org-buyer",
+      organizationName: "Atlas Demo Buyer",
+      organizationSlug: "atlas-demo-buyer",
+      organizationKind: "BUYER",
+      settings: {
+        allowedRails: ["INTERNAL_SIMULATED", "PROGRAMMABLE_USDC"],
+        preferredRail: "PROGRAMMABLE_USDC"
+      },
+      supportedChain: {
+        key: "BASE_SEPOLIA",
+        chainId: 84532,
+        label: "Base Sepolia",
+        networkName: "Base Sepolia",
+        assetSymbol: "USDC",
+        explorerBaseUrl: "https://sepolia.basescan.org/tx/",
+        requiredConfirmations: 2,
+        enabled: true
+      },
+      wallets: [],
+      readiness: {
+        ready: false,
+        reasons: ["A verified default organization wallet is required."]
+      }
+    }
+  ]),
+  verifyOrganizationWallet: vi.fn(async () => ({
+    id: "wallet-buyer-primary",
+    organizationId: "org-buyer",
+    organizationName: "Atlas Demo Buyer",
+    organizationKind: "BUYER",
+    label: "Buyer Treasury",
+    address: "0x1111111111111111111111111111111111111111",
+    chain: "BASE_SEPOLIA",
+    chainLabel: "Base Sepolia",
+    verificationStatus: "VERIFIED",
+    ownershipLabel: "Atlas Demo Buyer Treasury",
+    isDefault: true,
+    verificationNote: "Verified by operator",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }))
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -829,6 +978,13 @@ vi.mock("@atlas/database", async () => {
     listPaymentIntents: databaseMock.listPaymentIntents,
     getPaymentIntent: databaseMock.getPaymentIntent,
     executeBuyerPayment: databaseMock.executeBuyerPayment,
+    getOrganizationProgrammableSettlement: databaseMock.getOrganizationProgrammableSettlement,
+    listOrganizationWallets: databaseMock.listOrganizationWallets,
+    createOrganizationWallet: databaseMock.createOrganizationWallet,
+    updateOrganizationProgrammableSettlementSettings:
+      databaseMock.updateOrganizationProgrammableSettlementSettings,
+    listProgrammableSettlementOrganizations: databaseMock.listProgrammableSettlementOrganizations,
+    verifyOrganizationWallet: databaseMock.verifyOrganizationWallet,
     listReceiptRecords: databaseMock.listReceiptRecords,
     getReceiptRecord: databaseMock.getReceiptRecord,
     getOperatorOverview: databaseMock.getOperatorOverview,
@@ -1397,6 +1553,123 @@ describe("atlas api e2e", () => {
     expect(response.body.message).toBe("Payment retries must use the same rail during the current Phase 4 baseline.");
   });
 
+  it("executes the programmable USDC rail through the protected buyer payment route", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockResolvedValueOnce({
+      id: "payment-programmable",
+      requestId: "request-created",
+      buyerOrganizationId: "org-buyer",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      sellerOrganizationId: "org-seller",
+      sellerOrganizationName: "Atlas Demo Seller",
+      rail: "PROGRAMMABLE_USDC",
+      status: "CAPTURED",
+      provider: "programmable-usdc",
+      reference: "0xabc123",
+      amountMinor: 2400,
+      currency: "USD",
+      latestAttemptNumber: 1,
+      latestAttemptStatus: "CAPTURED",
+      requestStatus: "EXECUTING",
+      receiptStatus: "PENDING",
+      sellerFulfillmentStatus: null,
+      retryEligible: false,
+      reconciliationState: "AWAITING_SELLER_CONFIRMATION",
+      chainLabel: "Base Sepolia",
+      assetSymbol: "USDC",
+      transactionHash: "0xabc123",
+      confirmations: 2,
+      buyerWalletAddress: "0x1111111111111111111111111111111111111111",
+      sellerWalletAddress: "0x2222222222222222222222222222222222222222",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      attempts: [
+        {
+          id: "attempt-programmable-1",
+          paymentId: "payment-programmable",
+          attemptNumber: 1,
+          rail: "PROGRAMMABLE_USDC",
+          status: "CAPTURED",
+          reference: "0xabc123",
+          providerStatus: "confirmed",
+          evidence: {
+            providerStatus: "confirmed",
+            chain: "BASE_SEPOLIA",
+            assetSymbol: "USDC",
+            transactionHash: "0xabc123",
+            confirmations: 2
+          },
+          chainLabel: "Base Sepolia",
+          transactionHash: "0xabc123",
+          confirmations: 2,
+          errorCode: null,
+          errorMessage: null,
+          createdAt: new Date().toISOString()
+        }
+      ]
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "PROGRAMMABLE_USDC"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.item).toMatchObject({
+      id: "payment-programmable",
+      rail: "PROGRAMMABLE_USDC",
+      provider: "programmable-usdc",
+      chainLabel: "Base Sepolia",
+      transactionHash: "0xabc123"
+    });
+  });
+
+  it("returns conflict when programmable settlement lacks a verified wallet posture", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.executeBuyerPayment.mockRejectedValueOnce(
+      new AtlasPaymentsWorkflowError(
+        "The buyer organization needs a verified default wallet before programmable settlement can execute.",
+        "conflict"
+      )
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/payments/requests/request-created/execute")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        rail: "PROGRAMMABLE_USDC"
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe(
+      "The buyer organization needs a verified default wallet before programmable settlement can execute."
+    );
+  });
+
   it("lists and fetches receipts through shared protected routes", async () => {
     actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
       status: "ready",
@@ -1435,6 +1708,149 @@ describe("atlas api e2e", () => {
       sellerOrganizationName: "Atlas Demo Seller",
       evidenceSummary: expect.arrayContaining(["Reconciliation Receipt Available", "Seller Delivered"])
     });
+  });
+
+  it("serves programmable-settlement organization and wallet routes for buyer and seller workspaces", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+
+    const summaryResponse = await request(app.getHttpServer())
+      .get("/programmable-settlement/summary")
+      .set("x-atlas-local-session", "local-token");
+    const chainsResponse = await request(app.getHttpServer())
+      .get("/programmable-settlement/chains")
+      .set("x-atlas-local-session", "local-token");
+    const organizationResponse = await request(app.getHttpServer())
+      .get("/programmable-settlement/organization")
+      .set("x-atlas-local-session", "local-token");
+    const walletsResponse = await request(app.getHttpServer())
+      .get("/programmable-settlement/wallets")
+      .set("x-atlas-local-session", "local-token");
+    const createWalletResponse = await request(app.getHttpServer())
+      .post("/programmable-settlement/wallets")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        label: "New Wallet",
+        address: "0x5555555555555555555555555555555555555555",
+        ownershipLabel: "New Treasury Wallet",
+        chain: "BASE_SEPOLIA",
+        isDefault: false
+      });
+    const settingsResponse = await request(app.getHttpServer())
+      .patch("/programmable-settlement/settings")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        allowedRails: ["INTERNAL_SIMULATED", "PROGRAMMABLE_USDC"],
+        preferredRail: "PROGRAMMABLE_USDC"
+      });
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.module.key).toBe("programmable-settlement");
+    expect(chainsResponse.status).toBe(200);
+    expect(chainsResponse.body.items[0]).toMatchObject({
+      key: "BASE_SEPOLIA",
+      assetSymbol: "USDC"
+    });
+    expect(organizationResponse.status).toBe(200);
+    expect(organizationResponse.body.item).toMatchObject({
+      organizationName: "Atlas Demo Buyer",
+      settings: {
+        preferredRail: "PROGRAMMABLE_USDC"
+      }
+    });
+    expect(walletsResponse.status).toBe(200);
+    expect(walletsResponse.body.items[0]).toMatchObject({
+      verificationStatus: "VERIFIED"
+    });
+    expect(createWalletResponse.status).toBe(201);
+    expect(createWalletResponse.body.item).toMatchObject({
+      id: "wallet-created",
+      verificationStatus: "PENDING"
+    });
+    expect(settingsResponse.status).toBe(200);
+    expect(settingsResponse.body.item.settings.allowedRails).toEqual(["INTERNAL_SIMULATED", "PROGRAMMABLE_USDC"]);
+  });
+
+  it("serves programmable-settlement operator review and verification routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "OPERATOR",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "OPERATOR")
+    });
+
+    const [organizationsResponse, verifyResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/programmable-settlement/organizations").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer())
+        .patch("/programmable-settlement/wallets/wallet-buyer-primary/verification")
+        .set("x-atlas-local-session", "local-token")
+        .send({
+          status: "VERIFIED",
+          note: "Verified by operator"
+        })
+    ]);
+
+    expect(organizationsResponse.status).toBe(200);
+    expect(organizationsResponse.body.items[0]).toMatchObject({
+      organizationName: "Atlas Demo Buyer",
+      readiness: {
+        ready: false
+      }
+    });
+    expect(verifyResponse.status).toBe(200);
+    expect(verifyResponse.body.item).toMatchObject({
+      id: "wallet-buyer-primary",
+      verificationStatus: "VERIFIED",
+      verificationNote: "Verified by operator"
+    });
+  });
+
+  it("returns bad request when programmable-settlement validation fails", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+    databaseMock.createOrganizationWallet.mockRejectedValueOnce(
+      new AtlasProgrammableSettlementError("Wallet address must be a 42-character 0x-prefixed hex value.", "bad_request")
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/programmable-settlement/wallets")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        label: "Broken Wallet",
+        address: "invalid",
+        ownershipLabel: "Broken Wallet",
+        chain: "BASE_SEPOLIA",
+        isDefault: false
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Wallet address must be a 42-character 0x-prefixed hex value.");
   });
 
   it("serves operator overview, cases, notifications, and audit explorer routes", async () => {

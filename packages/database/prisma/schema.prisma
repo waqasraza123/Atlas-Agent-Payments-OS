@@ -80,12 +80,24 @@ enum PaymentStatus {
 enum PaymentRail {
   INTERNAL_SIMULATED
   STRIPE
+  PROGRAMMABLE_USDC
 }
 
 enum ReceiptStatus {
   PENDING
   AVAILABLE
   FAILED
+}
+
+enum ProgrammableSettlementChain {
+  BASE_SEPOLIA
+  BASE_MAINNET
+}
+
+enum WalletVerificationStatus {
+  PENDING
+  VERIFIED
+  REVOKED
 }
 
 enum OperatorCaseCategory {
@@ -149,10 +161,12 @@ model Organization {
   kind           OrganizationKind
   slug           String         @unique
   name           String
+  metadata       Json?
   memberships    Membership[]
   agents         Agent[]
   policies       Policy[]
   services       Service[]
+  wallets        OrganizationWallet[]
   buyerRequests  SpendRequest[] @relation("BuyerOrganizationRequests")
   sellerRequests SpendRequest[] @relation("SellerOrganizationRequests")
   payments       Payment[]      @relation("BuyerOrganizationPayments")
@@ -323,6 +337,25 @@ model Receipt {
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+}
+
+model OrganizationWallet {
+  id                 String                       @id @default(cuid())
+  organizationId     String
+  chain              ProgrammableSettlementChain
+  address            String
+  label              String
+  ownershipLabel     String
+  verificationStatus WalletVerificationStatus    @default(PENDING)
+  verificationNote   String?
+  isDefault          Boolean                     @default(false)
+  metadata           Json?
+  organization       Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  @@unique([organizationId, chain, address])
+  @@index([organizationId, verificationStatus])
 }
 
 model AuditEvent {

@@ -58,6 +58,7 @@ describe("atlas payments workflow contracts", () => {
 
   it("formats labels and eligibility helpers", () => {
     expect(formatAtlasPaymentRailLabel("INTERNAL_SIMULATED")).toBe("Internal Simulated");
+    expect(formatAtlasPaymentRailLabel("PROGRAMMABLE_USDC")).toBe("Programmable USDC");
     expect(formatAtlasPaymentStatusLabel("CAPTURED")).toBe("Captured");
     expect(formatAtlasReceiptStatusLabel("AVAILABLE")).toBe("Available");
     expect(formatAtlasPaymentReconciliationStateLabel("AWAITING_SELLER_CONFIRMATION")).toBe("Awaiting Seller Confirmation");
@@ -105,7 +106,13 @@ describe("atlas payments workflow contracts", () => {
         paymentStatus: "CAPTURED",
         sellerFulfillmentStatus: "DELIVERED",
         storageKey: "receipts/request-1.json",
-        attemptCount: 2
+        attemptCount: 2,
+        chainLabel: "Base Sepolia",
+        assetSymbol: "USDC",
+        transactionHash: "0xtx123",
+        confirmations: 2,
+        buyerWalletAddress: "0xbuyer",
+        sellerWalletAddress: "0xseller"
       })
     ).toEqual([
       "Reconciliation Receipt Available",
@@ -114,7 +121,13 @@ describe("atlas payments workflow contracts", () => {
       "Reference pi_123",
       "Artifact receipts/request-1.json",
       "Attempts 2",
-      "Seller Delivered"
+      "Seller Delivered",
+      "Chain Base Sepolia",
+      "Asset USDC",
+      "Transaction 0xtx123",
+      "Confirmations 2",
+      "Buyer wallet 0xbuyer",
+      "Seller wallet 0xseller"
     ]);
   });
 });

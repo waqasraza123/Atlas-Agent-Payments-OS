@@ -49,11 +49,21 @@ export type ApprovalStatus = (typeof approvalStatuses)[number];
 export const paymentStatuses = ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED"] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
-export const paymentRails = ["INTERNAL_SIMULATED", "STRIPE"] as const;
+export const paymentRails = ["INTERNAL_SIMULATED", "STRIPE", "PROGRAMMABLE_USDC"] as const;
 export type PaymentRail = (typeof paymentRails)[number];
 
 export const receiptStatuses = ["PENDING", "AVAILABLE", "FAILED"] as const;
 export type ReceiptStatus = (typeof receiptStatuses)[number];
+
+export const programmableSettlementChains = ["BASE_SEPOLIA", "BASE_MAINNET"] as const;
+export type ProgrammableSettlementChain = (typeof programmableSettlementChains)[number];
+export const programmableSettlementChainLabels: Record<ProgrammableSettlementChain, string> = {
+  BASE_SEPOLIA: "Base Sepolia",
+  BASE_MAINNET: "Base Mainnet"
+};
+
+export const walletVerificationStatuses = ["PENDING", "VERIFIED", "REVOKED"] as const;
+export type WalletVerificationStatus = (typeof walletVerificationStatuses)[number];
 
 export const auditActorTypes = ["HUMAN", "AGENT", "SYSTEM"] as const;
 export type AuditActorType = (typeof auditActorTypes)[number];
@@ -125,6 +135,14 @@ export function isPaymentRail(value: string): value is PaymentRail {
 
 export function isReceiptStatus(value: string): value is ReceiptStatus {
   return receiptStatuses.includes(value as ReceiptStatus);
+}
+
+export function isProgrammableSettlementChain(value: string): value is ProgrammableSettlementChain {
+  return programmableSettlementChains.includes(value as ProgrammableSettlementChain);
+}
+
+export function isWalletVerificationStatus(value: string): value is WalletVerificationStatus {
+  return walletVerificationStatuses.includes(value as WalletVerificationStatus);
 }
 
 export function isOperatorCaseCategory(value: string): value is OperatorCaseCategory {

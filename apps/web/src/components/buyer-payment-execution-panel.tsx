@@ -1,6 +1,6 @@
 import { paymentRuntime } from "@atlas/config";
 import { atlasPaymentMaximumAttemptCount, isAtlasPaymentAttemptLimitReached, isAtlasPaymentExecutionEligible, isAtlasPaymentRetryEligible } from "@atlas/domain";
-import { prisma } from "@atlas/database";
+import { getDefaultVerifiedOrganizationWallet, getOrganizationProgrammableSettlement, prisma } from "@atlas/database";
 import { DetailGrid, StatePanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { executeBuyerPaymentAction } from "@/app/(buyer)/buyer/actions";
@@ -28,6 +28,7 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
       organizationId: resolution.actor.organization.id
     },
     include: {
+      organization: true,
       sellerOrganization: true,
       payment: {
         include: {
@@ -75,12 +76,25 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
   const canRetry = request.payment ? isAtlasPaymentRetryEligible(request.payment.status) : false;
   const attemptLimitReached = isAtlasPaymentAttemptLimitReached(attemptCount);
   const action = executeBuyerPaymentAction.bind(null, requestId);
-  const availableRails = paymentRuntime.stripeEnabled
-    ? [
-        { value: "INTERNAL_SIMULATED", label: "Internal simulated" },
-        { value: "STRIPE", label: "Stripe" }
+  const programmableSettlement = await getOrganizationProgrammableSettlement(resolution.actor);
+  const sellerVerifiedWallet = await getDefaultVerifiedOrganizationWallet(request.sellerOrganizationId);
+  const programmableRailReady =
+    programmableSettlement.readiness.ready &&
+    programmableSettlement.settings.allowedRails.includes("PROGRAMMABLE_USDC") &&
+    Boolean(sellerVerifiedWallet);
+  const availableRails = [
+    { value: "INTERNAL_SIMULATED", label: "Internal simulated" },
+    ...(paymentRuntime.stripeEnabled ? [{ value: "STRIPE", label: "Stripe" }] : []),
+    ...(programmableRailReady ? [{ value: "PROGRAMMABLE_USDC", label: "Programmable USDC" }] : [])
+  ];
+  const programmableReadinessMessage = programmableRailReady
+    ? `Programmable USDC is available on ${programmableSettlement.supportedChain.label}.`
+    : [
+        ...programmableSettlement.readiness.reasons,
+        sellerVerifiedWallet ? null : "The seller organization needs a verified default wallet."
       ]
-    : [{ value: "INTERNAL_SIMULATED", label: "Internal simulated" }];
+        .filter((value): value is string => Boolean(value))
+        .join(" ");
 
   if ((!canExecute && !canRetry) || attemptLimitReached) {
     return (
@@ -129,9 +143,14 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
       <WorkflowFormField
         label="Rail"
         hint={
-          paymentRuntime.stripeEnabled
-            ? "Stripe is available in this environment and remains hidden behind the same Atlas payment abstraction."
-            : "Stripe is not configured in this environment, so execution falls back to the internal simulated rail."
+          [
+            paymentRuntime.stripeEnabled
+              ? "Stripe is available in this environment and remains hidden behind the same Atlas payment abstraction."
+              : "Stripe is not configured in this environment.",
+            programmableReadinessMessage
+          ]
+            .filter(Boolean)
+            .join(" ")
         }
       >
         <select
@@ -171,6 +190,13 @@ export async function BuyerPaymentExecutionPanel({ requestId }: BuyerPaymentExec
         <input
           readOnly
           value={`${attemptCount} of ${atlasPaymentMaximumAttemptCount}`}
+          className="w-full rounded-2xl border border-[var(--atlas-outline)] bg-[var(--atlas-surface-muted)] px-4 py-3 text-sm text-[var(--atlas-ink)]"
+        />
+      </WorkflowFormField>
+      <WorkflowFormField label="Programmable readiness" hint="Programmable settlement remains governed by org-level rail settings and verified wallet posture.">
+        <input
+          readOnly
+          value={programmableRailReady ? "Ready" : "Blocked"}
           className="w-full rounded-2xl border border-[var(--atlas-outline)] bg-[var(--atlas-surface-muted)] px-4 py-3 text-sm text-[var(--atlas-ink)]"
         />
       </WorkflowFormField>

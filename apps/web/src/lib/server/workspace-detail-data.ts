@@ -2,6 +2,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { prisma } from "@atlas/database";
 import {
   deriveAtlasPaymentReconciliationState,
+  extractAtlasProgrammableSettlementEvidence,
   formatAtlasPaymentRailLabel,
   formatAtlasPaymentReconciliationStateLabel,
   formatAtlasPaymentStatusLabel,
@@ -1070,6 +1071,39 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
     !Array.isArray(payment.request.receipt.metadata)
       ? (payment.request.receipt.metadata as Record<string, unknown>)
       : null;
+  const programmableEvidence =
+    (() => {
+      const paymentEvidence = extractAtlasProgrammableSettlementEvidence(paymentMetadata);
+
+      if (paymentEvidence.transactionHash || paymentEvidence.chainLabel) {
+        return paymentEvidence;
+      }
+
+      const receiptEvidence = extractAtlasProgrammableSettlementEvidence(receiptMetadata);
+
+      if (receiptEvidence.transactionHash || receiptEvidence.chainLabel) {
+        return receiptEvidence;
+      }
+
+      for (const attempt of payment.attempts) {
+        if (attempt.evidence && typeof attempt.evidence === "object" && !Array.isArray(attempt.evidence)) {
+          const attemptEvidence = extractAtlasProgrammableSettlementEvidence(attempt.evidence as Record<string, unknown>);
+
+          if (attemptEvidence.transactionHash || attemptEvidence.chainLabel) {
+            return attemptEvidence;
+          }
+        }
+      }
+
+      return {
+        chainLabel: null,
+        assetSymbol: null,
+        transactionHash: null,
+        confirmations: null,
+        buyerWalletAddress: null,
+        sellerWalletAddress: null
+      };
+    })();
   const sellerFulfillment = extractSellerFulfillment(
     payment.request.metadata && typeof payment.request.metadata === "object" && !Array.isArray(payment.request.metadata)
       ? (payment.request.metadata as Record<string, unknown>)
@@ -1156,6 +1190,11 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
           detail: "Atlas keeps the normalized payment status separate from the provider-native status."
         },
         {
+          label: "Chain evidence",
+          value: programmableEvidence.chainLabel ?? "Off-chain rail",
+          detail: programmableEvidence.transactionHash ?? "No programmable transaction captured"
+        },
+        {
           label: "Buyer organization",
           value: payment.organization.name,
           detail: payment.organization.slug
@@ -1181,14 +1220,30 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       items: payment.attempts.slice(0, 4).map((attempt) => ({
         label: `Attempt ${attempt.attemptNumber}`,
         value: formatAtlasPaymentStatusLabel(attempt.status),
-        detail:
-          attempt.errorMessage ??
-          (attempt.evidence &&
-          typeof attempt.evidence === "object" &&
-          !Array.isArray(attempt.evidence) &&
-          typeof (attempt.evidence as Record<string, unknown>).providerStatus === "string"
-            ? ((attempt.evidence as Record<string, unknown>).providerStatus as string)
-            : attempt.reference ?? "No attempt evidence captured")
+        detail: (() => {
+          if (attempt.errorMessage) {
+            return attempt.errorMessage;
+          }
+
+          if (attempt.evidence && typeof attempt.evidence === "object" && !Array.isArray(attempt.evidence)) {
+            const attemptEvidenceRecord = attempt.evidence as Record<string, unknown>;
+            const providerStatus =
+              typeof attemptEvidenceRecord.providerStatus === "string" ? attemptEvidenceRecord.providerStatus : null;
+            const programmableAttemptEvidence = extractAtlasProgrammableSettlementEvidence(attemptEvidenceRecord);
+
+            if (providerStatus || programmableAttemptEvidence.transactionHash || programmableAttemptEvidence.chainLabel) {
+              return [
+                providerStatus,
+                programmableAttemptEvidence.chainLabel,
+                programmableAttemptEvidence.transactionHash
+              ]
+                .filter((value): value is string => Boolean(value))
+                .join(" · ");
+            }
+          }
+
+          return attempt.reference ?? "No attempt evidence captured";
+        })()
       })),
       emptyTitle: "No payment attempts recorded",
       emptyDescription: "Atlas will render immutable payment attempts here once execution begins."
@@ -1295,7 +1350,46 @@ async function loadReceiptDetailModel(actor: AtlasActorContext, recordId: string
   const paymentReference =
     receipt.request.payment?.reference ??
     (typeof receiptMetadata?.paymentReference === "string" ? receiptMetadata.paymentReference : null);
-  const rail = receipt.request.payment?.rail ?? (receiptMetadata?.rail === "INTERNAL_SIMULATED" || receiptMetadata?.rail === "STRIPE" ? receiptMetadata.rail : null);
+  const programmableEvidence = (() => {
+    const emptyEvidence = {
+      chainLabel: null,
+      assetSymbol: null,
+      transactionHash: null,
+      confirmations: null,
+      buyerWalletAddress: null,
+      sellerWalletAddress: null
+    };
+    const directReceiptEvidence = extractAtlasProgrammableSettlementEvidence(receiptMetadata);
+
+    if (directReceiptEvidence.transactionHash || directReceiptEvidence.chainLabel) {
+      return directReceiptEvidence;
+    }
+
+    const directPaymentEvidence = extractAtlasProgrammableSettlementEvidence(paymentMetadata);
+
+    if (directPaymentEvidence.transactionHash || directPaymentEvidence.chainLabel) {
+      return directPaymentEvidence;
+    }
+
+    for (const attempt of receipt.request.payment?.attempts ?? []) {
+      if (attempt.evidence && typeof attempt.evidence === "object" && !Array.isArray(attempt.evidence)) {
+        const attemptEvidence = extractAtlasProgrammableSettlementEvidence(attempt.evidence as Record<string, unknown>);
+
+        if (attemptEvidence.transactionHash || attemptEvidence.chainLabel) {
+          return attemptEvidence;
+        }
+      }
+    }
+
+    return emptyEvidence;
+  })();
+  const rail =
+    receipt.request.payment?.rail ??
+    (receiptMetadata?.rail === "INTERNAL_SIMULATED" ||
+    receiptMetadata?.rail === "STRIPE" ||
+    receiptMetadata?.rail === "PROGRAMMABLE_USDC"
+      ? receiptMetadata.rail
+      : null);
   const reconciliationState = deriveAtlasPaymentReconciliationState({
     requestStatus: receipt.request.status,
     paymentStatus,
@@ -1309,7 +1403,13 @@ async function loadReceiptDetailModel(actor: AtlasActorContext, recordId: string
     paymentStatus,
     sellerFulfillmentStatus: sellerFulfillment?.fulfillmentStatus ?? null,
     storageKey: receipt.storageKey,
-    attemptCount: receipt.request.payment?.attempts.length ?? 0
+    attemptCount: receipt.request.payment?.attempts.length ?? 0,
+    chainLabel: programmableEvidence.chainLabel,
+    assetSymbol: programmableEvidence.assetSymbol,
+    transactionHash: programmableEvidence.transactionHash,
+    confirmations: programmableEvidence.confirmations,
+    buyerWalletAddress: programmableEvidence.buyerWalletAddress,
+    sellerWalletAddress: programmableEvidence.sellerWalletAddress
   });
   const timeline = buildAtlasLifecycleTimeline({
     request: {

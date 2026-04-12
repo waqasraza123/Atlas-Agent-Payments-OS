@@ -19,6 +19,15 @@ Blockchain support is an extension of the governed payment model, not the produc
 - on-chain evidence can appear in receipt timelines
 - organizations can control allowed rails
 
+## Repo Status
+
+- Completed in repo scope on 2026-04-12
+- Buyer and seller wallet registry now exists through schema-backed organization wallets
+- Supported programmable-settlement chain config now exists through shared runtime config
+- Governed `PROGRAMMABLE_USDC` rail selection now exists through organization settings and verified-wallet checks
+- Operator wallet verification and organization readiness views now exist
+- On-chain evidence now appears in payment attempts, payment detail, and receipt evidence summaries
+
 ## Detailed Sub-Steps
 
 ### Phase 7.1 — wallet registry
@@ -78,3 +87,4 @@ Later tracks may add:
 ## Acceptance Criteria
 
 - Atlas gains programmable settlement credibility without losing its core narrative as a governed control plane
+- The repo can expose programmable-settlement readiness, wallet posture, and on-chain evidence without bypassing the existing payment and receipt lifecycle model
