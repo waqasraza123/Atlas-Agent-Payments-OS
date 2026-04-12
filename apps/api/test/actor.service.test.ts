@@ -141,6 +141,7 @@ describe("actor resolution service", () => {
       issuedByOrganizationId: "org-operator",
       status: "ACTIVE",
       expiresAt: new Date("2026-04-13T01:00:00.000Z"),
+      reviewExpiresAt: new Date("2026-04-12T18:00:00.000Z"),
       issuedByUser: {
         email: "operator@atlas.local"
       },
@@ -202,9 +203,10 @@ describe("actor resolution service", () => {
     prismaMock.authSession.findUnique.mockResolvedValue({
       id: "session-provider-1",
       source: "IDENTITY_PROVIDER",
+      authProviderMode: "IDENTITY_BRIDGE",
       provider: "generic-sso",
       providerSubject: "subject-buyer-1",
-      expiresAt: new Date("2026-04-12T08:00:00.000Z"),
+      expiresAt: new Date("2027-04-12T08:00:00.000Z"),
       revokedAt: null,
       lastSeenAt: new Date("2026-04-12T00:00:00.000Z"),
       metadata: {
@@ -237,7 +239,7 @@ describe("actor resolution service", () => {
         provider: "generic-sso",
         sessionId: "session-provider-1",
         issuedAt: "2026-04-12T00:00:00.000Z",
-        expiresAt: "2026-04-12T08:00:00.000Z"
+        expiresAt: "2027-04-12T08:00:00.000Z"
       }
     );
 

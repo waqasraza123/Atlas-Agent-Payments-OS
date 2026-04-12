@@ -1,8 +1,17 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  createPrivateKey,
+  createPublicKey,
+  createSign,
+  timingSafeEqual,
+  verify,
+  type JsonWebKey as CryptoJsonWebKey
+} from "node:crypto";
 import {
   createAtlasIdentityAssertionPayload,
   atlasSignedSessionVersion,
   createAtlasSignedSessionPayload,
+  type AtlasExternalIdentityPayload,
   type AtlasIdentityAssertionPayload,
   isAtlasSupportAccessRecord,
   parseAtlasLocalSessionSelection,
@@ -31,12 +40,33 @@ export type AtlasIdentityAssertionVerificationResult =
       message: string;
     };
 
+export type AtlasExternalIdentityVerificationResult =
+  | {
+      status: "ready";
+      payload: AtlasExternalIdentityPayload;
+    }
+  | {
+      status: "invalid" | "expired";
+      message: string;
+    };
+
+type AtlasExternalIdentityVerificationInput = {
+  issuer: string;
+  audience: string;
+  provider: string;
+  jwks: Array<Record<string, unknown>>;
+};
+
 function encodeBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
 function decodeBase64Url(value: string) {
   return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function decodeBase64UrlJson(value: string) {
+  return JSON.parse(decodeBase64Url(value)) as Record<string, unknown>;
 }
 
 function createAtlasSessionSignature(secret: string, payloadSegment: string) {
@@ -54,6 +84,63 @@ function hasMatchingSignature(expected: string, actual: string) {
 function parseAtlasIsoTimestamp(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function encodeBase64UrlBytes(value: Buffer) {
+  return value.toString("base64url");
+}
+
+function parseJwtSegments(token: string) {
+  const segments = token.split(".");
+
+  if (segments.length !== 3 || segments.some((segment) => segment.trim().length === 0)) {
+    return null;
+  }
+
+  return {
+    headerSegment: segments[0],
+    payloadSegment: segments[1],
+    signatureSegment: segments[2]
+  };
+}
+
+function readNumericTimestamp(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.floor(value * 1000);
+}
+
+function selectAtlasJwk(jwks: Array<Record<string, unknown>>, kid: unknown) {
+  if (typeof kid !== "string" || kid.trim().length === 0) {
+    return null;
+  }
+
+  return (
+    jwks.find((candidate) => typeof candidate.kid === "string" && candidate.kid === kid && candidate.kty === "RSA") ?? null
+  );
+}
+
+function verifyJwtSignature(
+  segments: { headerSegment: string; payloadSegment: string; signatureSegment: string },
+  jwk: Record<string, unknown>
+) {
+  try {
+    const publicKey = createPublicKey({
+      key: jwk as CryptoJsonWebKey,
+      format: "jwk"
+    });
+
+    return verify(
+      "RSA-SHA256",
+      Buffer.from(`${segments.headerSegment}.${segments.payloadSegment}`, "utf8"),
+      publicKey,
+      Buffer.from(segments.signatureSegment, "base64url")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function createAtlasSignedSessionToken(secret: string, payload: AtlasSignedSessionPayload) {
@@ -278,6 +365,138 @@ export function verifyAtlasIdentityAssertionToken(
   }
 }
 
+export function verifyAtlasExternalIdentityToken(
+  input: AtlasExternalIdentityVerificationInput,
+  token: string | null | undefined,
+  now: Date = new Date()
+): AtlasExternalIdentityVerificationResult {
+  if (!token || token.trim().length === 0) {
+    return {
+      status: "invalid",
+      message: "Missing external identity token"
+    };
+  }
+
+  const segments = parseJwtSegments(token);
+  if (!segments) {
+    return {
+      status: "invalid",
+      message: "External identity token is malformed"
+    };
+  }
+
+  try {
+    const header = decodeBase64UrlJson(segments.headerSegment);
+    const payload = decodeBase64UrlJson(segments.payloadSegment);
+
+    if (header.alg !== "RS256") {
+      return {
+        status: "invalid",
+        message: "External identity token must use RS256"
+      };
+    }
+
+    const jwk = selectAtlasJwk(input.jwks, header.kid);
+    if (!jwk || !verifyJwtSignature(segments, jwk)) {
+      return {
+        status: "invalid",
+        message: "External identity token signature could not be verified"
+      };
+    }
+
+    const issuer = typeof payload.iss === "string" ? payload.iss.trim() : "";
+    const subject = typeof payload.sub === "string" ? payload.sub.trim() : "";
+    const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+    const userName = typeof payload.name === "string" && payload.name.trim().length > 0 ? payload.name.trim() : null;
+    const audienceValue = payload.aud;
+    const audiences =
+      typeof audienceValue === "string"
+        ? [audienceValue]
+        : Array.isArray(audienceValue)
+          ? audienceValue.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          : [];
+    const issuedAt = readNumericTimestamp(payload.iat);
+    const expiresAt = readNumericTimestamp(payload.exp);
+    const organizationSlug =
+      typeof payload.atlas_org_slug === "string" && payload.atlas_org_slug.trim().length > 0
+        ? payload.atlas_org_slug.trim()
+        : "";
+    const workspace =
+      typeof payload.atlas_workspace === "string"
+        ? parseAtlasLocalSessionSelection(
+            encodeURIComponent(
+              JSON.stringify({
+                profileKey: null,
+                workspace: payload.atlas_workspace,
+                userEmail: email,
+                organizationSlug,
+                role: payload.atlas_role,
+                agentId: payload.atlas_agent_id
+              })
+            )
+          )?.workspace ?? null
+        : null;
+    const selection =
+      workspace !== null
+        ? parseAtlasLocalSessionSelection(
+            encodeURIComponent(
+              JSON.stringify({
+                profileKey: null,
+                workspace,
+                userEmail: email,
+                organizationSlug,
+                role: payload.atlas_role,
+                agentId: typeof payload.atlas_agent_id === "string" ? payload.atlas_agent_id : null
+              })
+            )
+          )
+        : null;
+
+    if (
+      issuer !== input.issuer ||
+      subject.length === 0 ||
+      email.length === 0 ||
+      selection === null ||
+      issuedAt === null ||
+      expiresAt === null ||
+      expiresAt <= issuedAt ||
+      !audiences.includes(input.audience)
+    ) {
+      return {
+        status: "invalid",
+        message: "External identity token contains invalid Atlas session claims"
+      };
+    }
+
+    if (expiresAt <= now.getTime()) {
+      return {
+        status: "expired",
+        message: "External identity token has expired"
+      };
+    }
+
+    return {
+      status: "ready",
+      payload: {
+        issuer,
+        audience: input.audience,
+        provider: input.provider,
+        subject,
+        selection,
+        email,
+        userName,
+        issuedAt: new Date(issuedAt).toISOString(),
+        expiresAt: new Date(expiresAt).toISOString()
+      }
+    };
+  } catch {
+    return {
+      status: "invalid",
+      message: "External identity token could not be decoded"
+    };
+  }
+}
+
 export function createAtlasLocalSessionToken(
   secret: string,
   selection: AtlasLocalSessionSelection,
@@ -356,4 +575,64 @@ export function createAtlasIdentityAssertionTokenForSelection(
   }
 ) {
   return createAtlasIdentityAssertionToken(secret, createAtlasIdentityAssertionPayload(selection, input));
+}
+
+export function createAtlasExternalIdentityTokenForSelection(
+  privateKey:
+    | string
+    | {
+        key: string;
+        passphrase?: string;
+      },
+  selection: AtlasLocalSessionSelection,
+  input: {
+    issuer: string;
+    audience: string;
+    provider: string;
+    subject: string;
+    userName?: string | null;
+    issuedAt?: string;
+    expiresAt?: string;
+    keyId?: string;
+  }
+) {
+  const issuedAt = input.issuedAt ?? new Date().toISOString();
+  const expiresAt = input.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const headerSegment = encodeBase64Url(
+    JSON.stringify({
+      alg: "RS256",
+      typ: "JWT",
+      kid: input.keyId ?? "atlas-test-key"
+    })
+  );
+  const payloadSegment = encodeBase64Url(
+    JSON.stringify({
+      iss: input.issuer,
+      aud: input.audience,
+      sub: input.subject,
+      email: selection.userEmail.toLowerCase(),
+      name: input.userName?.trim() ?? null,
+      iat: Math.floor(Date.parse(issuedAt) / 1000),
+      exp: Math.floor(Date.parse(expiresAt) / 1000),
+      atlas_org_slug: selection.organizationSlug,
+      atlas_workspace: selection.workspace,
+      atlas_role: selection.role,
+      atlas_agent_id: selection.agentId,
+      atlas_provider: input.provider
+    })
+  );
+  const signer = createSign("RSA-SHA256");
+  signer.update(`${headerSegment}.${payloadSegment}`);
+  signer.end();
+  const privateKeyObject =
+    typeof privateKey === "string"
+      ? createPrivateKey(privateKey)
+      : createPrivateKey({
+          key: privateKey.key,
+          format: "pem",
+          passphrase: privateKey.passphrase
+        });
+  const signatureSegment = encodeBase64UrlBytes(signer.sign(privateKeyObject));
+
+  return `${headerSegment}.${payloadSegment}.${signatureSegment}`;
 }

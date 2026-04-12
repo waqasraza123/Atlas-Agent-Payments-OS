@@ -141,6 +141,7 @@ enum NotificationStatus {
 enum AuthProviderMode {
   LOCAL_SIGNED
   IDENTITY_BRIDGE
+  EXTERNAL_OIDC
 }
 
 enum AppSessionSource {
@@ -152,6 +153,7 @@ enum AppSessionSource {
 enum SupportAccessGrantStatus {
   PENDING_REVIEW
   ACTIVE
+  RECERTIFICATION_REQUIRED
   REJECTED
   REVOKED
   EXPIRED
@@ -160,6 +162,11 @@ enum SupportAccessGrantStatus {
 enum SupportAccessGrantReviewDecision {
   APPROVED
   REJECTED
+}
+
+enum SupportAccessGrantReviewType {
+  INITIAL
+  RECERTIFICATION
 }
 
 enum AuditActorType {
@@ -441,6 +448,8 @@ model SupportAccessGrant {
   reason               String
   status               SupportAccessGrantStatus @default(PENDING_REVIEW)
   expiresAt            DateTime
+  lastReviewedAt       DateTime?
+  reviewExpiresAt      DateTime?
   lastActivatedAt      DateTime?
   revokedAt            DateTime?
   revokedReason        String?
@@ -456,6 +465,7 @@ model SupportAccessGrant {
 
   @@index([issuedByOrganizationId, status, createdAt])
   @@index([targetOrganizationId, status, createdAt])
+  @@index([status, reviewExpiresAt])
 }
 
 model SupportAccessGrantReview {
@@ -463,6 +473,7 @@ model SupportAccessGrantReview {
   supportAccessGrantId   String
   reviewerUserId         String
   reviewerOrganizationId String
+  reviewType             SupportAccessGrantReviewType
   decision               SupportAccessGrantReviewDecision
   reason                 String
   supportAccessGrant     SupportAccessGrant              @relation(fields: [supportAccessGrantId], references: [id], onDelete: Cascade)
@@ -472,6 +483,7 @@ model SupportAccessGrantReview {
 
   @@index([supportAccessGrantId, createdAt])
   @@index([reviewerOrganizationId, createdAt])
+  @@index([supportAccessGrantId, reviewType, createdAt])
 }
 
 model AuditEvent {

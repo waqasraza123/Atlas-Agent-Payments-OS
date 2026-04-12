@@ -32,7 +32,7 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - A first production-operations baseline is now in place in repo scope through structured runtime config, request correlation, readiness endpoints, release scripts, and CI release gating.
 - A deployment and recovery baseline is now in place in repo scope through env-profile validation, release manifests, rollback-readiness checks, and backup/restore scripts.
 - An observability and incident-response baseline is now in place in repo scope through API runtime metrics, operator alerting surfaces, worker queue runtime metrics, and incident runbooks.
-- The next active implementation slice is direct external identity-provider integration, stricter tenancy validation across reporting and support inspection paths, formal access recertification, and deeper deployment automation for broader rollout readiness.
+- The next active implementation slice is access-review campaign automation, stricter tenancy validation across reporting and support inspection paths, restore-drill verification, and deeper deployment automation for broader rollout readiness.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
@@ -393,4 +393,4 @@ The next safest implementation slice is now:
 - auth and tenancy hardening from [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
 - broader release-stage enforcement from [release-maturity-model.md](./release-maturity-model.md)
 
-The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, observability/incident, signed-session, identity-assertion exchange, persisted auth-session, and reviewable support-access baselines also exist. Future work should concentrate on direct external identity-provider integration, access recertification, deeper tenancy validation, environment isolation, and stronger deployment automation before broader real-world rollout.
+The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, observability/incident, signed-session, direct external OIDC exchange into persisted Atlas sessions, and reviewable support-access baselines also exist. Future work should concentrate on recurring access-review automation, deeper tenancy validation, environment isolation, restore-drill verification, and stronger deployment automation before broader real-world rollout.

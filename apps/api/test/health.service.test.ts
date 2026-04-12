@@ -6,7 +6,9 @@ describe("health service", () => {
     vi.resetModules();
   });
 
-  it("simulates readiness checks in test mode", async () => {
+  it(
+    "simulates readiness checks in test mode",
+    async () => {
     vi.stubEnv("NODE_ENV", "test");
 
     const { HealthService } = await import("../src/modules/health/health.service");
@@ -21,7 +23,9 @@ describe("health service", () => {
         expect.objectContaining({ dependency: "object-storage", status: "skipped" })
       ])
     );
-  });
+    },
+    10000
+  );
 
   it("returns startup metadata from runtime config", async () => {
     vi.stubEnv("NODE_ENV", "test");

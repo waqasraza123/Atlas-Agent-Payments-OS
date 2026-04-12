@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook defines the current signed-session, identity-assertion exchange, persisted auth-session, and internal support-access baseline after the latest rollout-hardening auth slice.
+This runbook defines the current signed-session, external identity-provider exchange, persisted auth-session, and internal support-access baseline after the latest rollout-hardening auth slice.
 
 ## Current Session Types
 
@@ -23,7 +23,7 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - `AUTH_IDENTITY_BRIDGE_PROVIDER`
 - `AUTH_IDENTITY_SESSION_TTL_MINUTES`
 
-`AUTH_SESSION_SIGNING_SECRET` is required in the API and web runtimes. `AUTH_IDENTITY_BRIDGE_SECRET`, `AUTH_IDENTITY_BRIDGE_PROVIDER`, and `AUTH_IDENTITY_SESSION_TTL_MINUTES` are required when `AUTH_PROVIDER_MODE=identity-bridge`.
+`AUTH_SESSION_SIGNING_SECRET` is required in the API and web runtimes. `AUTH_IDENTITY_BRIDGE_SECRET`, `AUTH_IDENTITY_BRIDGE_PROVIDER`, and `AUTH_IDENTITY_SESSION_TTL_MINUTES` are required when `AUTH_PROVIDER_MODE=identity-bridge`. `AUTH_EXTERNAL_OIDC_ISSUER`, `AUTH_EXTERNAL_OIDC_AUDIENCE`, `AUTH_EXTERNAL_OIDC_PROVIDER`, `AUTH_EXTERNAL_OIDC_JWKS_JSON`, and `AUTH_IDENTITY_SESSION_TTL_MINUTES` are required when `AUTH_PROVIDER_MODE=external-oidc`.
 
 ## Local Session Behavior
 
@@ -40,6 +40,15 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - downstream web and API requests use the exchanged signed Atlas session rather than the raw assertion
 - the API validates the exchanged session against stored auth-session records before actor resolution
 - local session issuance is disabled when the runtime is configured for `identity-bridge`
+
+## External OIDC Exchange Behavior
+
+- external OIDC tokens are exchanged through `/auth/provider-exchange`
+- the web runtime verifies issuer, audience, provider, and RS256 signature against configured JWKS keys
+- the exchange creates a persisted Atlas auth session tied to user, organization, membership, and provider identity
+- downstream web and API requests use the exchanged signed Atlas session rather than the raw OIDC token
+- the API validates the exchanged session against stored auth-session records before actor resolution
+- local session issuance is disabled when the runtime is configured for `external-oidc`
 
 ## Support-Access Behavior
 
@@ -59,13 +68,15 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - approved grants must be explicitly activated by the requester before support mode starts
 - support grants can be revoked explicitly before TTL expiry
 - expired grants are marked expired when read
+- active grants move to recertification-required when review expiry is reached
+- recertification writes a new persisted review record and refreshes grant review expiry
+- support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge` or `AUTH_PROVIDER_MODE=external-oidc`
 
 ## Current Gaps
 
-- no direct external identity provider integration yet
-- no formal periodic recertification process yet
+- no recurring access-review campaign automation yet
 - no external approval workflow outside Atlas for issuing support grants
-- no direct session exchange with a production IdP yet
+- no direct session revocation or provisioning integration with an external IdP yet
 
 ## Verification Commands
 
@@ -77,6 +88,6 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
-- replace the current identity-bridge intermediate path with a direct external auth-provider integration
-- add formal access-review recertification controls
+- automate recurring access reviews and recertification campaigns
 - tighten tenancy validation across analytics, export, and support inspection paths
+- add direct external IdP lifecycle controls beyond the current exchange boundary

@@ -34,7 +34,7 @@ function readBoolean(value: string | undefined, fallback: boolean) {
 
 const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
-const atlasIdentityProviderModes = ["local-signed", "identity-bridge"] as const;
+const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
 const atlasReleaseStages = [
   "internal-concept-demo",
   "functional-alpha",
@@ -114,9 +114,14 @@ export const authRuntime = {
   sessionSigningSecret: readText(process.env.AUTH_SESSION_SIGNING_SECRET, "atlas-local-session-secret"),
   identityBridgeSecret: readText(process.env.AUTH_IDENTITY_BRIDGE_SECRET, "atlas-identity-bridge-secret"),
   identityBridgeProvider: readText(process.env.AUTH_IDENTITY_BRIDGE_PROVIDER, "generic-sso"),
+  externalOidcIssuer: readText(process.env.AUTH_EXTERNAL_OIDC_ISSUER, "https://id.atlas.local"),
+  externalOidcAudience: readText(process.env.AUTH_EXTERNAL_OIDC_AUDIENCE, "atlas-agent-payments-os"),
+  externalOidcProvider: readText(process.env.AUTH_EXTERNAL_OIDC_PROVIDER, "external-oidc"),
+  externalOidcJwksJson: readText(process.env.AUTH_EXTERNAL_OIDC_JWKS_JSON, '{"keys":[]}'),
   identitySessionTtlMinutes: readNumber(process.env.AUTH_IDENTITY_SESSION_TTL_MINUTES, 480),
   localSessionTtlMinutes: readNumber(process.env.AUTH_LOCAL_SESSION_TTL_MINUTES, 480),
   supportAccessTtlMinutes: readNumber(process.env.AUTH_SUPPORT_ACCESS_TTL_MINUTES, 60),
+  supportAccessReviewTtlHours: readNumber(process.env.AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS, 24),
   supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
 } as const;
 
@@ -245,6 +250,7 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
       ...atlasBaseRuntimeVariables(),
       "AUTH_PROVIDER_MODE",
       "AUTH_SESSION_SIGNING_SECRET",
+      "AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS",
       "API_PORT",
       "API_BASE_URL",
       "NEXT_PUBLIC_APP_URL",
@@ -262,7 +268,14 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
     return [...atlasBaseRuntimeVariables(), "REDIS_URL", "DATABASE_URL"] as const;
   }
 
-  return [...atlasBaseRuntimeVariables(), "AUTH_SESSION_SIGNING_SECRET", "AUTH_PROVIDER_MODE", "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
+  return [
+    ...atlasBaseRuntimeVariables(),
+    "AUTH_SESSION_SIGNING_SECRET",
+    "AUTH_PROVIDER_MODE",
+    "AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS",
+    "NEXT_PUBLIC_APP_URL",
+    "API_BASE_URL"
+  ] as const;
 }
 
 export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
@@ -279,6 +292,15 @@ export function validateAtlasRuntimeConfiguration(
     ...listAtlasRuntimeVariables(service),
     ...(service !== "worker" && providerMode === "identity-bridge"
       ? ["AUTH_IDENTITY_BRIDGE_SECRET", "AUTH_IDENTITY_BRIDGE_PROVIDER", "AUTH_IDENTITY_SESSION_TTL_MINUTES"]
+      : []),
+    ...(service !== "worker" && providerMode === "external-oidc"
+      ? [
+          "AUTH_EXTERNAL_OIDC_ISSUER",
+          "AUTH_EXTERNAL_OIDC_AUDIENCE",
+          "AUTH_EXTERNAL_OIDC_PROVIDER",
+          "AUTH_EXTERNAL_OIDC_JWKS_JSON",
+          "AUTH_IDENTITY_SESSION_TTL_MINUTES"
+        ]
       : [])
   ];
   const issues = requiredVariables.flatMap((variable) => {
@@ -362,12 +384,20 @@ export function validateAtlasPromotionReadiness(
   const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
   const allowedSupportEmails = readTextList(env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS);
 
-  if ((toEnv === "staging" || toEnv === "production") && providerMode !== "identity-bridge") {
-    issues.push(`Promotion to ${toEnv} requires AUTH_PROVIDER_MODE=identity-bridge.`);
+  if (toEnv === "staging" && providerMode === "local-signed") {
+    issues.push("Promotion to staging requires AUTH_PROVIDER_MODE=identity-bridge or AUTH_PROVIDER_MODE=external-oidc.");
+  }
+
+  if (toEnv === "production" && providerMode !== "external-oidc") {
+    issues.push("Promotion to production requires AUTH_PROVIDER_MODE=external-oidc.");
   }
 
   if (toEnv === "production" && allowedSupportEmails.length === 0) {
     issues.push("Promotion to production requires AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured.");
+  }
+
+  if (toEnv === "production" && readNumber(env.AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS, 0) <= 0) {
+    issues.push("Promotion to production requires AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS to be explicitly configured.");
   }
 
   return issues;

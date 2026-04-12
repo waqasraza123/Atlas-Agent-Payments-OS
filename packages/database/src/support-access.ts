@@ -9,6 +9,7 @@ import {
   Prisma,
   type PrismaClient,
   type SupportAccessGrantReviewDecision,
+  type SupportAccessGrantReviewType,
   type SupportAccessGrantStatus
 } from "./generated/client/index.js";
 import { prisma } from "./client";
@@ -44,6 +45,7 @@ export class AtlasSupportAccessWorkflowError extends Error {
 
 export type AtlasSupportAccessGrantReviewRecord = {
   id: string;
+  reviewType: SupportAccessGrantReviewType;
   decision: SupportAccessGrantReviewDecision;
   reason: string;
   reviewerUserEmail: string;
@@ -65,6 +67,8 @@ export type AtlasSupportAccessGrantRecord = {
   status: SupportAccessGrantStatus;
   createdAt: string;
   expiresAt: string;
+  lastReviewedAt: string | null;
+  reviewExpiresAt: string | null;
   lastActivatedAt: string | null;
   revokedAt: string | null;
   revokedReason: string | null;
@@ -110,6 +114,7 @@ function assertReason(value: unknown, label: string) {
 
 function mapReviewRecord(review: {
   id: string;
+  reviewType: SupportAccessGrantReviewType;
   decision: SupportAccessGrantReviewDecision;
   reason: string;
   createdAt: Date;
@@ -118,6 +123,7 @@ function mapReviewRecord(review: {
 }) {
   return {
     id: review.id,
+    reviewType: review.reviewType,
     decision: review.decision,
     reason: review.reason,
     reviewerUserEmail: review.reviewerUser.email,
@@ -143,12 +149,20 @@ function mapSupportAccessGrantRecord(grant: GrantWithRelations) {
     status: grant.status,
     createdAt: grant.createdAt.toISOString(),
     expiresAt: grant.expiresAt.toISOString(),
+    lastReviewedAt: grant.lastReviewedAt?.toISOString() ?? null,
+    reviewExpiresAt: grant.reviewExpiresAt?.toISOString() ?? null,
     lastActivatedAt: grant.lastActivatedAt?.toISOString() ?? null,
     revokedAt: grant.revokedAt?.toISOString() ?? null,
     revokedReason: grant.revokedReason,
     latestReview: reviews[0] ?? null,
     reviews
   } satisfies AtlasSupportAccessGrantRecord;
+}
+
+function createReviewExpiry(expiresAt: Date) {
+  return new Date(
+    Math.min(expiresAt.getTime(), Date.now() + authRuntime.supportAccessReviewTtlHours * 60 * 60 * 1000)
+  );
 }
 
 async function createAuditEvent(
@@ -202,13 +216,41 @@ async function markExpiredGrantIfNeeded(grantId: string, client: SupportAccessRe
     return null;
   }
 
-  if ((grant.status === "ACTIVE" || grant.status === "PENDING_REVIEW") && grant.expiresAt.getTime() <= Date.now()) {
+  if (
+    (grant.status === "ACTIVE" || grant.status === "PENDING_REVIEW" || grant.status === "RECERTIFICATION_REQUIRED") &&
+    grant.expiresAt.getTime() <= Date.now()
+  ) {
     return client.supportAccessGrant.update({
       where: {
         id: grant.id
       },
       data: {
         status: "EXPIRED"
+      },
+      include: {
+        issuedByUser: true,
+        issuedByOrganization: true,
+        targetOrganization: true,
+        reviews: {
+          include: {
+            reviewerUser: true,
+            reviewerOrganization: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
+      }
+    });
+  }
+
+  if (grant.status === "ACTIVE" && grant.reviewExpiresAt && grant.reviewExpiresAt.getTime() <= Date.now()) {
+    return client.supportAccessGrant.update({
+      where: {
+        id: grant.id
+      },
+      data: {
+        status: "RECERTIFICATION_REQUIRED"
       },
       include: {
         issuedByUser: true,
@@ -273,10 +315,17 @@ export async function issueSupportAccessGrant(
         issuedByOrganizationId: actor.organization.id,
         targetOrganizationId: targetOrganization.id,
         targetWorkspace: input.targetWorkspace,
-        authProviderMode: authRuntime.providerMode === "identity-bridge" ? "IDENTITY_BRIDGE" : "LOCAL_SIGNED",
+        authProviderMode:
+          authRuntime.providerMode === "external-oidc"
+            ? "EXTERNAL_OIDC"
+            : authRuntime.providerMode === "identity-bridge"
+              ? "IDENTITY_BRIDGE"
+              : "LOCAL_SIGNED",
         reason,
         expiresAt,
-        status: "PENDING_REVIEW"
+        status: "PENDING_REVIEW",
+        lastReviewedAt: null,
+        reviewExpiresAt: null
       },
       include: {
         issuedByUser: true,
@@ -358,17 +407,21 @@ export async function reviewSupportAccessGrant(
         supportAccessGrantId: grant.id,
         reviewerUserId: actor.user.id,
         reviewerOrganizationId: actor.organization.id,
+        reviewType: "INITIAL",
         decision: input.decision,
         reason: reviewReason
       }
     });
 
+    const reviewExpiresAt = input.decision === "APPROVED" ? createReviewExpiry(grant.expiresAt) : null;
     const updatedGrant = await transaction.supportAccessGrant.update({
       where: {
         id: grant.id
       },
       data: {
-        status: input.decision === "APPROVED" ? "ACTIVE" : "REJECTED"
+        status: input.decision === "APPROVED" ? "ACTIVE" : "REJECTED",
+        lastReviewedAt: new Date(),
+        reviewExpiresAt
       },
       include: {
         issuedByUser: true,
@@ -392,6 +445,7 @@ export async function reviewSupportAccessGrant(
       payload: {
         decision: input.decision,
         reviewReason,
+        reviewType: "INITIAL",
         targetOrganizationId: updatedGrant.targetOrganizationId,
         targetWorkspace: updatedGrant.targetWorkspace
       }
@@ -401,6 +455,99 @@ export async function reviewSupportAccessGrant(
   });
 
   return mapSupportAccessGrantRecord(reviewedGrant);
+}
+
+export async function recertifySupportAccessGrant(
+  actor: AtlasActorContext,
+  grantId: string,
+  input: {
+    reviewReason: string;
+  },
+  client: PrismaClient = prisma
+) {
+  assertOperatorActor(actor);
+  assertReviewerRole(actor.membership.role);
+
+  const reviewReason = assertReason(input.reviewReason, "Support-access recertification reason");
+  const grant = await markExpiredGrantIfNeeded(grantId, client);
+
+  if (!grant) {
+    throw new AtlasSupportAccessWorkflowError("The selected support-access grant could not be found.", "not_found");
+  }
+
+  if (grant.issuedByOrganizationId !== actor.organization.id) {
+    throw new AtlasSupportAccessWorkflowError(
+      "Support-access grants can only be recertified inside the issuing operator organization.",
+      "forbidden"
+    );
+  }
+
+  if (grant.issuedByUserId === actor.user.id) {
+    throw new AtlasSupportAccessWorkflowError(
+      "Operators cannot recertify support-access grants that they requested themselves.",
+      "forbidden"
+    );
+  }
+
+  if (grant.status !== "ACTIVE" && grant.status !== "RECERTIFICATION_REQUIRED") {
+    throw new AtlasSupportAccessWorkflowError(
+      "Only active or recertification-required support-access grants can be recertified.",
+      "conflict"
+    );
+  }
+
+  const recertifiedGrant = await client.$transaction(async (transaction) => {
+    await transaction.supportAccessGrantReview.create({
+      data: {
+        supportAccessGrantId: grant.id,
+        reviewerUserId: actor.user.id,
+        reviewerOrganizationId: actor.organization.id,
+        reviewType: "RECERTIFICATION",
+        decision: "APPROVED",
+        reason: reviewReason
+      }
+    });
+
+    const updatedGrant = await transaction.supportAccessGrant.update({
+      where: {
+        id: grant.id
+      },
+      data: {
+        status: "ACTIVE",
+        lastReviewedAt: new Date(),
+        reviewExpiresAt: createReviewExpiry(grant.expiresAt)
+      },
+      include: {
+        issuedByUser: true,
+        issuedByOrganization: true,
+        targetOrganization: true,
+        reviews: {
+          include: {
+            reviewerUser: true,
+            reviewerOrganization: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
+      }
+    });
+
+    await createAuditEvent(transaction, actor, {
+      eventType: "support_access.recertified",
+      targetId: updatedGrant.id,
+      payload: {
+        reviewReason,
+        reviewType: "RECERTIFICATION",
+        targetOrganizationId: updatedGrant.targetOrganizationId,
+        targetWorkspace: updatedGrant.targetWorkspace
+      }
+    });
+
+    return updatedGrant;
+  });
+
+  return mapSupportAccessGrantRecord(recertifiedGrant);
 }
 
 export async function listSupportAccessGrants(actor: AtlasActorContext, client: SupportAccessReadClient = prisma) {
@@ -523,7 +670,11 @@ export async function revokeSupportAccessGrant(
     );
   }
 
-  if (grant.status !== "ACTIVE" && grant.status !== "PENDING_REVIEW") {
+  if (
+    grant.status !== "ACTIVE" &&
+    grant.status !== "PENDING_REVIEW" &&
+    grant.status !== "RECERTIFICATION_REQUIRED"
+  ) {
     throw new AtlasSupportAccessWorkflowError("Only active or pending support-access grants can be revoked.", "conflict");
   }
 

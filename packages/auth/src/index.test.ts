@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   canAtlasActorAccessWorkspace,
@@ -12,14 +13,22 @@ import {
 } from "./index";
 import {
   createAtlasIdentityAssertionTokenForSelection,
+  createAtlasExternalIdentityTokenForSelection,
   createAtlasIdentityProviderSessionToken,
   createAtlasLocalSessionToken,
   createAtlasSupportSessionToken,
+  verifyAtlasExternalIdentityToken,
   verifyAtlasIdentityAssertionToken,
   verifyAtlasSignedSessionToken
 } from "./server";
 
 const sessionSecret = "atlas-test-secret";
+const externalOidcKeyPair = generateKeyPairSync("rsa", {
+  modulusLength: 2048
+});
+const externalOidcPublicJwk = externalOidcKeyPair.publicKey.export({
+  format: "jwk"
+}) as Record<string, unknown>;
 
 describe("atlas auth session utilities", () => {
   it("round-trips a raw local session selection", () => {
@@ -120,6 +129,49 @@ describe("atlas auth session utilities", () => {
     expect(verification.status).toBe("ready");
     expect(verification.status === "ready" ? verification.payload.source : null).toBe("identity-provider");
     expect(verification.status === "ready" ? verification.payload.sessionId : null).toBe("session-123");
+  });
+
+  it("verifies external oidc tokens for direct provider integration", () => {
+    const token = createAtlasExternalIdentityTokenForSelection(
+      externalOidcKeyPair.privateKey.export({
+        format: "pem",
+        type: "pkcs8"
+      }).toString(),
+      {
+        ...createAtlasLocalSessionSelection("buyer-admin"),
+        profileKey: null
+      },
+      {
+        issuer: "https://id.atlas.example",
+        audience: "atlas-agent-payments-os",
+        provider: "okta-design-partner",
+        subject: "okta-subject-1",
+        keyId: "atlas-test-key",
+        userName: "Buyer Admin",
+        issuedAt: "2026-04-12T00:00:00.000Z",
+        expiresAt: "2026-04-12T01:00:00.000Z"
+      }
+    );
+
+    const verification = verifyAtlasExternalIdentityToken(
+      {
+        issuer: "https://id.atlas.example",
+        audience: "atlas-agent-payments-os",
+        provider: "okta-design-partner",
+        jwks: [
+          {
+            ...externalOidcPublicJwk,
+            kid: "atlas-test-key"
+          }
+        ]
+      },
+      token,
+      new Date("2026-04-12T00:30:00.000Z")
+    );
+
+    expect(verification.status).toBe("ready");
+    expect(verification.status === "ready" ? verification.payload.provider : null).toBe("okta-design-partner");
+    expect(verification.status === "ready" ? verification.payload.selection.organizationSlug : null).toBe("atlas-demo-buyer");
   });
 
   it("returns null for malformed raw selections", () => {

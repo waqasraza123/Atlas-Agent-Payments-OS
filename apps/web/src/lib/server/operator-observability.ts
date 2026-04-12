@@ -21,7 +21,7 @@ async function fetchOperatorObservabilityResource<T>(
     actor.source === "identity-provider" && actor.sessionId
       ? createAtlasIdentityProviderSessionToken(authRuntime.sessionSigningSecret, selection, {
           sessionId: actor.sessionId,
-          provider: authRuntime.identityBridgeProvider,
+          provider: actor.providerMode === "external-oidc" ? authRuntime.externalOidcProvider : authRuntime.identityBridgeProvider,
           expiresAt: actor.sessionExpiresAt
         })
       : createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {

@@ -78,6 +78,7 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "240");
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.local");
     vi.stubEnv("API_BASE_URL", "https://api.atlas.local");
@@ -132,6 +133,7 @@ describe("atlas config", () => {
     expect(authRuntime.identitySessionTtlMinutes).toBe(240);
     expect(authRuntime.localSessionTtlMinutes).toBe(120);
     expect(authRuntime.supportAccessTtlMinutes).toBe(30);
+    expect(authRuntime.supportAccessReviewTtlHours).toBe(24);
     expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
     expect(deploymentRuntime.revision).toBe("rev-123");
     expect(deploymentRuntime.deploymentSlot).toBe("blue");
@@ -158,6 +160,49 @@ describe("atlas config", () => {
       deploymentSlot: "blue"
     });
     expect(() => assertAtlasRuntimeConfiguration("worker")).not.toThrow();
+    expect(validateAtlasPromotionReadiness("staging")).toEqual([]);
+    expect(validateAtlasPromotionReadiness("production")).toEqual([
+      "Promotion to production requires AUTH_PROVIDER_MODE=external-oidc."
+    ]);
+  });
+
+  it("reads direct external oidc runtime values from the environment", async () => {
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("LOG_LEVEL", "info");
+    vi.stubEnv("RELEASE_STAGE", "ga");
+    vi.stubEnv("AUTH_SESSION_SIGNING_SECRET", "atlas-secret");
+    vi.stubEnv("AUTH_PROVIDER_MODE", "external-oidc");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_ISSUER", "https://id.atlas.example");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_AUDIENCE", "atlas-agent-payments-os");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_PROVIDER", "okta-design-partner");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_JWKS_JSON", '{"keys":[{"kid":"atlas-test-key","kty":"RSA"}]}');
+    vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "480");
+    vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator-admin@atlas.local");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
+    vi.stubEnv("HEALTHCHECK_TIMEOUT_MS", "2000");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.example");
+    vi.stubEnv("API_BASE_URL", "https://api.atlas.example");
+    vi.stubEnv("DATABASE_URL", "postgresql://atlas:atlas@127.0.0.1:5432/atlas");
+    vi.stubEnv("API_PORT", "4000");
+    vi.stubEnv("REDIS_URL", "redis://127.0.0.1:6379");
+    vi.stubEnv("MINIO_ENDPOINT", "minio.atlas.example");
+    vi.stubEnv("MINIO_PORT", "9000");
+    vi.stubEnv("MINIO_ACCESS_KEY", "atlasminio");
+    vi.stubEnv("MINIO_SECRET_KEY", "atlasminio");
+    vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
+
+    const { authRuntime, validateAtlasRuntimeConfiguration, validateAtlasPromotionReadiness } = await import("./index");
+
+    expect(authRuntime.providerMode).toBe("external-oidc");
+    expect(authRuntime.externalOidcIssuer).toBe("https://id.atlas.example");
+    expect(authRuntime.externalOidcAudience).toBe("atlas-agent-payments-os");
+    expect(authRuntime.externalOidcProvider).toBe("okta-design-partner");
+    expect(authRuntime.supportAccessReviewTtlHours).toBe(24);
+    expect(validateAtlasRuntimeConfiguration("api")).toMatchObject({
+      ok: true
+    });
     expect(validateAtlasPromotionReadiness("production")).toEqual([]);
   });
 
@@ -194,13 +239,13 @@ describe("atlas config", () => {
       validateAtlasPromotionReadiness("staging", {
         AUTH_PROVIDER_MODE: "local-signed"
       })
-    ).toContain("Promotion to staging requires AUTH_PROVIDER_MODE=identity-bridge.");
+    ).toContain("Promotion to staging requires AUTH_PROVIDER_MODE=identity-bridge or AUTH_PROVIDER_MODE=external-oidc.");
 
     expect(
       validateAtlasPromotionReadiness("production", {
         AUTH_PROVIDER_MODE: "identity-bridge",
         AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS: ""
       })
-    ).toContain("Promotion to production requires AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured.");
+    ).toContain("Promotion to production requires AUTH_PROVIDER_MODE=external-oidc.");
   });
 });

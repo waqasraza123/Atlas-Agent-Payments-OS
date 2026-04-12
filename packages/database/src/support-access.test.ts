@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   activateSupportAccessGrant,
   issueSupportAccessGrant,
+  recertifySupportAccessGrant,
   reviewSupportAccessGrant
 } from "./support-access";
 
@@ -49,6 +50,8 @@ describe("support access workflow", () => {
           status: "PENDING_REVIEW",
           createdAt: new Date("2026-04-12T00:00:00.000Z"),
           expiresAt: new Date(expiresAt),
+          lastReviewedAt: null,
+          reviewExpiresAt: null,
           lastActivatedAt: null,
           revokedAt: null,
           revokedReason: null,
@@ -112,6 +115,8 @@ describe("support access workflow", () => {
           reason: "Investigate a delayed settlement and receipt mismatch.",
           status: "PENDING_REVIEW",
           expiresAt: new Date(Date.now() + 60_000),
+          lastReviewedAt: null,
+          reviewExpiresAt: null,
           lastActivatedAt: null,
           revokedAt: null,
           revokedReason: null,
@@ -178,6 +183,8 @@ describe("support access workflow", () => {
           reason: "Investigate a delayed settlement and receipt mismatch.",
           status: "PENDING_REVIEW",
           expiresAt: new Date(Date.now() + 60_000),
+          lastReviewedAt: null,
+          reviewExpiresAt: null,
           lastActivatedAt: null,
           revokedAt: null,
           revokedReason: null,
@@ -206,5 +213,130 @@ describe("support access workflow", () => {
     await expect(activateSupportAccessGrant(requestingActor, "grant-1", client as never)).rejects.toThrow(
       /only approved support-access grants can be activated/i
     );
+  });
+
+  it("recertifies active support grants through a second review", async () => {
+    const actor = createOperatorActor({
+      user: {
+        id: "user-reviewer",
+        email: "operator-owner@atlas.local",
+        name: "Operator Owner"
+      },
+      membership: {
+        id: "membership-owner",
+        role: "OWNER"
+      }
+    });
+    const transaction = {
+      supportAccessGrantReview: {
+        create: vi.fn(async () => undefined)
+      },
+      supportAccessGrant: {
+        update: vi.fn(async () => ({
+          id: "grant-1",
+          issuedByUserId: "user-requester",
+          issuedByOrganizationId: actor.organization.id,
+          targetOrganizationId: "org-buyer",
+          targetWorkspace: "BUYER",
+          authProviderMode: "IDENTITY_BRIDGE",
+          reason: "Investigate delayed settlement posture for a buyer tenant.",
+          status: "ACTIVE",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          lastReviewedAt: new Date(),
+          reviewExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+          lastActivatedAt: null,
+          revokedAt: null,
+          revokedReason: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          issuedByUser: {
+            id: "user-requester",
+            email: "operator-admin@atlas.local"
+          },
+          issuedByOrganization: {
+            id: actor.organization.id,
+            slug: actor.organization.slug,
+            name: actor.organization.name
+          },
+          targetOrganization: {
+            id: "org-buyer",
+            slug: "atlas-demo-buyer",
+            name: "Atlas Demo Buyer"
+          },
+          reviews: [
+            {
+              id: "review-2",
+              reviewType: "RECERTIFICATION",
+              decision: "APPROVED",
+              reason: "Recertified after confirming the investigation is still active.",
+              createdAt: new Date(),
+              reviewerUser: {
+                email: actor.user.email
+              },
+              reviewerOrganization: {
+                name: actor.organization.name
+              }
+            }
+          ]
+        }))
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    };
+    const client = {
+      supportAccessGrant: {
+        findUnique: vi.fn(async () => ({
+          id: "grant-1",
+          issuedByUserId: "user-requester",
+          issuedByOrganizationId: actor.organization.id,
+          targetOrganizationId: "org-buyer",
+          targetWorkspace: "BUYER",
+          authProviderMode: "IDENTITY_BRIDGE",
+          reason: "Investigate delayed settlement posture for a buyer tenant.",
+          status: "RECERTIFICATION_REQUIRED",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          lastReviewedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          reviewExpiresAt: new Date(Date.now() - 60 * 1000),
+          lastActivatedAt: null,
+          revokedAt: null,
+          revokedReason: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          issuedByUser: {
+            id: "user-requester",
+            email: "operator-admin@atlas.local"
+          },
+          issuedByOrganization: {
+            id: actor.organization.id,
+            slug: actor.organization.slug,
+            name: actor.organization.name
+          },
+          targetOrganization: {
+            id: "org-buyer",
+            slug: "atlas-demo-buyer",
+            name: "Atlas Demo Buyer"
+          },
+          reviews: []
+        })),
+        update: vi.fn()
+      },
+      $transaction: vi.fn(async (callback: (input: typeof transaction) => Promise<unknown>) => callback(transaction))
+    } as const;
+
+    const grant = await recertifySupportAccessGrant(
+      actor,
+      "grant-1",
+      {
+        reviewReason: "Recertified after confirming the investigation is still active."
+      },
+      client as never
+    );
+
+    expect(grant.status).toBe("ACTIVE");
+    expect(transaction.supportAccessGrantReview.create).toHaveBeenCalled();
+    expect(transaction.supportAccessGrant.update).toHaveBeenCalled();
   });
 });

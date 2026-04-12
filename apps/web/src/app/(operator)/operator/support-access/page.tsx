@@ -6,6 +6,7 @@ import { WorkflowFormField } from "@/components/workflow-form-field";
 import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import {
   createSupportAccessSessionAction,
+  recertifySupportAccessGrantAction,
   reviewSupportAccessGrantAction,
   revokeSupportAccessGrantAction
 } from "../actions";
@@ -41,7 +42,11 @@ export default async function OperatorSupportAccessPage() {
   ]);
   const pendingGrants = grants.filter((grant) => grant.status === "PENDING_REVIEW");
   const activeGrants = grants.filter((grant) => grant.status === "ACTIVE");
+  const recertificationRequiredGrants = grants.filter((grant) => grant.status === "RECERTIFICATION_REQUIRED");
   const reviewableGrants = pendingGrants.filter((grant) => grant.issuedByUserId !== resolution.actor.user.id);
+  const recertifiableGrants = recertificationRequiredGrants.filter(
+    (grant) => grant.issuedByUserId !== resolution.actor.user.id
+  );
 
   return (
     <div className="space-y-6">
@@ -70,6 +75,11 @@ export default async function OperatorSupportAccessPage() {
           label="Tracked grants"
           value={String(grants.length)}
           detail="Support grants now persist for review, activation, revoke, and later audit inspection."
+        />
+        <MetricCard
+          label="Recertification required"
+          value={String(recertificationRequiredGrants.length)}
+          detail="Active support scope now ages out of review and must be explicitly recertified before continued tenant inspection."
         />
       </section>
       <WorkflowFormPanel
@@ -211,6 +221,61 @@ export default async function OperatorSupportAccessPage() {
       </section>
       <section className="space-y-4">
         <PageHeader
+          eyebrow="Recertification"
+          title="Review renewal queue"
+          description="Support scope is now time-bounded by review. Active grants that age out must be recertified before operators continue using them."
+        />
+        {recertifiableGrants.length === 0 ? (
+          <Panel className="p-5">
+            <p className="text-sm text-[var(--atlas-muted)]">No support grants currently require recertification in this environment.</p>
+          </Panel>
+        ) : (
+          <div className="grid gap-4">
+            {recertifiableGrants.map((grant) => (
+              <Panel key={grant.id} className="space-y-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                    {grant.targetOrganizationName} ({grant.targetWorkspace})
+                  </p>
+                  <p className="text-sm text-[var(--atlas-muted)]">{grant.reason}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    {grant.status} · review expires {grant.reviewExpiresAt ? new Date(grant.reviewExpiresAt).toLocaleString() : "not set"}
+                  </p>
+                </div>
+                {grant.latestReview ? (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    Last review: {grant.latestReview.reviewType} · {grant.latestReview.decision} by {grant.latestReview.reviewerUserEmail}
+                  </p>
+                ) : null}
+                {recertifiableGrants.some((reviewableGrant) => reviewableGrant.id === grant.id) ? (
+                  <form action={recertifySupportAccessGrantAction.bind(null, grant.id)} className="grid gap-3">
+                    <input
+                      type="text"
+                      name="reviewReason"
+                      minLength={12}
+                      placeholder="Recertification reason for audit review"
+                      className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+                    >
+                      Recertify grant
+                    </button>
+                  </form>
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    A different operator admin or owner must recertify this grant.
+                  </p>
+                )}
+              </Panel>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="space-y-4">
+        <PageHeader
           eyebrow="Active grants"
           title="Approved support access"
           description="Approved grants can enter read-only support mode and can still be revoked deliberately when the investigation is complete."
@@ -234,7 +299,8 @@ export default async function OperatorSupportAccessPage() {
                 </div>
                 {grant.latestReview ? (
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
-                    Approved by {grant.latestReview.reviewerUserEmail} · reviewed {new Date(grant.latestReview.createdAt).toLocaleString()}
+                    Approved by {grant.latestReview.reviewerUserEmail} · reviewed {new Date(grant.latestReview.createdAt).toLocaleString()} · review expires{" "}
+                    {grant.reviewExpiresAt ? new Date(grant.reviewExpiresAt).toLocaleString() : "not set"}
                   </p>
                 ) : null}
                 <div className="grid gap-3 md:grid-cols-2">

@@ -27,6 +27,7 @@ export type AtlasPersistedAuthSessionRecord = {
   provider: string;
   providerSubject: string;
   source: "IDENTITY_PROVIDER";
+  authProviderMode: "IDENTITY_BRIDGE" | "EXTERNAL_OIDC";
   issuedAt: string;
   expiresAt: string;
   revokedAt: string | null;
@@ -36,6 +37,7 @@ export type AtlasPersistedAuthSessionRecord = {
 function mapPersistedAuthSession(session: {
   id: string;
   source: string;
+  authProviderMode: string;
   provider: string | null;
   providerSubject: string | null;
   expiresAt: Date;
@@ -68,6 +70,7 @@ function mapPersistedAuthSession(session: {
     provider: session.provider ?? "",
     providerSubject: session.providerSubject ?? "",
     source: session.source,
+    authProviderMode: session.authProviderMode === "EXTERNAL_OIDC" ? "EXTERNAL_OIDC" : "IDENTITY_BRIDGE",
     issuedAt: typeof metadata?.issuedAt === "string" ? metadata.issuedAt : session.lastSeenAt.toISOString(),
     expiresAt: session.expiresAt.toISOString(),
     revokedAt: session.revokedAt?.toISOString() ?? null,
@@ -125,6 +128,65 @@ export async function exchangeIdentityAssertionForSession(
     issuedAt: string;
     expiresAt: string;
     userName: string | null;
+  },
+  client: PrismaClient = prisma
+) {
+  return exchangeIdentitySession(
+    {
+      selection: input.selection,
+      subject: input.subject,
+      provider: input.provider,
+      issuedAt: input.issuedAt,
+      expiresAt: input.expiresAt,
+      userName: input.userName,
+      authProviderMode: "IDENTITY_BRIDGE",
+      metadata: {}
+    },
+    client
+  );
+}
+
+export async function exchangeExternalIdentityForSession(
+  input: {
+    selection: AtlasLocalSessionSelection;
+    subject: string;
+    provider: string;
+    issuer: string;
+    audience: string;
+    issuedAt: string;
+    expiresAt: string;
+    userName: string | null;
+  },
+  client: PrismaClient = prisma
+) {
+  return exchangeIdentitySession(
+    {
+      selection: input.selection,
+      subject: input.subject,
+      provider: input.provider,
+      issuedAt: input.issuedAt,
+      expiresAt: input.expiresAt,
+      userName: input.userName,
+      authProviderMode: "EXTERNAL_OIDC",
+      metadata: {
+        issuer: input.issuer,
+        audience: input.audience
+      }
+    },
+    client
+  );
+}
+
+async function exchangeIdentitySession(
+  input: {
+    selection: AtlasLocalSessionSelection;
+    subject: string;
+    provider: string;
+    issuedAt: string;
+    expiresAt: string;
+    userName: string | null;
+    authProviderMode: "IDENTITY_BRIDGE" | "EXTERNAL_OIDC";
+    metadata: Prisma.JsonObject;
   },
   client: PrismaClient = prisma
 ) {
@@ -199,13 +261,14 @@ export async function exchangeIdentityAssertionForSession(
         organizationId: membership.organization.id,
         membershipId: membership.id,
         source: "IDENTITY_PROVIDER",
-        authProviderMode: "IDENTITY_BRIDGE",
+        authProviderMode: input.authProviderMode,
         provider,
         providerSubject: subject,
         expiresAt,
         metadata: {
           issuedAt: issuedAt.toISOString(),
-          userName: input.userName
+          userName: input.userName,
+          ...input.metadata
         }
       },
       include: {
@@ -224,6 +287,7 @@ export async function exchangeIdentityAssertionForSession(
         provider,
         subject,
         membershipId: membership.id,
+        authProviderMode: input.authProviderMode,
         expiresAt: expiresAt.toISOString()
       }
     });

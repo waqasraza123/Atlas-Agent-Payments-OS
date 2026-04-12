@@ -45,7 +45,7 @@ export class HealthService {
   }
 
   private isSimulatedCheckMode() {
-    return appRuntime.nodeEnv === "test";
+    return process.env.NODE_ENV === "test" || appRuntime.nodeEnv === "test";
   }
 
   private async measureDependencyCheck(

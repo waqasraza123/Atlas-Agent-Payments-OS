@@ -1,5 +1,7 @@
+import { generateKeyPairSync } from "node:crypto";
 import { atlasLocalSessionCookieName } from "@atlas/auth";
 import {
+  createAtlasExternalIdentityTokenForSelection,
   createAtlasIdentityAssertionTokenForSelection,
   verifyAtlasSignedSessionToken
 } from "@atlas/auth/server";
@@ -8,9 +10,17 @@ import { authRuntime } from "@atlas/config";
 import { DELETE, POST } from "./route";
 
 const exchangeIdentityAssertionForSessionMock = vi.fn();
+const exchangeExternalIdentityForSessionMock = vi.fn();
+const externalOidcKeyPair = generateKeyPairSync("rsa", {
+  modulusLength: 2048
+});
+const externalOidcPublicJwk = externalOidcKeyPair.publicKey.export({
+  format: "jwk"
+}) as Record<string, unknown>;
 
 vi.mock("@atlas/database", () => ({
-  exchangeIdentityAssertionForSession: exchangeIdentityAssertionForSessionMock
+  exchangeIdentityAssertionForSession: exchangeIdentityAssertionForSessionMock,
+  exchangeExternalIdentityForSession: exchangeExternalIdentityForSessionMock
 }));
 
 async function createRequest(formEntries: Array<[string, string]>) {
@@ -29,6 +39,7 @@ async function createRequest(formEntries: Array<[string, string]>) {
 describe("local session route", () => {
   afterEach(() => {
     exchangeIdentityAssertionForSessionMock.mockReset();
+    exchangeExternalIdentityForSessionMock.mockReset();
     vi.unstubAllEnvs();
     vi.resetModules();
   });
@@ -131,7 +142,7 @@ describe("local session route", () => {
     exchangeIdentityAssertionForSessionMock.mockResolvedValue({
       id: "session-provider-1",
       provider: "generic-sso",
-      expiresAt: "2026-04-12T08:00:00.000Z"
+      expiresAt: "2027-04-12T08:00:00.000Z"
     });
 
     const { POST: exchangePost } = await import("../provider-exchange/route");
@@ -150,7 +161,7 @@ describe("local session route", () => {
         provider: "generic-sso",
         userName: "Buyer Admin",
         issuedAt: "2026-04-12T00:00:00.000Z",
-        expiresAt: "2026-04-12T08:00:00.000Z"
+        expiresAt: "2027-04-12T08:00:00.000Z"
       }
     );
 
@@ -169,5 +180,68 @@ describe("local session route", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/buyer");
     expect(response.cookies.get(atlasLocalSessionCookieName)?.value).toBeTruthy();
     expect(exchangeIdentityAssertionForSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("exchanges a direct external oidc token into a persisted provider session cookie", async () => {
+    vi.stubEnv("AUTH_PROVIDER_MODE", "external-oidc");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_ISSUER", "https://id.atlas.example");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_AUDIENCE", "atlas-agent-payments-os");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_PROVIDER", "okta-design-partner");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_JWKS_JSON", JSON.stringify({
+      keys: [
+        {
+          ...externalOidcPublicJwk,
+          kid: "atlas-test-key"
+        }
+      ]
+    }));
+    vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "480");
+    exchangeExternalIdentityForSessionMock.mockResolvedValue({
+      id: "session-oidc-1",
+      provider: "okta-design-partner",
+      expiresAt: "2027-04-12T08:00:00.000Z"
+    });
+
+    const { POST: exchangePost } = await import("../provider-exchange/route");
+    const identityToken = createAtlasExternalIdentityTokenForSelection(
+      externalOidcKeyPair.privateKey.export({
+        format: "pem",
+        type: "pkcs8"
+      }).toString(),
+      {
+        profileKey: null,
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      {
+        issuer: "https://id.atlas.example",
+        audience: "atlas-agent-payments-os",
+        provider: "okta-design-partner",
+        subject: "okta-subject-1",
+        keyId: "atlas-test-key",
+        userName: "Buyer Admin",
+        issuedAt: "2026-04-12T00:00:00.000Z",
+        expiresAt: "2027-04-12T08:00:00.000Z"
+      }
+    );
+
+    const formData = new FormData();
+    formData.set("identityToken", identityToken);
+    formData.set("redirectTo", "/buyer");
+
+    const response = await exchangePost(
+      new Request("http://localhost:3000/auth/provider-exchange", {
+        method: "POST",
+        body: formData
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/buyer");
+    expect(response.cookies.get(atlasLocalSessionCookieName)?.value).toBeTruthy();
+    expect(exchangeExternalIdentityForSessionMock).toHaveBeenCalledTimes(1);
   });
 });

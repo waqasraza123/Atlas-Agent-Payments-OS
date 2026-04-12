@@ -10,12 +10,13 @@ import {
 export const atlasLocalSessionCookieName = "atlas_local_session";
 export const atlasLocalSessionHeaderName = "x-atlas-local-session";
 export const atlasIdentityAssertionHeaderName = "x-atlas-auth-assertion";
+export const atlasExternalIdentityTokenHeaderName = "x-atlas-external-id-token";
 export const atlasSupportAccessMode = "read-only";
 export const atlasSignedSessionVersion = 1;
 export const atlasSupportAllowedMethods = ["GET", "HEAD", "OPTIONS"] as const;
 
-export type AtlasIdentityProviderMode = "local-signed" | "identity-bridge";
-export type AtlasSessionSource = "local-development" | "identity-provider" | "identity-bridge" | "internal-support";
+export type AtlasIdentityProviderMode = "local-signed" | "identity-bridge" | "external-oidc";
+export type AtlasSessionSource = "local-development" | "identity-provider" | "identity-bridge" | "external-oidc" | "internal-support";
 
 export type AtlasActorUser = {
   id: string;
@@ -112,6 +113,18 @@ export type AtlasIdentityAssertionPayload = {
   subject: string;
   provider: string;
   userName: string | null;
+};
+
+export type AtlasExternalIdentityPayload = {
+  issuer: string;
+  audience: string;
+  provider: string;
+  subject: string;
+  selection: AtlasLocalSessionSelection;
+  email: string;
+  userName: string | null;
+  issuedAt: string;
+  expiresAt: string;
 };
 
 export type AtlasSupportAccessGrantInput = {
@@ -359,6 +372,20 @@ export function canAtlasActorMutate(actor: AtlasActorContext) {
 
 export function canAtlasActorExportData(actor: AtlasActorContext) {
   return !isAtlasSupportAccessActor(actor);
+}
+
+export function canAtlasActorInspectAnalytics(actor: AtlasActorContext) {
+  return actor.workspace !== "OPERATOR" || !isAtlasSupportAccessActor(actor);
+}
+
+export function canAtlasActorAccessTenantRecord(
+  actor: AtlasActorContext,
+  input: {
+    organizationSlug: string;
+    workspace: OrganizationKind;
+  }
+) {
+  return actor.organization.slug === input.organizationSlug && actor.workspace === input.workspace;
 }
 
 export function canAtlasActorAccessWorkspace(

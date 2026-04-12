@@ -156,13 +156,32 @@ async function loadSupportAccessGrant(supportAccess: AtlasSupportAccessRecord) {
     return null;
   }
 
-  if (grant.status === "ACTIVE" && grant.expiresAt.getTime() <= Date.now()) {
+  if (
+    (grant.status === "ACTIVE" || grant.status === "RECERTIFICATION_REQUIRED") &&
+    grant.expiresAt.getTime() <= Date.now()
+  ) {
     return prisma.supportAccessGrant.update({
       where: {
         id: grant.id
       },
       data: {
         status: "EXPIRED"
+      },
+      include: {
+        issuedByUser: true,
+        issuedByOrganization: true,
+        targetOrganization: true
+      }
+    });
+  }
+
+  if (grant.status === "ACTIVE" && grant.reviewExpiresAt && grant.reviewExpiresAt.getTime() <= Date.now()) {
+    return prisma.supportAccessGrant.update({
+      where: {
+        id: grant.id
+      },
+      data: {
+        status: "RECERTIFICATION_REQUIRED"
       },
       include: {
         issuedByUser: true,
@@ -225,7 +244,7 @@ async function loadActorContext(input: {
       workspace: input.selection.workspace,
       agentId: input.selection.agentId,
       source: "identity-provider",
-      providerMode: "identity-bridge",
+      providerMode: persistedSession.authProviderMode === "EXTERNAL_OIDC" ? "external-oidc" : "identity-bridge",
       sessionId: persistedSession.id,
       sessionIssuedAt: input.issuedAt,
       sessionExpiresAt: input.expiresAt,

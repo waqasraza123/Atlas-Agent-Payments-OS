@@ -11,6 +11,7 @@ import {
   activateSupportAccessGrant,
   performOperatorCaseAction,
   issueSupportAccessGrant,
+  recertifySupportAccessGrant,
   reviewSupportAccessGrant,
   revokeSupportAccessGrant,
   AtlasOperatorWorkflowError,
@@ -158,11 +159,11 @@ export async function createSupportAccessSessionAction(formData: FormData) {
   }
 
   if (appRuntime.appEnv === "production") {
-    if (authRuntime.providerMode !== "identity-bridge") {
+    if (authRuntime.providerMode !== "identity-bridge" && authRuntime.providerMode !== "external-oidc") {
       redirectWithFeedback(
         "/operator/support-access",
         "Support scope rejected",
-        "Production support-access issuance requires the identity-bridge auth mode so operator identity is not derived from local session profiles.",
+        "Production support-access issuance requires an external or bridged identity-provider mode so operator identity is not derived from local session profiles.",
         "error"
       );
     }
@@ -244,5 +245,23 @@ export async function revokeSupportAccessGrantAction(grantId: string, formData: 
     );
   } catch (error) {
     redirectWithFeedback("/operator/support-access", "Support revoke failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function recertifySupportAccessGrantAction(grantId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const grant = await recertifySupportAccessGrant(actor, grantId, {
+      reviewReason: toTextValue(formData.get("reviewReason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Support grant recertified",
+      `Atlas extended review coverage for ${grant.targetOrganizationName}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Support recertification failed", normalizeActionError(error), "error");
   }
 }

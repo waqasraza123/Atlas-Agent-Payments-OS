@@ -1,4 +1,4 @@
-import type { AtlasActorContext } from "@atlas/auth";
+import { canAtlasActorExportData, canAtlasActorInspectAnalytics, type AtlasActorContext } from "@atlas/auth";
 import {
   exportBuyerRequestCsv,
   exportSellerRequestCsv,
@@ -14,10 +14,15 @@ import {
 } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import { rethrowAnalyticsReportingError } from "../shared/workflow-error";
+import { ForbiddenException } from "@nestjs/common";
 
 @Injectable()
 export class AnalyticsService {
   async getBuyerOverview(actor: AtlasActorContext) {
+    if (!canAtlasActorInspectAnalytics(actor)) {
+      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
+    }
+
     try {
       return {
         item: await getBuyerAnalytics(actor.organization.id)
@@ -28,6 +33,10 @@ export class AnalyticsService {
   }
 
   async listBuyerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
+    if (!canAtlasActorInspectAnalytics(actor)) {
+      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
+    }
+
     try {
       return {
         items: await listBuyerRequestAnalytics(actor.organization.id, query)
@@ -38,6 +47,10 @@ export class AnalyticsService {
   }
 
   async listBuyerActivity(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
+    if (!canAtlasActorInspectAnalytics(actor)) {
+      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
+    }
+
     try {
       return {
         items: await listBuyerActivityAnalytics(actor.organization.id, query)
@@ -48,6 +61,10 @@ export class AnalyticsService {
   }
 
   async exportBuyerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
+    if (!canAtlasActorExportData(actor)) {
+      throw new ForbiddenException("Support sessions cannot export tenant data.");
+    }
+
     try {
       return exportBuyerRequestCsv(actor.organization.id, query);
     } catch (error) {
@@ -56,6 +73,10 @@ export class AnalyticsService {
   }
 
   async getSellerOverview(actor: AtlasActorContext) {
+    if (!canAtlasActorInspectAnalytics(actor)) {
+      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
+    }
+
     try {
       return {
         item: await getSellerRevenueAnalytics(actor.organization.id)
@@ -66,6 +87,10 @@ export class AnalyticsService {
   }
 
   async listSellerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
+    if (!canAtlasActorInspectAnalytics(actor)) {
+      throw new ForbiddenException("Support sessions cannot inspect analytics from this route.");
+    }
+
     try {
       return {
         items: await listSellerRequestAnalytics(actor.organization.id, query)
@@ -76,6 +101,10 @@ export class AnalyticsService {
   }
 
   async exportSellerRequests(actor: AtlasActorContext, query: Record<string, string | string[] | undefined>) {
+    if (!canAtlasActorExportData(actor)) {
+      throw new ForbiddenException("Support sessions cannot export tenant data.");
+    }
+
     try {
       return exportSellerRequestCsv(actor.organization.id, query);
     } catch (error) {
@@ -121,4 +150,3 @@ export class AnalyticsService {
     }
   }
 }
-
