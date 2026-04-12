@@ -27,7 +27,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - enterprise SSO
 - SCIM or directory provisioning if justified later
 - stronger admin and support access review operations
-- direct external identity-provider lifecycle operations beyond the current assignment-backed exchange and lifecycle-governance baseline
+- live external identity-provider lifecycle operations beyond the current assignment-backed exchange, provider-aware adapters, and lifecycle-governance baseline
 
 ## Authorization Maturity Path
 
@@ -102,7 +102,7 @@ These are placeholders for tracked future work, not current claims:
 - formal directory provisioning and deprovisioning beyond the current campaign-driven support grant and identity-link governance baseline
 - broad public rollout security posture
 - hardened production auth beyond the current local-first, signed-session, and external OIDC exchange baseline
-- direct upstream identity-provider lifecycle operations beyond the current external OIDC exchange, persisted-session, assignment, and identity-link lifecycle baseline
+- live upstream identity-provider lifecycle operations beyond the current external OIDC exchange, persisted-session, assignment, identity-link lifecycle, and provider-aware adapter baseline
 
 ## Must Be Done Before Broad Real-World Rollout
 
@@ -113,6 +113,6 @@ These are placeholders for tracked future work, not current claims:
 - secrets management and rotation process
 - stronger operator access constraints
 - support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
-- real non-local restore ownership and secret-manager-native rotation execution
+- real non-local restore ownership and secret-manager-backed rotation execution ownership
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

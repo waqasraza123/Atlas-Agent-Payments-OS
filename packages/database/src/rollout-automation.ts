@@ -7,6 +7,8 @@ import {
   assertAtlasPromotionOperationalReadiness,
   assertAtlasPromotionReadiness,
   createAtlasReleaseManifest,
+  type AtlasAutomationAdapterResult,
+  type AtlasAutomationCommandResult,
   deploymentAutomationRuntime,
   deploymentRuntime,
   operationsRuntime,
@@ -20,6 +22,10 @@ import {
   type AtlasSecretRotationExecutionReport,
   type AtlasSecretRotationManifest,
   type AtlasRestoreDrillReport,
+  type AtlasSecretRotationProvider,
+  type AtlasRestoreDrillProvider,
+  type AtlasDeploymentAutomationProvider,
+  type AtlasUpstreamIdentityProvider,
   type AtlasUpstreamIdentityLifecycleAction,
   type AtlasUpstreamIdentityLifecycleReport,
   upstreamIdentityRuntime
@@ -62,17 +68,46 @@ function truncateOutput(value: string | null | undefined) {
   return normalized.length > 4000 ? normalized.slice(0, 4000) : normalized;
 }
 
+function readAdapterResult(stdout: string | null | undefined): AtlasAutomationAdapterResult | null {
+  const normalized = stdout?.trim() ?? "";
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as AtlasAutomationAdapterResult;
+
+    if (
+      parsed &&
+      parsed.version === 1 &&
+      typeof parsed.adapter === "string" &&
+      typeof parsed.provider === "string" &&
+      typeof parsed.operationId === "string" &&
+      typeof parsed.summary === "string" &&
+      parsed.metadata &&
+      typeof parsed.metadata === "object" &&
+      !Array.isArray(parsed.metadata)
+    ) {
+      return parsed;
+    }
+  } catch {}
+
+  return null;
+}
+
 function executeConfiguredCommand(
   mode: AtlasCommandAdapterMode,
   command: string | null,
   payload: Record<string, unknown>
-) {
+): AtlasAutomationCommandResult & { adapterResult: AtlasAutomationAdapterResult | null } {
   if (mode === "dry-run") {
     return {
       configured: Boolean(command),
       exitCode: null,
       stdout: "",
-      stderr: ""
+      stderr: "",
+      adapterResult: null
     };
   }
 
@@ -93,7 +128,8 @@ function executeConfiguredCommand(
     configured: true,
     exitCode: result.status,
     stdout: truncateOutput(result.stdout),
-    stderr: truncateOutput(result.stderr)
+    stderr: truncateOutput(result.stderr),
+    adapterResult: readAdapterResult(result.stdout)
   };
 }
 
@@ -173,8 +209,16 @@ export function listAtlasRestoreDrillReports(limit = 12) {
   return listArtifacts<AtlasRestoreDrillReport>(resolveRepoPath(restoreDrillRuntime.reportDirectory), limit);
 }
 
+export function findLatestAtlasRestoreDrillReport(targetEnvironment: AtlasAppEnvironment) {
+  return listAtlasRestoreDrillReports(50).find((report) => report.targetEnvironment === targetEnvironment) ?? null;
+}
+
 export function listAtlasSecretRotationExecutionReports(limit = 12) {
   return listArtifacts<AtlasSecretRotationExecutionReport>(resolveRepoPath(secretRotationRuntime.reportDirectory), limit);
+}
+
+export function findLatestAtlasSecretRotationExecutionReport(targetEnvironment: AtlasPromotionTarget) {
+  return listAtlasSecretRotationExecutionReports(50).find((report) => report.environment === targetEnvironment) ?? null;
 }
 
 export function listAtlasPromotionExecutionReports(limit = 12) {
@@ -218,6 +262,7 @@ export function executeAtlasRestoreDrill(input: {
   let execution: AtlasRestoreDrillReport["execution"] = null;
   let executionMode: AtlasCommandAdapterMode = "dry-run";
   let executor = "dry-run";
+  let adapterResult: AtlasAutomationAdapterResult | null = null;
 
   if (input.executeRestore) {
     executionMode = "command";
@@ -227,7 +272,9 @@ export function executeAtlasRestoreDrill(input: {
         backupPath,
         targetEnvironment,
         targetLabel,
-        targetHost: targetHost || null
+        targetHost: targetHost || null,
+        provider: restoreDrillRuntime.provider,
+        executeRestore: input.executeRestore
       });
 
       if (result.exitCode !== 0) {
@@ -238,6 +285,7 @@ export function executeAtlasRestoreDrill(input: {
       }
 
       executor = "configured-command";
+      adapterResult = result.adapterResult;
       execution = {
         databaseUrlRedacted: targetHost || "remote-target",
         stdout: result.stdout
@@ -288,6 +336,7 @@ export function executeAtlasRestoreDrill(input: {
     targetHost: targetHost || null,
     proofArtifactPath: reportPath,
     execution,
+    adapterResult,
     completedAt: new Date().toISOString()
   };
 
@@ -353,6 +402,10 @@ export function executeAtlasSecretRotation(input: {
     );
   }
 
+  const reportPath =
+    input.reportPath && input.reportPath.trim().length > 0
+      ? resolve(input.reportPath)
+      : resolveRepoPath(secretRotationRuntime.reportDirectory, environment, `${createTimestampFileFragment()}.json`);
   const report: AtlasSecretRotationExecutionReport = {
     version: 1,
     environment,
@@ -361,20 +414,120 @@ export function executeAtlasSecretRotation(input: {
     rotatedBy,
     reason,
     generatedAt,
+    reportPath,
     manifestPath,
     manifest,
-    command
+    command,
+    adapterResult: command.adapterResult
   };
-  const reportPath =
-    input.reportPath && input.reportPath.trim().length > 0
-      ? resolve(input.reportPath)
-      : resolveRepoPath(secretRotationRuntime.reportDirectory, environment, `${createTimestampFileFragment()}.json`);
 
   writeJsonArtifact(reportPath, report);
   return {
     report,
     reportPath,
     manifestPath
+  };
+}
+
+export function createAtlasPromotionBundle(input: {
+  fromEnv: AtlasPromotionTarget;
+  toEnv: AtlasPromotionTarget;
+  services: AtlasRuntimeService[];
+  envFile: string;
+  environment: Record<string, string | undefined>;
+  restoreReportPath: string;
+  restoreDrillReport: AtlasRestoreDrillReport;
+  secretRotationExecutionReportPath?: string | null;
+  secretRotationExecutionReport?: AtlasSecretRotationExecutionReport;
+  secretRotationManifestPath?: string | null;
+  secretRotationManifest: AtlasSecretRotationManifest;
+}) {
+  const timestamp = createTimestampFileFragment();
+  const outputDirectory = resolveRepoPath("release-manifests", input.toEnv, timestamp);
+  mkdirSync(outputDirectory, { recursive: true });
+
+  const manifestPaths = input.services.map((service) => {
+    const manifest = createAtlasReleaseManifest(service, input.environment);
+    const outputPath = resolve(outputDirectory, `${service}.json`);
+    const payload = `${JSON.stringify(
+      {
+        promotion: {
+          fromEnv: input.fromEnv,
+          toEnv: input.toEnv,
+          createdAt: new Date().toISOString(),
+          envFile: input.envFile
+        },
+        manifest
+      },
+      null,
+      2
+    )}\n`;
+    writeFileSync(outputPath, payload, "utf8");
+
+    return {
+      service,
+      outputPath,
+      sha256: computeAtlasFileSha256(outputPath)
+    };
+  });
+
+  const secretRotationProofPath = input.secretRotationExecutionReportPath ?? input.secretRotationManifestPath;
+
+  if (!secretRotationProofPath) {
+    throw new AtlasRolloutAutomationError("Promotion bundle requires a secret rotation proof path.", "bad_request");
+  }
+
+  const promotionBundlePath = resolve(outputDirectory, "promotion.json");
+  writeFileSync(
+    promotionBundlePath,
+    `${JSON.stringify(
+      {
+        promotion: {
+          fromEnv: input.fromEnv,
+          toEnv: input.toEnv,
+          createdAt: new Date().toISOString(),
+          envFile: input.envFile,
+          restoreReportPath: input.restoreReportPath,
+          secretRotationExecutionReportPath: input.secretRotationExecutionReportPath ?? null,
+          secretRotationManifestPath: input.secretRotationManifestPath ?? null
+        },
+        artifact: {
+          id: input.environment.RELEASE_ARTIFACT_ID,
+          sha256: input.environment.RELEASE_ARTIFACT_SHA256
+        },
+        operationalProof: {
+          restoreDrill: {
+            path: input.restoreReportPath,
+            sha256: computeAtlasFileSha256(input.restoreReportPath),
+            completedAt: input.restoreDrillReport.completedAt,
+            targetEnvironment: input.restoreDrillReport.targetEnvironment,
+            targetLabel: input.restoreDrillReport.targetLabel
+          },
+          secretRotation: {
+            path: secretRotationProofPath,
+            sha256: computeAtlasFileSha256(secretRotationProofPath),
+            generatedAt:
+              input.secretRotationExecutionReport?.generatedAt ?? input.secretRotationManifest.generatedAt,
+            environment: input.secretRotationManifest.environment,
+            rotatedBy: input.secretRotationManifest.rotatedBy,
+            provider: input.secretRotationExecutionReport?.provider ?? "manifest-only",
+            mode: input.secretRotationExecutionReport?.mode ?? "dry-run",
+            secretKeys: input.secretRotationManifest.secrets.map((secret) => secret.key)
+          }
+        },
+        revision: input.environment.APP_REVISION,
+        services: manifestPaths
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  return {
+    outputDirectory,
+    manifestPaths,
+    promotionBundlePath
   };
 }
 
@@ -409,7 +562,8 @@ export function executeAtlasPromotionAutomation(input: {
     toEnv,
     services: input.services,
     bundlePath,
-    bundleSha256
+    bundleSha256,
+    provider: deploymentAutomationRuntime.provider
   });
 
   if (command.exitCode !== null && command.exitCode !== 0) {
@@ -419,6 +573,11 @@ export function executeAtlasPromotionAutomation(input: {
     );
   }
 
+  const reportPath = resolveRepoPath(
+    deploymentAutomationRuntime.reportDirectory,
+    toEnv,
+    `${createTimestampFileFragment()}.json`
+  );
   const report: AtlasPromotionExecutionReport = {
     version: 1,
     fromEnv,
@@ -426,15 +585,13 @@ export function executeAtlasPromotionAutomation(input: {
     services: input.services,
     mode: deploymentAutomationRuntime.mode,
     generatedAt: new Date().toISOString(),
+    reportPath,
     bundlePath,
     bundleSha256,
-    command
+    provider: deploymentAutomationRuntime.provider,
+    command,
+    adapterResult: command.adapterResult
   };
-  const reportPath = resolveRepoPath(
-    deploymentAutomationRuntime.reportDirectory,
-    toEnv,
-    `${createTimestampFileFragment()}.json`
-  );
 
   writeJsonArtifact(reportPath, report);
   return {
@@ -470,24 +627,26 @@ export function executeAtlasUpstreamIdentityLifecycle(input: {
     );
   }
 
+  const reportPath = resolveRepoPath(
+    upstreamIdentityRuntime.reportDirectory,
+    input.assignment.organizationSlug,
+    `${createTimestampFileFragment()}-${input.action.toLowerCase()}.json`
+  );
   const report: AtlasUpstreamIdentityLifecycleReport = {
     version: 1,
     provider: upstreamIdentityRuntime.provider,
     mode: upstreamIdentityRuntime.mode,
     action: input.action,
     generatedAt: new Date().toISOString(),
+    reportPath,
     actorUserEmail: input.actor.user.email,
     assignmentId: input.assignment.id,
     externalEmail: input.assignment.externalEmail,
     organizationSlug: input.assignment.organizationSlug,
     role: input.assignment.role,
-    command
+    command,
+    adapterResult: command.adapterResult
   };
-  const reportPath = resolveRepoPath(
-    upstreamIdentityRuntime.reportDirectory,
-    input.assignment.organizationSlug,
-    `${createTimestampFileFragment()}-${input.action.toLowerCase()}.json`
-  );
 
   writeJsonArtifact(reportPath, report);
   return {

@@ -16,7 +16,7 @@ import { WorkflowFormField } from "@/components/workflow-form-field";
 import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { readWorkflowFeedback } from "@/lib/workflow-feedback";
-import { executeRestoreDrillAction, executeSecretRotationAction } from "../actions";
+import { executePromotionAutomationAction, executeRestoreDrillAction, executeSecretRotationAction } from "../actions";
 
 type OperatorRolloutPageProps = Readonly<{
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -64,7 +64,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
           detail={`${upstreamIdentityRuntime.provider} · ${upstreamIdentityRuntime.reportDirectory}`}
         />
       </section>
-      <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid gap-6 xl:grid-cols-3">
         <WorkflowFormPanel
           eyebrow="Restore proof"
           title="Run restore drill"
@@ -152,6 +152,52 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
             />
           </WorkflowFormField>
         </WorkflowFormPanel>
+        <WorkflowFormPanel
+          eyebrow="Promotion execution"
+          title="Run deployment promotion"
+          description="Use the latest target-environment restore and rotation proof to create a promotion bundle and dispatch the configured deployment runner."
+          action={executePromotionAutomationAction}
+          submitLabel="Execute promotion"
+        >
+          <WorkflowFormField label="From environment" hint="Promotions advance one environment at a time.">
+            <select
+              name="fromEnv"
+              defaultValue="development"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            >
+              <option value="development">Development</option>
+              <option value="staging">Staging</option>
+            </select>
+          </WorkflowFormField>
+          <WorkflowFormField label="To environment" hint="Atlas validates proof freshness against the promotion target.">
+            <select
+              name="toEnv"
+              defaultValue="staging"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            >
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+            </select>
+          </WorkflowFormField>
+          <WorkflowFormField label="Service set" hint="Use all for full environment promotion or a subset for staged rollout.">
+            <input
+              type="text"
+              name="services"
+              defaultValue="all"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              required
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Environment file" hint="This file provides the target-environment config snapshot used to build the promotion bundle.">
+            <input
+              type="text"
+              name="envFile"
+              defaultValue=".env.staging.example"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              required
+            />
+          </WorkflowFormField>
+        </WorkflowFormPanel>
       </section>
       <div className="grid gap-6 xl:grid-cols-2">
         <RecordListPanel
@@ -177,7 +223,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
             id: `${report.environment}-${report.generatedAt}`,
             title: `${report.environment} · ${report.provider}`,
             description: report.manifest.secrets.map((secret) => secret.key).join(", "),
-            detail: `${report.mode.toUpperCase()} · ${new Date(report.generatedAt).toLocaleString()}`,
+            detail: `${report.mode.toUpperCase()} · ${report.adapterResult?.operationId ?? "no operation id"} · ${new Date(report.generatedAt).toLocaleString()}`,
             statusLabel: report.mode === "command" ? "EXECUTED" : "DRY_RUN",
             statusTone: report.mode === "command" ? "success" : "default"
           }))}
@@ -192,7 +238,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
             id: `${report.toEnv}-${report.generatedAt}`,
             title: `${report.fromEnv} -> ${report.toEnv}`,
             description: report.services.join(", "),
-            detail: `${report.mode.toUpperCase()} · ${new Date(report.generatedAt).toLocaleString()}`,
+            detail: `${report.provider} · ${report.adapterResult?.operationId ?? "no operation id"} · ${new Date(report.generatedAt).toLocaleString()}`,
             statusLabel: report.mode === "command" ? "EXECUTED" : "DRY_RUN",
             statusTone: report.mode === "command" ? "success" : "default"
           }))}
@@ -207,7 +253,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
             id: `${report.assignmentId}-${report.generatedAt}`,
             title: `${report.action} ${report.externalEmail}`,
             description: `${report.provider} · ${report.organizationSlug}`,
-            detail: `${report.mode.toUpperCase()} · ${new Date(report.generatedAt).toLocaleString()}`,
+            detail: `${report.mode.toUpperCase()} · ${report.adapterResult?.operationId ?? "no operation id"} · ${new Date(report.generatedAt).toLocaleString()}`,
             statusLabel: report.mode === "command" ? "EXECUTED" : "DRY_RUN",
             statusTone: report.mode === "command" ? "success" : "default"
           }))}

@@ -1,18 +1,14 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   assertAtlasPromotionReadiness,
   canAtlasPromoteEnvironment,
-  createAtlasReleaseManifest,
   type AtlasRestoreDrillReport,
   type AtlasSecretRotationExecutionReport,
   type AtlasSecretRotationManifest,
   type AtlasPromotionTarget,
   type AtlasRuntimeService
 } from "../packages/config/src/index.ts";
-import { executeAtlasPromotionAutomation } from "../packages/database/src/rollout-automation.ts";
-import { parseEnvFile, resolveRepoPath } from "./lib/env-file";
+import { createAtlasPromotionBundle, executeAtlasPromotionAutomation } from "../packages/database/src/rollout-automation.ts";
+import { parseEnvFile } from "./lib/env-file";
 
 function readArgumentValue(flag: string) {
   const index = process.argv.indexOf(flag);
@@ -101,77 +97,19 @@ async function main() {
     ? secretRotationExecutionReport.manifest
     : readJsonFile<AtlasSecretRotationManifest>(secretRotationManifestPath as string);
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const outputDirectory = resolveRepoPath(join("release-manifests", toEnv, timestamp));
-  mkdirSync(outputDirectory, { recursive: true });
-
-  const manifestPaths = services.map((service) => {
-    const manifest = createAtlasReleaseManifest(service, environment);
-    const outputPath = join(outputDirectory, `${service}.json`);
-    const payload = `${JSON.stringify({
-      promotion: {
-        fromEnv,
-        toEnv,
-        createdAt: new Date().toISOString(),
-        envFile
-      },
-      manifest
-    }, null, 2)}\n`;
-    writeFileSync(outputPath, payload, "utf8");
-    return {
-      service,
-      outputPath,
-      sha256: createHash("sha256").update(payload).digest("hex")
-    };
+  const bundle = createAtlasPromotionBundle({
+    fromEnv,
+    toEnv,
+    services,
+    envFile,
+    environment,
+    restoreReportPath,
+    restoreDrillReport,
+    secretRotationExecutionReportPath,
+    secretRotationExecutionReport,
+    secretRotationManifestPath,
+    secretRotationManifest
   });
-
-  const promotionBundlePath = join(outputDirectory, "promotion.json");
-  writeFileSync(
-    promotionBundlePath,
-    `${JSON.stringify(
-      {
-        promotion: {
-          fromEnv,
-          toEnv,
-          createdAt: new Date().toISOString(),
-          envFile,
-          restoreReportPath,
-          secretRotationExecutionReportPath,
-          secretRotationManifestPath
-        },
-        artifact: {
-          id: environment.RELEASE_ARTIFACT_ID,
-          sha256: environment.RELEASE_ARTIFACT_SHA256
-        },
-        operationalProof: {
-          restoreDrill: {
-            path: restoreReportPath,
-            sha256: createHash("sha256").update(readFileSync(restoreReportPath)).digest("hex"),
-            completedAt: restoreDrillReport.completedAt,
-            targetEnvironment: restoreDrillReport.targetEnvironment,
-            targetLabel: restoreDrillReport.targetLabel
-          },
-          secretRotation: {
-            path: secretRotationExecutionReportPath ?? secretRotationManifestPath,
-            sha256: createHash("sha256")
-              .update(readFileSync(secretRotationExecutionReportPath ?? (secretRotationManifestPath as string)))
-              .digest("hex"),
-            generatedAt: secretRotationExecutionReport?.generatedAt ?? secretRotationManifest.generatedAt,
-            environment: secretRotationManifest.environment,
-            rotatedBy: secretRotationManifest.rotatedBy,
-            provider: secretRotationExecutionReport?.provider ?? "manifest-only",
-            mode: secretRotationExecutionReport?.mode ?? "dry-run",
-            secretKeys: secretRotationManifest.secrets.map((secret) => secret.key)
-          }
-        },
-        revision: environment.APP_REVISION,
-        services: manifestPaths
-      },
-      null,
-      2
-    )}\n`,
-    "utf8"
-  );
 
   const promotionExecution = executeAtlasPromotionAutomation({
     fromEnv,
@@ -181,11 +119,15 @@ async function main() {
     secretRotationManifest,
     secretRotationExecutionReport,
     environment,
-    bundlePath: promotionBundlePath
+    bundlePath: bundle.promotionBundlePath
   });
 
   process.stdout.write(
-    `${[...manifestPaths.map((manifest) => manifest.outputPath), promotionBundlePath, promotionExecution.reportPath].join("\n")}\n`
+    `${[
+      ...bundle.manifestPaths.map((manifest) => manifest.outputPath),
+      bundle.promotionBundlePath,
+      promotionExecution.reportPath
+    ].join("\n")}\n`
   );
 }
 

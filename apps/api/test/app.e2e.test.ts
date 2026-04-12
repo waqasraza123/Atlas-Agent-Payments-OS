@@ -975,10 +975,11 @@ const databaseMock = vi.hoisted(() => ({
   listAtlasUpstreamIdentityLifecycleReports: vi.fn(async () => [
     {
       version: 1,
-      provider: "okta-scim-staging",
+      provider: "okta-scim",
       mode: "dry-run",
       action: "PROVISION",
       generatedAt: new Date().toISOString(),
+      reportPath: "/tmp/upstream-list.json",
       actorUserEmail: "operator-admin@atlas.local",
       assignmentId: "assignment-1",
       externalEmail: "buyer-admin@example.com",
@@ -989,16 +990,18 @@ const databaseMock = vi.hoisted(() => ({
         exitCode: null,
         stdout: "",
         stderr: ""
-      }
+      },
+      adapterResult: null
     }
   ]),
   executeAtlasUpstreamIdentityLifecycle: vi.fn(() => ({
     report: {
       version: 1,
-      provider: "okta-scim-staging",
+      provider: "okta-scim",
       mode: "dry-run",
       action: "PROVISION",
       generatedAt: new Date().toISOString(),
+      reportPath: "/tmp/upstream.json",
       actorUserEmail: "operator-admin@atlas.local",
       assignmentId: "assignment-created",
       externalEmail: "seller-admin@example.com",
@@ -1009,7 +1012,8 @@ const databaseMock = vi.hoisted(() => ({
         exitCode: null,
         stdout: "",
         stderr: ""
-      }
+      },
+      adapterResult: null
     },
     reportPath: "/tmp/upstream.json"
   })),

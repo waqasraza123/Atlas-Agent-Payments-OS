@@ -36,6 +36,10 @@ const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
 const atlasCommandAdapterModes = ["dry-run", "command"] as const;
+const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
+const atlasRestoreDrillProviders = ["local-psql", "ssh-postgres", "kubernetes-job"] as const;
+const atlasSecretRotationProviders = ["generic-secret-manager", "aws-secrets-manager", "hashicorp-vault"] as const;
+const atlasDeploymentAutomationProviders = ["generic-deployer", "github-actions", "argo-rollouts"] as const;
 const atlasDefaultSecretRotationKeys = [
   "AUTH_SESSION_SIGNING_SECRET",
   "AUTH_IDENTITY_BRIDGE_SECRET",
@@ -82,6 +86,30 @@ function readCommandAdapterMode(value: string | undefined, fallback: AtlasComman
     : fallback;
 }
 
+function readUpstreamIdentityProvider(value: string | undefined) {
+  return atlasUpstreamIdentityProviders.includes(value as AtlasUpstreamIdentityProvider)
+    ? (value as AtlasUpstreamIdentityProvider)
+    : "generic-oidc-admin";
+}
+
+function readRestoreDrillProvider(value: string | undefined) {
+  return atlasRestoreDrillProviders.includes(value as AtlasRestoreDrillProvider)
+    ? (value as AtlasRestoreDrillProvider)
+    : "local-psql";
+}
+
+function readSecretRotationProvider(value: string | undefined) {
+  return atlasSecretRotationProviders.includes(value as AtlasSecretRotationProvider)
+    ? (value as AtlasSecretRotationProvider)
+    : "generic-secret-manager";
+}
+
+function readDeploymentAutomationProvider(value: string | undefined) {
+  return atlasDeploymentAutomationProviders.includes(value as AtlasDeploymentAutomationProvider)
+    ? (value as AtlasDeploymentAutomationProvider)
+    : "generic-deployer";
+}
+
 export const atlasProduct = {
   name: "Atlas Agent Payments OS",
   summary: "Premium controls for managed AI agent spend across paid APIs and digital services."
@@ -91,6 +119,10 @@ export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
 export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
+export type AtlasUpstreamIdentityProvider = (typeof atlasUpstreamIdentityProviders)[number];
+export type AtlasRestoreDrillProvider = (typeof atlasRestoreDrillProviders)[number];
+export type AtlasSecretRotationProvider = (typeof atlasSecretRotationProviders)[number];
+export type AtlasDeploymentAutomationProvider = (typeof atlasDeploymentAutomationProviders)[number];
 export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
 export type AtlasRuntimeService = "api" | "web" | "worker";
 export type AtlasPromotionTarget = Exclude<AtlasAppEnvironment, "local">;
@@ -149,9 +181,13 @@ export const authRuntime = {
 
 export const upstreamIdentityRuntime = {
   mode: readCommandAdapterMode(process.env.AUTH_UPSTREAM_IDENTITY_MODE, "dry-run"),
-  provider: readText(process.env.AUTH_UPSTREAM_IDENTITY_PROVIDER, "generic-oidc-admin"),
+  provider: readUpstreamIdentityProvider(process.env.AUTH_UPSTREAM_IDENTITY_PROVIDER),
   command: readOptionalText(process.env.AUTH_UPSTREAM_IDENTITY_COMMAND),
-  reportDirectory: readText(process.env.AUTH_UPSTREAM_IDENTITY_REPORT_DIR, "operations-artifacts/upstream-identity")
+  reportDirectory: readText(process.env.AUTH_UPSTREAM_IDENTITY_REPORT_DIR, "operations-artifacts/upstream-identity"),
+  oktaOrgUrl: readOptionalText(process.env.AUTH_OKTA_ORG_URL),
+  oktaScimAppId: readOptionalText(process.env.AUTH_OKTA_SCIM_APP_ID),
+  auth0Domain: readOptionalText(process.env.AUTH_AUTH0_DOMAIN),
+  auth0OrganizationId: readOptionalText(process.env.AUTH_AUTH0_ORGANIZATION_ID)
 } as const;
 
 export const apiRuntime = {
@@ -209,21 +245,34 @@ export const operationsRuntime = readOperationsRuntime(process.env);
 export const restoreDrillRuntime = {
   mode: readCommandAdapterMode(process.env.RESTORE_DRILL_MODE, "dry-run"),
   command: readOptionalText(process.env.RESTORE_DRILL_COMMAND),
-  reportDirectory: readText(process.env.RESTORE_DRILL_REPORT_DIR, "restore-drills")
+  provider: readRestoreDrillProvider(process.env.RESTORE_DRILL_PROVIDER),
+  reportDirectory: readText(process.env.RESTORE_DRILL_REPORT_DIR, "restore-drills"),
+  sshDestination: readOptionalText(process.env.RESTORE_DRILL_SSH_DESTINATION),
+  kubernetesNamespace: readOptionalText(process.env.RESTORE_DRILL_KUBERNETES_NAMESPACE),
+  kubernetesJobTemplate: readOptionalText(process.env.RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE)
 } as const;
 
 export const secretRotationRuntime = {
   mode: readCommandAdapterMode(process.env.SECRET_ROTATION_MODE, "dry-run"),
-  provider: readText(process.env.SECRET_ROTATION_PROVIDER, "generic-secret-manager"),
+  provider: readSecretRotationProvider(process.env.SECRET_ROTATION_PROVIDER),
   command: readOptionalText(process.env.SECRET_ROTATION_COMMAND),
   reportDirectory: readText(process.env.SECRET_ROTATION_REPORT_DIR, "rotation-executions"),
-  manifestDirectory: readText(process.env.SECRET_ROTATION_MANIFEST_DIR, "rotation-manifests")
+  manifestDirectory: readText(process.env.SECRET_ROTATION_MANIFEST_DIR, "rotation-manifests"),
+  awsRegion: readOptionalText(process.env.SECRET_ROTATION_AWS_REGION),
+  awsPrefix: readOptionalText(process.env.SECRET_ROTATION_AWS_PREFIX),
+  vaultAddress: readOptionalText(process.env.SECRET_ROTATION_VAULT_ADDR),
+  vaultMount: readOptionalText(process.env.SECRET_ROTATION_VAULT_MOUNT)
 } as const;
 
 export const deploymentAutomationRuntime = {
   mode: readCommandAdapterMode(process.env.DEPLOYMENT_AUTOMATION_MODE, "dry-run"),
   command: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_COMMAND),
-  reportDirectory: readText(process.env.DEPLOYMENT_AUTOMATION_REPORT_DIR, "promotion-executions")
+  provider: readDeploymentAutomationProvider(process.env.DEPLOYMENT_AUTOMATION_PROVIDER),
+  reportDirectory: readText(process.env.DEPLOYMENT_AUTOMATION_REPORT_DIR, "promotion-executions"),
+  githubRepository: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY),
+  githubWorkflow: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW),
+  argoServer: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_SERVER),
+  argoApplication: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_APPLICATION)
 } as const;
 
 export function createAtlasStructuredLogPayload(
@@ -319,6 +368,23 @@ export type AtlasSecretRotationManifest = {
   }>;
 };
 
+export type AtlasAutomationCommandResult = {
+  configured: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+};
+
+export type AtlasAutomationAdapterResult = {
+  version: 1;
+  adapter: string;
+  provider: string;
+  operationId: string;
+  summary: string;
+  targetRef: string | null;
+  metadata: Record<string, string | number | boolean | null>;
+};
+
 export type AtlasSecretRotationExecutionReport = {
   version: 1;
   environment: AtlasPromotionTarget;
@@ -327,14 +393,11 @@ export type AtlasSecretRotationExecutionReport = {
   rotatedBy: string;
   reason: string;
   generatedAt: string;
+  reportPath: string;
   manifestPath: string;
   manifest: AtlasSecretRotationManifest;
-  command: {
-    configured: boolean;
-    exitCode: number | null;
-    stdout: string;
-    stderr: string;
-  } | null;
+  command: AtlasAutomationCommandResult | null;
+  adapterResult: AtlasAutomationAdapterResult | null;
 };
 
 export type AtlasRestoreDrillReport = {
@@ -362,6 +425,7 @@ export type AtlasRestoreDrillReport = {
     databaseUrlRedacted: string;
     stdout: string;
   } | null;
+  adapterResult: AtlasAutomationAdapterResult | null;
   completedAt: string;
 };
 
@@ -372,14 +436,12 @@ export type AtlasPromotionExecutionReport = {
   services: AtlasRuntimeService[];
   mode: AtlasCommandAdapterMode;
   generatedAt: string;
+  reportPath: string;
   bundlePath: string;
   bundleSha256: string;
-  command: {
-    configured: boolean;
-    exitCode: number | null;
-    stdout: string;
-    stderr: string;
-  } | null;
+  provider: string;
+  command: AtlasAutomationCommandResult | null;
+  adapterResult: AtlasAutomationAdapterResult | null;
 };
 
 export type AtlasUpstreamIdentityLifecycleAction = "PROVISION" | "SUSPEND" | "REACTIVATE" | "REVOKE";
@@ -390,17 +452,14 @@ export type AtlasUpstreamIdentityLifecycleReport = {
   mode: AtlasCommandAdapterMode;
   action: AtlasUpstreamIdentityLifecycleAction;
   generatedAt: string;
+  reportPath: string;
   actorUserEmail: string;
   assignmentId: string;
   externalEmail: string;
   organizationSlug: string;
   role: string;
-  command: {
-    configured: boolean;
-    exitCode: number | null;
-    stdout: string;
-    stderr: string;
-  } | null;
+  command: AtlasAutomationCommandResult | null;
+  adapterResult: AtlasAutomationAdapterResult | null;
 };
 
 function atlasBaseRuntimeVariables() {
@@ -439,6 +498,22 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
     "NEXT_PUBLIC_APP_URL",
     "API_BASE_URL"
   ] as const;
+}
+
+function requireRuntimeVariable(
+  issues: AtlasRuntimeValidationIssue[],
+  env: Record<string, string | undefined>,
+  variable: string,
+  message: string
+) {
+  const value = env[variable];
+
+  if (!value || value.trim().length === 0) {
+    issues.push({
+      variable,
+      message
+    });
+  }
 }
 
 export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
@@ -514,6 +589,136 @@ export function validateAtlasRuntimeConfiguration(
           message: `${requirement.variable} is required when ${requirement.modeVariable}=command.`
         });
       }
+    }
+  }
+
+  if (readCommandAdapterMode(env.AUTH_UPSTREAM_IDENTITY_MODE, "dry-run") === "command") {
+    const provider = readUpstreamIdentityProvider(env.AUTH_UPSTREAM_IDENTITY_PROVIDER);
+
+    if (provider === "okta-scim") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_OKTA_ORG_URL",
+        "AUTH_OKTA_ORG_URL is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=okta-scim."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_OKTA_SCIM_APP_ID",
+        "AUTH_OKTA_SCIM_APP_ID is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=okta-scim."
+      );
+    }
+
+    if (provider === "auth0-management") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_AUTH0_DOMAIN",
+        "AUTH_AUTH0_DOMAIN is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=auth0-management."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_AUTH0_ORGANIZATION_ID",
+        "AUTH_AUTH0_ORGANIZATION_ID is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=auth0-management."
+      );
+    }
+  }
+
+  if (readCommandAdapterMode(env.RESTORE_DRILL_MODE, "dry-run") === "command") {
+    const provider = readRestoreDrillProvider(env.RESTORE_DRILL_PROVIDER);
+
+    if (provider === "ssh-postgres") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "RESTORE_DRILL_SSH_DESTINATION",
+        "RESTORE_DRILL_SSH_DESTINATION is required when RESTORE_DRILL_PROVIDER=ssh-postgres."
+      );
+    }
+
+    if (provider === "kubernetes-job") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "RESTORE_DRILL_KUBERNETES_NAMESPACE",
+        "RESTORE_DRILL_KUBERNETES_NAMESPACE is required when RESTORE_DRILL_PROVIDER=kubernetes-job."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE",
+        "RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE is required when RESTORE_DRILL_PROVIDER=kubernetes-job."
+      );
+    }
+  }
+
+  if (readCommandAdapterMode(env.SECRET_ROTATION_MODE, "dry-run") === "command") {
+    const provider = readSecretRotationProvider(env.SECRET_ROTATION_PROVIDER);
+
+    if (provider === "aws-secrets-manager") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "SECRET_ROTATION_AWS_REGION",
+        "SECRET_ROTATION_AWS_REGION is required when SECRET_ROTATION_PROVIDER=aws-secrets-manager."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "SECRET_ROTATION_AWS_PREFIX",
+        "SECRET_ROTATION_AWS_PREFIX is required when SECRET_ROTATION_PROVIDER=aws-secrets-manager."
+      );
+    }
+
+    if (provider === "hashicorp-vault") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "SECRET_ROTATION_VAULT_ADDR",
+        "SECRET_ROTATION_VAULT_ADDR is required when SECRET_ROTATION_PROVIDER=hashicorp-vault."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "SECRET_ROTATION_VAULT_MOUNT",
+        "SECRET_ROTATION_VAULT_MOUNT is required when SECRET_ROTATION_PROVIDER=hashicorp-vault."
+      );
+    }
+  }
+
+  if (readCommandAdapterMode(env.DEPLOYMENT_AUTOMATION_MODE, "dry-run") === "command") {
+    const provider = readDeploymentAutomationProvider(env.DEPLOYMENT_AUTOMATION_PROVIDER);
+
+    if (provider === "github-actions") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY",
+        "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY is required when DEPLOYMENT_AUTOMATION_PROVIDER=github-actions."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW",
+        "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW is required when DEPLOYMENT_AUTOMATION_PROVIDER=github-actions."
+      );
+    }
+
+    if (provider === "argo-rollouts") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "DEPLOYMENT_AUTOMATION_ARGO_SERVER",
+        "DEPLOYMENT_AUTOMATION_ARGO_SERVER is required when DEPLOYMENT_AUTOMATION_PROVIDER=argo-rollouts."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "DEPLOYMENT_AUTOMATION_ARGO_APPLICATION",
+        "DEPLOYMENT_AUTOMATION_ARGO_APPLICATION is required when DEPLOYMENT_AUTOMATION_PROVIDER=argo-rollouts."
+      );
     }
   }
 
@@ -726,6 +931,47 @@ export function validateAtlasSecretRotationExecutionReport(
     issues.push("Secret rotation execution report must include the stored manifest path.");
   }
 
+  if (report.adapterResult) {
+    issues.push(...validateAtlasAutomationAdapterResult(report.adapterResult, report.provider));
+  }
+
+  return issues;
+}
+
+export function validateAtlasAutomationAdapterResult(
+  adapterResult: AtlasAutomationAdapterResult,
+  expectedProvider?: string
+) {
+  const issues: string[] = [];
+
+  if (adapterResult.version !== 1) {
+    issues.push("Automation adapter result version must equal 1.");
+  }
+
+  if (typeof adapterResult.adapter !== "string" || adapterResult.adapter.trim().length < 2) {
+    issues.push("Automation adapter result must include an adapter label.");
+  }
+
+  if (typeof adapterResult.provider !== "string" || adapterResult.provider.trim().length < 2) {
+    issues.push("Automation adapter result must include a provider label.");
+  }
+
+  if (expectedProvider && adapterResult.provider !== expectedProvider) {
+    issues.push(`Automation adapter result provider must equal ${expectedProvider}.`);
+  }
+
+  if (typeof adapterResult.operationId !== "string" || adapterResult.operationId.trim().length < 6) {
+    issues.push("Automation adapter result must include a durable operationId.");
+  }
+
+  if (typeof adapterResult.summary !== "string" || adapterResult.summary.trim().length < 6) {
+    issues.push("Automation adapter result must include an execution summary.");
+  }
+
+  if (!adapterResult.metadata || typeof adapterResult.metadata !== "object" || Array.isArray(adapterResult.metadata)) {
+    issues.push("Automation adapter result must include metadata.");
+  }
+
   return issues;
 }
 
@@ -735,6 +981,7 @@ export function validateAtlasRestoreDrillReport(
   env: Record<string, string | undefined> = process.env
 ) {
   const runtime = readOperationsRuntime(env);
+  const restoreProvider = readRestoreDrillProvider(env.RESTORE_DRILL_PROVIDER);
   const issues: string[] = [];
 
   if (report.version !== 1) {
@@ -759,6 +1006,10 @@ export function validateAtlasRestoreDrillReport(
 
   if (typeof report.executor !== "string" || report.executor.trim().length < 2) {
     issues.push("Restore drill report must include the executor label.");
+  }
+
+  if (report.adapterResult) {
+    issues.push(...validateAtlasAutomationAdapterResult(report.adapterResult, restoreProvider));
   }
 
   validateTimestampAge("Restore drill completedAt", report.completedAt, runtime.restoreDrillMaxAgeHours, issues);

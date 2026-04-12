@@ -52,9 +52,13 @@ describe("atlas config", () => {
     expect(programmableSettlementRuntime.chainId).toBe(84532);
     expect(storageRuntime.bucketReceipts).toBe("atlas-receipts");
     expect(upstreamIdentityRuntime.mode).toBe("dry-run");
+    expect(upstreamIdentityRuntime.provider).toBe("generic-oidc-admin");
+    expect(restoreDrillRuntime.provider).toBe("local-psql");
     expect(restoreDrillRuntime.mode).toBe("dry-run");
     expect(secretRotationRuntime.mode).toBe("dry-run");
+    expect(secretRotationRuntime.provider).toBe("generic-secret-manager");
     expect(deploymentAutomationRuntime.mode).toBe("dry-run");
+    expect(deploymentAutomationRuntime.provider).toBe("generic-deployer");
     expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
     expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
     expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
@@ -135,6 +139,15 @@ describe("atlas config", () => {
           databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
           stdout: "RESTORE"
         },
+        adapterResult: {
+          version: 1,
+          adapter: "kubernetes-restore-job",
+          provider: "local-psql",
+          operationId: "local-psql-123456",
+          summary: "Executed restore drill.",
+          targetRef: "postgres.staging.internal",
+          metadata: {}
+        },
         completedAt: new Date().toISOString()
       })
     ).toEqual([]);
@@ -147,6 +160,7 @@ describe("atlas config", () => {
         rotatedBy: "operator-admin@atlas.local",
         reason: "Rotate shared staging secrets before partner validation.",
         generatedAt: new Date().toISOString(),
+        reportPath: "/tmp/rotation-report.json",
         manifestPath: "/tmp/rotation-manifest.json",
         manifest: {
           version: 1,
@@ -169,6 +183,15 @@ describe("atlas config", () => {
           exitCode: 0,
           stdout: "rotated",
           stderr: ""
+        },
+        adapterResult: {
+          version: 1,
+          adapter: "aws-secrets-manager-rotation",
+          provider: "aws-secrets-manager",
+          operationId: "aws-secrets-manager-123456",
+          summary: "Rotate 6 secrets for staging.",
+          targetRef: "us-east-1:atlas/staging",
+          metadata: {}
         }
       })
     ).toEqual([]);
@@ -199,6 +222,15 @@ describe("atlas config", () => {
             databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
             stdout: "RESTORE"
           },
+          adapterResult: {
+            version: 1,
+            adapter: "kubernetes-restore-job",
+            provider: "local-psql",
+            operationId: "local-psql-123456",
+            summary: "Executed restore drill.",
+            targetRef: "postgres.staging.internal",
+            metadata: {}
+          },
           completedAt: new Date().toISOString()
         },
         secretRotationExecutionReport: {
@@ -209,6 +241,7 @@ describe("atlas config", () => {
           rotatedBy: "operator-admin@atlas.local",
           reason: "Rotate shared staging secrets before partner validation.",
           generatedAt: new Date().toISOString(),
+          reportPath: "/tmp/rotation-report.json",
           manifestPath: "/tmp/rotation-manifest.json",
           manifest: {
             version: 1,
@@ -231,6 +264,15 @@ describe("atlas config", () => {
             exitCode: 0,
             stdout: "rotated",
             stderr: ""
+          },
+          adapterResult: {
+            version: 1,
+            adapter: "aws-secrets-manager-rotation",
+            provider: "aws-secrets-manager",
+            operationId: "aws-secrets-manager-123456",
+            summary: "Rotate 6 secrets for staging.",
+            targetRef: "us-east-1:atlas/staging",
+            metadata: {}
           }
         }
       })
@@ -249,6 +291,8 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_MODE", "command");
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_PROVIDER", "okta-scim");
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", "atlas-identity-admin --payload \"$ATLAS_OPERATION_PAYLOAD\"");
+    vi.stubEnv("AUTH_OKTA_ORG_URL", "https://atlas.okta.example");
+    vi.stubEnv("AUTH_OKTA_SCIM_APP_ID", "atlas-okta-app");
     vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "240");
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
@@ -272,7 +316,10 @@ describe("atlas config", () => {
     vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
     vi.stubEnv("RESTORE_DRILL_MAX_AGE_HOURS", "168");
     vi.stubEnv("RESTORE_DRILL_MODE", "command");
+    vi.stubEnv("RESTORE_DRILL_PROVIDER", "kubernetes-job");
     vi.stubEnv("RESTORE_DRILL_COMMAND", "atlas-restore-drill --payload \"$ATLAS_OPERATION_PAYLOAD\"");
+    vi.stubEnv("RESTORE_DRILL_KUBERNETES_NAMESPACE", "atlas-staging");
+    vi.stubEnv("RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE", "atlas-restore-drill");
     vi.stubEnv("SECRET_ROTATION_MAX_AGE_HOURS", "720");
     vi.stubEnv(
       "SECRET_ROTATION_REQUIRED_KEYS",
@@ -283,8 +330,13 @@ describe("atlas config", () => {
     vi.stubEnv("SECRET_ROTATION_MODE", "command");
     vi.stubEnv("SECRET_ROTATION_PROVIDER", "aws-secrets-manager");
     vi.stubEnv("SECRET_ROTATION_COMMAND", "atlas-secret-rotation --payload \"$ATLAS_OPERATION_PAYLOAD\"");
+    vi.stubEnv("SECRET_ROTATION_AWS_REGION", "us-east-1");
+    vi.stubEnv("SECRET_ROTATION_AWS_PREFIX", "atlas/staging");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_MODE", "command");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_PROVIDER", "github-actions");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_COMMAND", "atlas-deploy --payload \"$ATLAS_OPERATION_PAYLOAD\"");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY", "atlas/payments-os");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW", "deploy-staging");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_ENABLED", "true");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_KEY", "BASE_MAINNET");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_ID", "8453");
@@ -350,8 +402,11 @@ describe("atlas config", () => {
     expect(storageRuntime.port).toBe(9100);
     expect(storageRuntime.useSsl).toBe(true);
     expect(restoreDrillRuntime.mode).toBe("command");
+    expect(restoreDrillRuntime.provider).toBe("kubernetes-job");
     expect(secretRotationRuntime.mode).toBe("command");
+    expect(secretRotationRuntime.provider).toBe("aws-secrets-manager");
     expect(deploymentAutomationRuntime.mode).toBe("command");
+    expect(deploymentAutomationRuntime.provider).toBe("github-actions");
     expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
     expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
     expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
@@ -429,6 +484,61 @@ describe("atlas config", () => {
       ok: true
     });
     expect(validateAtlasPromotionReadiness("production")).toEqual([]);
+  });
+
+  it("requires provider-specific adapter variables for command integrations", async () => {
+    vi.stubEnv("APP_ENV", "staging");
+    vi.stubEnv("AUTH_PROVIDER_MODE", "external-oidc");
+    vi.stubEnv("AUTH_SESSION_SIGNING_SECRET", "atlas-secret");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_ISSUER", "https://id.atlas.example");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_AUDIENCE", "atlas-agent-payments-os");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_PROVIDER", "external-oidc");
+    vi.stubEnv("AUTH_EXTERNAL_OIDC_JWKS_JSON", '{"keys":[]}');
+    vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "480");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
+    vi.stubEnv("API_PORT", "4000");
+    vi.stubEnv("API_BASE_URL", "https://api.atlas.example");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.example");
+    vi.stubEnv("DATABASE_URL", "postgresql://atlas:atlas@127.0.0.1:5432/atlas");
+    vi.stubEnv("REDIS_URL", "redis://127.0.0.1:6379");
+    vi.stubEnv("MINIO_ENDPOINT", "minio.atlas.example");
+    vi.stubEnv("MINIO_PORT", "9000");
+    vi.stubEnv("MINIO_ACCESS_KEY", "atlasminio");
+    vi.stubEnv("MINIO_SECRET_KEY", "atlasminio");
+    vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
+    vi.stubEnv("APP_REVISION", "rev-1");
+    vi.stubEnv("DEPLOYMENT_SLOT", "blue");
+    vi.stubEnv("RELEASE_ARTIFACT_ID", "artifact-1");
+    vi.stubEnv("RELEASE_ARTIFACT_SHA256", "a".repeat(64));
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_MODE", "command");
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_PROVIDER", "okta-scim");
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", "identity-command");
+    vi.stubEnv("RESTORE_DRILL_MODE", "command");
+    vi.stubEnv("RESTORE_DRILL_PROVIDER", "kubernetes-job");
+    vi.stubEnv("RESTORE_DRILL_COMMAND", "restore-command");
+    vi.stubEnv("SECRET_ROTATION_MODE", "command");
+    vi.stubEnv("SECRET_ROTATION_PROVIDER", "aws-secrets-manager");
+    vi.stubEnv("SECRET_ROTATION_COMMAND", "rotation-command");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_MODE", "command");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_PROVIDER", "github-actions");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_COMMAND", "deploy-command");
+
+    const { validateAtlasRuntimeConfiguration } = await import("./index");
+    const result = validateAtlasRuntimeConfiguration("api");
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.map((issue) => issue.variable)).toEqual(
+      expect.arrayContaining([
+        "AUTH_OKTA_ORG_URL",
+        "AUTH_OKTA_SCIM_APP_ID",
+        "RESTORE_DRILL_KUBERNETES_NAMESPACE",
+        "RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE",
+        "SECRET_ROTATION_AWS_REGION",
+        "SECRET_ROTATION_AWS_PREFIX",
+        "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY",
+        "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW"
+      ])
+    );
   });
 
   it("reports missing runtime variables clearly", async () => {
@@ -555,6 +665,7 @@ describe("atlas config", () => {
         targetHost: null,
         proofArtifactPath: null,
         execution: null,
+        adapterResult: null,
         completedAt: new Date("2020-01-01T00:00:00.000Z").toISOString()
       },
       secretRotationExecutionReport: {
@@ -565,6 +676,7 @@ describe("atlas config", () => {
         rotatedBy: "ops",
         reason: "too short",
         generatedAt: new Date("2020-01-01T00:00:00.000Z").toISOString(),
+        reportPath: "/tmp/rotation-report.json",
         manifestPath: "",
         manifest: {
           version: 1,
@@ -580,7 +692,8 @@ describe("atlas config", () => {
           exitCode: null,
           stdout: "",
           stderr: ""
-        }
+        },
+        adapterResult: null
       }
       })
     ).toEqual([

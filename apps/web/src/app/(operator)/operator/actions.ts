@@ -8,11 +8,16 @@ import {
 import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import {
+  createAtlasPromotionBundle,
   executeAtlasUpstreamIdentityLifecycle,
+  executeAtlasPromotionAutomation,
   executeAtlasRestoreDrill,
   executeAtlasSecretRotation,
+  findLatestAtlasRestoreDrillReport,
+  findLatestAtlasSecretRotationExecutionReport,
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
+  parseAtlasEnvFile,
   provisionExternalIdentityAssignment,
   performOperatorCaseAction,
   updateIdentityProviderLinkLifecycle,
@@ -87,6 +92,16 @@ function toCommaSeparatedValues(value: FormDataEntryValue | null) {
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0)
     : [];
+}
+
+function toPromotionServices(value: FormDataEntryValue | null) {
+  const values = toCommaSeparatedValues(value);
+
+  if (values.length === 0 || values.includes("all")) {
+    return ["api", "web", "worker"] as const;
+  }
+
+  return values.filter((entry): entry is "api" | "web" | "worker" => entry === "api" || entry === "web" || entry === "worker");
 }
 
 export async function performOperatorCaseActionAction(caseId: string, formData: FormData) {
@@ -498,5 +513,99 @@ export async function executeSecretRotationAction(formData: FormData) {
     );
   } catch (error) {
     redirectWithFeedback("/operator/rollout", "Secret rotation failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function executePromotionAutomationAction(formData: FormData) {
+  await requireOperatorActor();
+
+  try {
+    const fromEnv = toTextValue(formData.get("fromEnv"));
+    const toEnv = toTextValue(formData.get("toEnv"));
+    const envFile = toTextValue(formData.get("envFile"));
+    const services = toPromotionServices(formData.get("services"));
+
+    if (
+      fromEnv !== "development" &&
+      fromEnv !== "staging"
+    ) {
+      redirectWithFeedback("/operator/rollout", "Promotion execution failed", "Promotion source must be development or staging.", "error");
+    }
+
+    if (
+      toEnv !== "staging" &&
+      toEnv !== "production"
+    ) {
+      redirectWithFeedback("/operator/rollout", "Promotion execution failed", "Promotion target must be staging or production.", "error");
+    }
+
+    const restoreDrillReport = findLatestAtlasRestoreDrillReport(toEnv);
+    const secretRotationExecutionReport = findLatestAtlasSecretRotationExecutionReport(toEnv);
+
+    if (!restoreDrillReport) {
+      redirectWithFeedback(
+        "/operator/rollout",
+        "Promotion execution failed",
+        `No restore drill proof exists yet for ${toEnv}.`,
+        "error"
+      );
+    }
+
+    if (!secretRotationExecutionReport) {
+      redirectWithFeedback(
+        "/operator/rollout",
+        "Promotion execution failed",
+        `No secret rotation proof exists yet for ${toEnv}.`,
+        "error"
+      );
+    }
+
+    if (!restoreDrillReport.proofArtifactPath) {
+      redirectWithFeedback(
+        "/operator/rollout",
+        "Promotion execution failed",
+        `The latest restore drill for ${toEnv} is missing a proof artifact path.`,
+        "error"
+      );
+    }
+
+    const environment = {
+      ...process.env,
+      ...parseAtlasEnvFile(envFile),
+      APP_ENV: toEnv
+    };
+    const bundle = createAtlasPromotionBundle({
+      fromEnv,
+      toEnv,
+      services: [...services],
+      envFile,
+      environment,
+      restoreReportPath: restoreDrillReport.proofArtifactPath,
+      restoreDrillReport,
+      secretRotationExecutionReportPath: secretRotationExecutionReport.reportPath,
+      secretRotationExecutionReport,
+      secretRotationManifestPath: secretRotationExecutionReport.manifestPath,
+      secretRotationManifest: secretRotationExecutionReport.manifest
+    });
+
+    const execution = executeAtlasPromotionAutomation({
+      fromEnv,
+      toEnv,
+      services: [...services],
+      restoreDrillReport,
+      secretRotationExecutionReport,
+      secretRotationManifest: secretRotationExecutionReport.manifest,
+      environment,
+      bundlePath: bundle.promotionBundlePath
+    });
+
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Promotion execution recorded",
+      `Atlas stored promotion execution proof for ${fromEnv} to ${toEnv} at ${execution.reportPath}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Promotion execution failed", normalizeActionError(error), "error");
   }
 }

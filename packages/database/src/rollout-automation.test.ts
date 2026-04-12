@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AtlasActorContext } from "@atlas/auth";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +30,10 @@ function createOperatorActor(email = "operator-admin@atlas.local") {
   } satisfies AtlasActorContext;
 }
 
+function adapterScriptPath(fileName: string) {
+  return fileURLToPath(new URL(`../../../scripts/adapters/${fileName}`, import.meta.url));
+}
+
 describe("rollout automation", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -53,6 +58,7 @@ describe("rollout automation", () => {
     expect(result.report.executedRestore).toBe(false);
     expect(result.report.executionMode).toBe("dry-run");
     expect(result.report.executor).toBe("dry-run");
+    expect(result.report.adapterResult).toBeNull();
     expect(listAtlasRestoreDrillReports(1)).toEqual([
       expect.objectContaining({
         targetEnvironment: "staging",
@@ -83,6 +89,7 @@ describe("rollout automation", () => {
     });
 
     expect(result.report.mode).toBe("dry-run");
+    expect(result.report.reportPath).toBe(result.reportPath);
     expect(result.report.command).toEqual(
       expect.objectContaining({
         configured: false,
@@ -135,6 +142,7 @@ describe("rollout automation", () => {
           databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas",
           stdout: "RESTORE"
         },
+        adapterResult: null,
         completedAt: now
       },
       secretRotationExecutionReport: {
@@ -145,6 +153,7 @@ describe("rollout automation", () => {
         rotatedBy: "operator-admin@atlas.local",
         reason: "Rotate staging secrets before validating release promotion.",
         generatedAt: now,
+        reportPath: "/tmp/rotation-report.json",
         manifestPath: "/tmp/rotation-manifest.json",
         manifest: {
           version: 1,
@@ -167,7 +176,8 @@ describe("rollout automation", () => {
           exitCode: 0,
           stdout: "rotated",
           stderr: ""
-        }
+        },
+        adapterResult: null
       },
       environment: {
         APP_ENV: "staging",
@@ -183,6 +193,7 @@ describe("rollout automation", () => {
     });
 
     expect(result.report.mode).toBe("dry-run");
+    expect(result.report.reportPath).toBe(result.reportPath);
     expect(listAtlasPromotionExecutionReports(1)).toEqual([
       expect.objectContaining({
         toEnv: "staging",
@@ -228,11 +239,233 @@ describe("rollout automation", () => {
     });
 
     expect(result.report.mode).toBe("dry-run");
+    expect(result.report.reportPath).toBe(result.reportPath);
     expect(listAtlasUpstreamIdentityLifecycleReports(1)).toEqual([
       expect.objectContaining({
         assignmentId: "assignment-1",
         action: "SUSPEND"
       })
     ]);
+  });
+
+  it("parses command adapter output for restore drills", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-restore-command-"));
+    const backupPath = join(sandbox, "restore.sql");
+    writeFileSync(backupPath, "select 1;\n", "utf8");
+
+    vi.stubEnv("RESTORE_DRILL_MODE", "command");
+    vi.stubEnv("RESTORE_DRILL_PROVIDER", "kubernetes-job");
+    vi.stubEnv("RESTORE_DRILL_KUBERNETES_NAMESPACE", "atlas-staging");
+    vi.stubEnv("RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE", "atlas-restore-job");
+    vi.stubEnv("RESTORE_DRILL_COMMAND", `${process.execPath} ${adapterScriptPath("restore-drill.mjs")}`);
+    vi.stubEnv("RESTORE_DRILL_REPORT_DIR", join(sandbox, "restore-reports"));
+
+    const { executeAtlasRestoreDrill } = await import("./rollout-automation");
+    const result = executeAtlasRestoreDrill({
+      backupPath,
+      targetEnvironment: "staging",
+      targetLabel: "staging-restore-slot",
+      targetHost: "postgres.staging.internal",
+      executeRestore: true
+    });
+
+    expect(result.report.adapterResult).toEqual(
+      expect.objectContaining({
+        provider: "kubernetes-job",
+        adapter: "kubernetes-restore-job"
+      })
+    );
+  });
+
+  it("parses command adapter output for secret rotation", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-rotation-command-"));
+
+    vi.stubEnv("SECRET_ROTATION_MODE", "command");
+    vi.stubEnv("SECRET_ROTATION_PROVIDER", "aws-secrets-manager");
+    vi.stubEnv("SECRET_ROTATION_AWS_REGION", "us-east-1");
+    vi.stubEnv("SECRET_ROTATION_AWS_PREFIX", "atlas/staging");
+    vi.stubEnv("SECRET_ROTATION_COMMAND", `${process.execPath} ${adapterScriptPath("secret-rotation.mjs")}`);
+    vi.stubEnv("SECRET_ROTATION_REPORT_DIR", join(sandbox, "rotation-reports"));
+    vi.stubEnv("SECRET_ROTATION_MANIFEST_DIR", join(sandbox, "rotation-manifests"));
+
+    const { executeAtlasSecretRotation } = await import("./rollout-automation");
+    const result = executeAtlasSecretRotation({
+      environment: "staging",
+      rotatedBy: "operator-admin@atlas.local",
+      reason: "Rotate staging secrets before validating release promotion.",
+      secretKeys: ["AUTH_SESSION_SIGNING_SECRET"]
+    });
+
+    expect(result.report.adapterResult).toEqual(
+      expect.objectContaining({
+        provider: "aws-secrets-manager",
+        adapter: "aws-secrets-manager-rotation"
+      })
+    );
+  });
+
+  it("parses command adapter output for promotion automation", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-promotion-command-"));
+    const bundlePath = join(sandbox, "promotion.json");
+    writeFileSync(bundlePath, JSON.stringify({ ok: true }), "utf8");
+    const now = new Date().toISOString();
+
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_MODE", "command");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_PROVIDER", "github-actions");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY", "atlas/payments-os");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW", "deploy-staging");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_COMMAND", `${process.execPath} ${adapterScriptPath("deployment-promotion.mjs")}`);
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_REPORT_DIR", join(sandbox, "promotion-reports"));
+
+    const { executeAtlasPromotionAutomation } = await import("./rollout-automation");
+    const result = executeAtlasPromotionAutomation({
+      fromEnv: "development",
+      toEnv: "staging",
+      services: ["api"],
+      restoreDrillReport: {
+        version: 1,
+        appEnv: "staging",
+        releaseStage: "private-beta",
+        revision: "rev-1",
+        backupPath: "/tmp/atlas.sql",
+        manifestPath: "/tmp/atlas.sql.manifest.json",
+        executedRestore: true,
+        targetEnvironment: "staging",
+        targetLabel: "staging-restore-slot",
+        backupIntegrity: {
+          version: 1,
+          filePath: "/tmp/atlas.sql",
+          sha256: "a".repeat(64),
+          sizeBytes: 128,
+          generatedAt: now
+        },
+        executionMode: "command",
+        executor: "configured-command",
+        targetHost: "postgres.staging.internal",
+        proofArtifactPath: "/tmp/restore-report.json",
+        execution: {
+          databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas",
+          stdout: "RESTORE"
+        },
+        adapterResult: {
+          version: 1,
+          adapter: "kubernetes-restore-job",
+          provider: "kubernetes-job",
+          operationId: "kubernetes-job-123456",
+          summary: "Restore drill.",
+          targetRef: "atlas-staging/atlas-restore-job",
+          metadata: {}
+        },
+        completedAt: now
+      },
+      secretRotationExecutionReport: {
+        version: 1,
+        environment: "staging",
+        provider: "aws-secrets-manager",
+        mode: "command",
+        rotatedBy: "operator-admin@atlas.local",
+        reason: "Rotate staging secrets before validating release promotion.",
+        generatedAt: now,
+        reportPath: "/tmp/rotation-report.json",
+        manifestPath: "/tmp/rotation-manifest.json",
+        manifest: {
+          version: 1,
+          environment: "staging",
+          rotatedBy: "operator-admin@atlas.local",
+          reason: "Rotate staging secrets before validating release promotion.",
+          generatedAt: now,
+          maxAgeHours: 720,
+          secrets: [
+            { key: "AUTH_SESSION_SIGNING_SECRET", rotatedAt: now },
+            { key: "AUTH_IDENTITY_BRIDGE_SECRET", rotatedAt: now },
+            { key: "DATABASE_URL", rotatedAt: now },
+            { key: "STRIPE_SECRET_KEY", rotatedAt: now },
+            { key: "STRIPE_WEBHOOK_SECRET", rotatedAt: now },
+            { key: "MINIO_SECRET_KEY", rotatedAt: now }
+          ]
+        },
+        command: {
+          configured: true,
+          exitCode: 0,
+          stdout: "rotated",
+          stderr: ""
+        },
+        adapterResult: {
+          version: 1,
+          adapter: "aws-secrets-manager-rotation",
+          provider: "aws-secrets-manager",
+          operationId: "aws-secrets-manager-123456",
+          summary: "Rotate staging secrets.",
+          targetRef: "us-east-1:atlas/staging",
+          metadata: {}
+        }
+      },
+      environment: {
+        APP_ENV: "staging",
+        AUTH_PROVIDER_MODE: "external-oidc",
+        AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS: "operator-admin@atlas.local",
+        AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS: "24",
+        RESTORE_DRILL_PROVIDER: "kubernetes-job",
+        APP_REVISION: "rev-1",
+        DEPLOYMENT_SLOT: "blue",
+        RELEASE_ARTIFACT_ID: "atlas-staging-build",
+        RELEASE_ARTIFACT_SHA256: "a".repeat(64)
+      },
+      bundlePath
+    });
+
+    expect(result.report.adapterResult).toEqual(
+      expect.objectContaining({
+        provider: "github-actions",
+        adapter: "github-actions-dispatch"
+      })
+    );
+  });
+
+  it("parses command adapter output for upstream identity lifecycle", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-upstream-command-"));
+
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_MODE", "command");
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_PROVIDER", "okta-scim");
+    vi.stubEnv("AUTH_OKTA_ORG_URL", "https://atlas.okta.example");
+    vi.stubEnv("AUTH_OKTA_SCIM_APP_ID", "atlas-okta-app");
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", `${process.execPath} ${adapterScriptPath("upstream-identity.mjs")}`);
+    vi.stubEnv("AUTH_UPSTREAM_IDENTITY_REPORT_DIR", join(sandbox, "upstream-reports"));
+
+    const { executeAtlasUpstreamIdentityLifecycle } = await import("./rollout-automation");
+    const result = executeAtlasUpstreamIdentityLifecycle({
+      actor: createOperatorActor(),
+      assignment: {
+        id: "assignment-1",
+        provider: "okta-design-partner",
+        externalEmail: "buyer-admin@example.com",
+        userId: "user-buyer",
+        userEmail: "buyer-admin@example.com",
+        userName: "Buyer Admin",
+        organizationId: "org-buyer",
+        organizationSlug: "atlas-demo-buyer",
+        organizationName: "Atlas Demo Buyer",
+        workspace: "BUYER",
+        membershipId: "membership-buyer",
+        role: "ADMIN",
+        status: "ACTIVE",
+        statusReason: null,
+        provisionedAt: new Date().toISOString(),
+        lastExchangedAt: null,
+        statusChangedAt: null,
+        provisionedByUserEmail: "operator-admin@atlas.local",
+        statusChangedByUserEmail: null,
+        activeSessionCount: 0
+      },
+      action: "REVOKE",
+      reason: "Revoke upstream tenant access after access review closure."
+    });
+
+    expect(result.report.adapterResult).toEqual(
+      expect.objectContaining({
+        provider: "okta-scim",
+        adapter: "okta-scim-admin"
+      })
+    );
   });
 });
