@@ -79,6 +79,7 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_LOOKAHEAD_HOURS", "12");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.local");
     vi.stubEnv("API_BASE_URL", "https://api.atlas.local");
@@ -134,6 +135,7 @@ describe("atlas config", () => {
     expect(authRuntime.localSessionTtlMinutes).toBe(120);
     expect(authRuntime.supportAccessTtlMinutes).toBe(30);
     expect(authRuntime.supportAccessReviewTtlHours).toBe(24);
+    expect(authRuntime.supportAccessReviewLookaheadHours).toBe(12);
     expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
     expect(deploymentRuntime.revision).toBe("rev-123");
     expect(deploymentRuntime.deploymentSlot).toBe("blue");
@@ -181,6 +183,7 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator-admin@atlas.local");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS", "24");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_REVIEW_LOOKAHEAD_HOURS", "12");
     vi.stubEnv("HEALTHCHECK_TIMEOUT_MS", "2000");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.example");
     vi.stubEnv("API_BASE_URL", "https://api.atlas.example");
@@ -200,6 +203,7 @@ describe("atlas config", () => {
     expect(authRuntime.externalOidcAudience).toBe("atlas-agent-payments-os");
     expect(authRuntime.externalOidcProvider).toBe("okta-design-partner");
     expect(authRuntime.supportAccessReviewTtlHours).toBe(24);
+    expect(authRuntime.supportAccessReviewLookaheadHours).toBe(12);
     expect(validateAtlasRuntimeConfiguration("api")).toMatchObject({
       ok: true
     });

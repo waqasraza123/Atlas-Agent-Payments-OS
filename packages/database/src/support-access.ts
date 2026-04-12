@@ -15,6 +15,7 @@ import {
 import { prisma } from "./client";
 
 type SupportAccessReadClient = PrismaClient | Prisma.TransactionClient;
+type SupportAccessWriteClient = PrismaClient | Prisma.TransactionClient;
 
 type GrantWithRelations = Prisma.SupportAccessGrantGetPayload<{
   include: {
@@ -187,6 +188,17 @@ async function createAuditEvent(
   });
 }
 
+async function runSupportAccessTransaction<T>(
+  client: SupportAccessWriteClient,
+  callback: (transaction: Prisma.TransactionClient) => Promise<T>
+) {
+  if ("$transaction" in client) {
+    return client.$transaction(async (transaction) => callback(transaction));
+  }
+
+  return callback(client);
+}
+
 async function loadGrant(grantId: string, client: SupportAccessReadClient) {
   return client.supportAccessGrant.findUnique({
     where: {
@@ -280,7 +292,7 @@ export async function issueSupportAccessGrant(
     reason: string;
     expiresAt: string;
   },
-  client: PrismaClient = prisma
+  client: SupportAccessWriteClient = prisma
 ) {
   assertOperatorActor(actor);
 
@@ -308,7 +320,7 @@ export async function issueSupportAccessGrant(
     throw new AtlasSupportAccessWorkflowError("The selected support-access target could not be resolved.", "not_found");
   }
 
-  const grant = await client.$transaction(async (transaction) => {
+  const grant = await runSupportAccessTransaction(client, async (transaction) => {
     const createdGrant = await transaction.supportAccessGrant.create({
       data: {
         issuedByUserId: actor.user.id,
@@ -368,7 +380,7 @@ export async function reviewSupportAccessGrant(
     decision: SupportAccessGrantReviewDecision;
     reviewReason: string;
   },
-  client: PrismaClient = prisma
+  client: SupportAccessWriteClient = prisma
 ) {
   assertOperatorActor(actor);
   assertReviewerRole(actor.membership.role);
@@ -401,7 +413,7 @@ export async function reviewSupportAccessGrant(
     throw new AtlasSupportAccessWorkflowError("Only pending support-access grants can be reviewed.", "conflict");
   }
 
-  const reviewedGrant = await client.$transaction(async (transaction) => {
+  const reviewedGrant = await runSupportAccessTransaction(client, async (transaction) => {
     await transaction.supportAccessGrantReview.create({
       data: {
         supportAccessGrantId: grant.id,
@@ -463,7 +475,7 @@ export async function recertifySupportAccessGrant(
   input: {
     reviewReason: string;
   },
-  client: PrismaClient = prisma
+  client: SupportAccessWriteClient = prisma
 ) {
   assertOperatorActor(actor);
   assertReviewerRole(actor.membership.role);
@@ -496,7 +508,7 @@ export async function recertifySupportAccessGrant(
     );
   }
 
-  const recertifiedGrant = await client.$transaction(async (transaction) => {
+  const recertifiedGrant = await runSupportAccessTransaction(client, async (transaction) => {
     await transaction.supportAccessGrantReview.create({
       data: {
         supportAccessGrantId: grant.id,
@@ -585,7 +597,7 @@ export async function listSupportAccessGrants(actor: AtlasActorContext, client: 
 export async function activateSupportAccessGrant(
   actor: AtlasActorContext,
   grantId: string,
-  client: PrismaClient = prisma
+  client: SupportAccessWriteClient = prisma
 ) {
   assertOperatorActor(actor);
 
@@ -608,7 +620,7 @@ export async function activateSupportAccessGrant(
     );
   }
 
-  const activatedGrant = await client.$transaction(async (transaction) => {
+  const activatedGrant = await runSupportAccessTransaction(client, async (transaction) => {
     const updatedGrant = await transaction.supportAccessGrant.update({
       where: {
         id: grant.id
@@ -653,7 +665,7 @@ export async function revokeSupportAccessGrant(
   input: {
     revokeReason: string;
   },
-  client: PrismaClient = prisma
+  client: SupportAccessWriteClient = prisma
 ) {
   assertOperatorActor(actor);
   const revokeReason = assertReason(input.revokeReason, "Revoke reason");
@@ -678,7 +690,7 @@ export async function revokeSupportAccessGrant(
     throw new AtlasSupportAccessWorkflowError("Only active or pending support-access grants can be revoked.", "conflict");
   }
 
-  const revokedGrant = await client.$transaction(async (transaction) => {
+  const revokedGrant = await runSupportAccessTransaction(client, async (transaction) => {
     const updatedGrant = await transaction.supportAccessGrant.update({
       where: {
         id: grant.id

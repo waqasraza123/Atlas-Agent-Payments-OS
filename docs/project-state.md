@@ -15,7 +15,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Prisma schema and committed initial migration under `packages/database/prisma`
 - Signed session handling now exists through a shared auth contract, HTTP cookie in the web app, and a shared request header contract in the API
 - A production-grade intermediate auth boundary now exists through signed local sessions for development, signed identity assertions exchanged into persisted Atlas sessions, and API-side session verification against stored auth-session records
-- Internal support access now exists as a constrained, signed operator flow with tenant targeting, reason capture, TTL bounds, persisted grant records, approval reviews, revoke support, and read-only API and workflow enforcement
+- Internal support access now exists as a constrained, signed operator flow with tenant targeting, reason capture, TTL bounds, persisted grant records, approval reviews, activation controls, revoke support, recurring review campaigns, provider-session governance, and read-only API and workflow enforcement
 - Buyer, seller, and operator routes now use actor-aware workspace shells with explicit route surfaces instead of placeholder-only panels
 - Workspace and API domain structure now share a single route and module registry in `@atlas/domain`
 - The API now exposes thin domain skeleton modules for identity, organizations, agents, policies, requests, approvals, audit, sellers, services, payments, receipts, and operator controls
@@ -61,7 +61,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 5: operator controls and exceptions completed in repo scope
 - Phase 6: analytics and enterprise polish completed in repo scope
 - Phase 7: programmable settlement extension completed in repo scope
-- Next active implementation track: access-review campaign automation, stricter tenancy validation across reporting and support paths, restore-drill verification, and deeper deployment automation for broader rollout readiness
+- Next active implementation track: restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting, export, and support inspection paths, direct IdP lifecycle controls beyond session exchange, and formal access-review operations for broader rollout readiness
 
 ## Completed Major Slices
 
@@ -99,7 +99,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 7 is now complete in repo scope through programmable wallet registry, supported chain config, governed `PROGRAMMABLE_USDC` rail selection, operator wallet verification, and on-chain evidence propagation into payment and receipt records
 - Post-v1 operations baseline is now in place through runtime config discipline, request correlation, readiness endpoints, release scripts, and CI release gating
 - Deployment and recovery baseline is now in place through env-profile validation, release manifests, backup and restore scripts, and rollback-readiness checks
-- Signed session and support-access hardening is now in place through HMAC-signed session tokens, identity assertion exchange into persisted Atlas sessions, support-mode tenant scoping, persisted support-access grants, approval reviews, revoke flows, read-only support write enforcement, allowed-email controls, and operator support-access issuance flows
+- Signed session and support-access hardening is now in place through HMAC-signed session tokens, identity assertion exchange into persisted Atlas sessions, persisted auth-session records, support-mode tenant scoping, persisted support-access grants, approval reviews, recertification campaigns, provider-session revoke flows, read-only support write enforcement, allowed-email controls, and operator support-access issuance flows
 - Root safe push workflow with versioned pre-push hook and verifier scripts
 - Durable repo memory in `AGENTS.md` and `docs/project-state.md`
 
@@ -123,11 +123,11 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - A first post-v1 operations baseline is now in place in repo scope
 - A deployment and recovery baseline is now in place in repo scope
 - An observability and incident-response baseline is now in place in repo scope
-- The current active execution slice is access-review campaign automation, stricter tenancy validation across reporting and support inspection paths, restore-drill verification, and deeper deployment automation for broader rollout readiness
+- The current active execution slice is restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting, export, and support inspection paths, direct IdP lifecycle controls beyond the current session-exchange boundary, and formal access-review operations for broader rollout readiness
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships plus signed local session tokens carried in the shared session cookie and the `x-atlas-local-session` request header contract
 - The broader rollout baseline now supports direct external OIDC token verification, exchange into persisted Atlas sessions, provider-mode runtime enforcement, and signed session verification against stored auth-session records
-- Internal support access is now tenant-targeted, persisted, reviewable, revocable, recertifiable, and read-only, but still needs recurring review campaigns, broader tenancy enforcement on inspection paths, and deeper deployment/restore discipline before broad rollout
+- Internal support access is now tenant-targeted, persisted, reviewable, activatable, revocable, recertifiable, campaign-driven, and read-only, while operator governance can also revoke active provider-backed tenant sessions from one surface
 - Root `pnpm test:e2e` now exercises API e2e and web HTTP smoke coverage
 - Policy evaluation results now persist on `SpendRequest.evaluationResult`, and idempotency keys persist on `SpendRequest.idempotencyKey`
 - Buyer workflow writes currently use shared domain validation plus Prisma-backed transaction helpers reused by both API and web
@@ -135,7 +135,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 
 ## Deferred / Not Yet Implemented
 
-- Direct external identity-provider lifecycle beyond the current JWKS-backed external OIDC exchange baseline
+- Direct external identity-provider lifecycle beyond the current JWKS-backed external OIDC exchange and persisted session baseline
 - Richer policy version history beyond the current integer version increment and stored rule snapshots
 - Stripe webhook ingestion and settlement confirmation beyond the current payment-intent baseline
 - Broader export packaging, richer audit bundle workflows, and deeper self-serve analytics customization beyond the current CSV baseline
@@ -143,7 +143,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Configurable analytics and broader reporting automation
 - Full release-engineering implementation for multi-environment deployment and rollback discipline
 - Full tracing, external alert dispatch, long-term metrics retention, and incident-response automation
-- Broader auth maturity, SSO, recurring access review campaigns, and deeper tenant-isolation hardening beyond the current signed-session and external OIDC exchange baseline
+- Broader auth maturity, SSO, external IdP lifecycle controls, and deeper tenant-isolation hardening beyond the current signed-session and external OIDC exchange baseline
 - Production-ready Stripe webhook ingestion and settlement confirmation lifecycle
 - Broader support tooling, compliance workstreams, and enterprise deployment controls
 - Browser-level interaction tests beyond current HTTP and route-level smoke coverage
@@ -160,7 +160,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
 - The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, reason-captured interventions, and governed programmable settlement
-- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, recertification support, promotion-manifest generation, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but recurring access-review automation, restore-drill verification, and deeper deployment automation are still not in place
+- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, explicit activation, recertification support, campaign-driven access review, identity-session revocation, promotion-manifest generation, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but restore-drill verification, deeper deployment artifact enforcement, stricter tenancy validation across reporting and export paths, and direct IdP lifecycle controls are still not in place
 - Database backup and restore scripts now exist, but scheduled backups, restore drills, and cloud deployment automation are still not in place
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence

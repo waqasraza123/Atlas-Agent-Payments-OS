@@ -9,9 +9,12 @@ import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import {
   activateSupportAccessGrant,
+  createSupportAccessReviewCampaign,
   performOperatorCaseAction,
+  revokeIdentityProviderSession,
   issueSupportAccessGrant,
   recertifySupportAccessGrant,
+  resolveSupportAccessReviewCampaignItem,
   reviewSupportAccessGrant,
   revokeSupportAccessGrant,
   AtlasOperatorWorkflowError,
@@ -263,5 +266,65 @@ export async function recertifySupportAccessGrantAction(grantId: string, formDat
     );
   } catch (error) {
     redirectWithFeedback("/operator/support-access", "Support recertification failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function createSupportAccessReviewCampaignAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const campaign = await createSupportAccessReviewCampaign(actor, {
+      title: toTextValue(formData.get("title")),
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Access review campaign created",
+      `Atlas opened ${campaign.pendingItemCount} review items for operator follow-up.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Access review campaign failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function resolveSupportAccessReviewCampaignItemAction(
+  campaignId: string,
+  itemId: string,
+  formData: FormData
+) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const result = await resolveSupportAccessReviewCampaignItem(actor, campaignId, itemId, {
+      action: toTextValue(formData.get("action")) === "REVOKE" ? "REVOKE" : "RECERTIFY",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Campaign item resolved",
+      `Atlas updated ${result.targetOrganizationName} to ${result.itemStatus.toLowerCase()}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Campaign action failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function revokeIdentityProviderSessionAction(sessionId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const session = await revokeIdentityProviderSession(actor, sessionId, {
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Identity session revoked",
+      `Atlas revoked ${session.userEmail} for ${session.organizationName}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Identity session revoke failed", normalizeActionError(error), "error");
   }
 }

@@ -26,8 +26,8 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 
 - enterprise SSO
 - SCIM or directory provisioning if justified later
-- stronger admin and support access review workflows
-- direct external identity-provider lifecycle management beyond the current external OIDC exchange baseline
+- stronger admin and support access review operations
+- direct external identity-provider lifecycle management beyond the current external OIDC exchange and persisted-session baseline
 
 ## Authorization Maturity Path
 
@@ -86,7 +86,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 These are placeholders for tracked future work, not current claims:
 
 - security questionnaires and enterprise buyer trust materials
-- access review workflows
+- access review operations at enterprise scale
 - key management discipline
 - support-access issuance review and periodic recertification
 - privacy and data retention policy maturity
@@ -98,10 +98,10 @@ These are placeholders for tracked future work, not current claims:
 - enterprise SSO
 - advanced compliance program claims
 - region-specific data residency architecture
-- formal access review systems
+- formal access review systems beyond the current campaign-driven support grant baseline
 - broad public rollout security posture
 - hardened production auth beyond the current local-first, signed-session, and external OIDC exchange baseline
-- recurring access-review campaign workflows and deeper provider lifecycle controls
+- direct external identity-provider lifecycle controls beyond the current external OIDC exchange and persisted-session baseline
 
 ## Must Be Done Before Broad Real-World Rollout
 
@@ -111,6 +111,6 @@ These are placeholders for tracked future work, not current claims:
 - incident handling and audit export readiness
 - secrets management and rotation process
 - stronger operator access constraints
-- support-session review expiry, recertification, reviewability, and revoke flows
+- support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

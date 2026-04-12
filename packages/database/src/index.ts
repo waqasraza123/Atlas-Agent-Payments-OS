@@ -1,4 +1,5 @@
 export * from "./analytics-reporting";
+export * from "./access-governance";
 export * from "./auth-sessions";
 export { prisma } from "./client";
 export * from "./buyer-workflow";

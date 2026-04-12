@@ -61,7 +61,7 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - support-access sessions carry both the principal operator identity and the target tenant identity
 - support-access sessions are read-only at the API guard layer
 - support-mode writes are also blocked in shared buyer, seller, payment, and programmable-settlement workflow layers
-- support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge`
+- support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge` or `AUTH_PROVIDER_MODE=external-oidc`
 - allowed support issuer emails can be limited through `AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS`
 - every issued support session creates a persisted grant record
 - every review decision creates a persisted review record
@@ -70,13 +70,14 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - expired grants are marked expired when read
 - active grants move to recertification-required when review expiry is reached
 - recertification writes a new persisted review record and refreshes grant review expiry
-- support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge` or `AUTH_PROVIDER_MODE=external-oidc`
+- operator governance can open review campaigns for due or recertification-required grants
+- review campaign items can recertify or revoke existing grants
+- operator governance can revoke active provider-backed tenant sessions from the same surface
 
 ## Current Gaps
 
-- no recurring access-review campaign automation yet
 - no external approval workflow outside Atlas for issuing support grants
-- no direct session revocation or provisioning integration with an external IdP yet
+- no direct provisioning integration with an external IdP yet
 
 ## Verification Commands
 
@@ -88,6 +89,6 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
-- automate recurring access reviews and recertification campaigns
 - tighten tenancy validation across analytics, export, and support inspection paths
 - add direct external IdP lifecycle controls beyond the current exchange boundary
+- add formal access-review operations beyond the current operator-driven campaign baseline

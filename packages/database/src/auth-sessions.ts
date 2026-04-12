@@ -34,7 +34,7 @@ export type AtlasPersistedAuthSessionRecord = {
   lastSeenAt: string;
 };
 
-function mapPersistedAuthSession(session: {
+export function mapPersistedAuthSession(session: {
   id: string;
   source: string;
   authProviderMode: string;

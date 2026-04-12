@@ -1,12 +1,22 @@
-import { listPlatformOrganizations, listSupportAccessGrants, prisma } from "@atlas/database";
+import {
+  listIdentityProviderSessions,
+  listPlatformOrganizations,
+  listSupportAccessGrants,
+  listSupportAccessReviewCampaignCandidates,
+  listSupportAccessReviewCampaigns,
+  prisma
+} from "@atlas/database";
 import { authRuntime } from "@atlas/config";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { WorkflowFormField } from "@/components/workflow-form-field";
 import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import {
+  createSupportAccessReviewCampaignAction,
   createSupportAccessSessionAction,
   recertifySupportAccessGrantAction,
+  resolveSupportAccessReviewCampaignItemAction,
+  revokeIdentityProviderSessionAction,
   reviewSupportAccessGrantAction,
   revokeSupportAccessGrantAction
 } from "../actions";
@@ -18,7 +28,7 @@ export default async function OperatorSupportAccessPage() {
     return null;
   }
 
-  const [organizations, targetOrganizations, grants] = await Promise.all([
+  const [organizations, targetOrganizations, grants, campaignCandidates, campaigns, identitySessions] = await Promise.all([
     listPlatformOrganizations().then((items) =>
       items.filter((organization) => organization.organizationKind === "BUYER" || organization.organizationKind === "SELLER")
     ),
@@ -38,7 +48,10 @@ export default async function OperatorSupportAccessPage() {
         kind: true
       }
     }),
-    listSupportAccessGrants(resolution.actor)
+    listSupportAccessGrants(resolution.actor),
+    listSupportAccessReviewCampaignCandidates(resolution.actor),
+    listSupportAccessReviewCampaigns(resolution.actor),
+    listIdentityProviderSessions(resolution.actor)
   ]);
   const pendingGrants = grants.filter((grant) => grant.status === "PENDING_REVIEW");
   const activeGrants = grants.filter((grant) => grant.status === "ACTIVE");
@@ -47,6 +60,7 @@ export default async function OperatorSupportAccessPage() {
   const recertifiableGrants = recertificationRequiredGrants.filter(
     (grant) => grant.issuedByUserId !== resolution.actor.user.id
   );
+  const openCampaigns = campaigns.filter((campaign) => campaign.status === "OPEN");
 
   return (
     <div className="space-y-6">
@@ -80,6 +94,21 @@ export default async function OperatorSupportAccessPage() {
           label="Recertification required"
           value={String(recertificationRequiredGrants.length)}
           detail="Active support scope now ages out of review and must be explicitly recertified before continued tenant inspection."
+        />
+        <MetricCard
+          label="Campaign candidates"
+          value={String(campaignCandidates.length)}
+          detail={`Grants expiring within ${authRuntime.supportAccessReviewLookaheadHours} hours now surface as access-review campaign candidates.`}
+        />
+        <MetricCard
+          label="Open campaigns"
+          value={String(openCampaigns.length)}
+          detail="Operator review campaigns group due support grants into one governance queue."
+        />
+        <MetricCard
+          label="Live IdP sessions"
+          value={String(identitySessions.length)}
+          detail="External and bridged Atlas sessions can now be revoked directly from operator governance."
         />
       </section>
       <WorkflowFormPanel
@@ -125,6 +154,52 @@ export default async function OperatorSupportAccessPage() {
           />
         </WorkflowFormField>
       </WorkflowFormPanel>
+      <WorkflowFormPanel
+        eyebrow="Access review"
+        title="Open a review campaign"
+        description="Campaigns group expiring or overdue support grants into a single governance queue so recertification and revoke decisions are deliberate and traceable."
+        action={createSupportAccessReviewCampaignAction}
+        submitLabel="Create review campaign"
+      >
+        <WorkflowFormField label="Campaign title" hint="Use a durable title that makes review history legible later.">
+          <input
+            type="text"
+            name="title"
+            minLength={12}
+            defaultValue={`Support access review ${new Date().toLocaleDateString()}`}
+            className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            required
+          />
+        </WorkflowFormField>
+        <WorkflowFormField
+          label="Campaign reason"
+          hint="Campaign creation records why the current review window requires operator follow-up."
+        >
+          <textarea
+            name="reason"
+            rows={4}
+            minLength={12}
+            className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            placeholder="Review support grants expiring before the next design-partner operations window."
+            required
+          />
+        </WorkflowFormField>
+      </WorkflowFormPanel>
+      <RecordListPanel
+        eyebrow="Candidate queue"
+        title="Support grants due for governance review"
+        description="These grants are already overdue or will age out of review soon."
+        items={campaignCandidates.map((candidate) => ({
+          id: candidate.grantId,
+          title: `${candidate.targetOrganizationName} (${candidate.targetWorkspace})`,
+          description: candidate.reason,
+          detail: `Requested by ${candidate.issuedByUserEmail} · review ${candidate.reviewExpiresAt ? `expires ${new Date(candidate.reviewExpiresAt).toLocaleString()}` : "not set"}`,
+          statusLabel: candidate.status.replaceAll("_", " "),
+          statusTone: candidate.status === "RECERTIFICATION_REQUIRED" ? "warning" : "default"
+        }))}
+        emptyTitle="No review candidates"
+        emptyDescription="Atlas will surface candidate grants here once active support scope approaches review expiry."
+      />
       <RecordListPanel
         eyebrow="Target inventory"
         title="Tenant support candidates"
@@ -140,6 +215,97 @@ export default async function OperatorSupportAccessPage() {
         emptyTitle="No support targets available"
         emptyDescription="Tenant targets will appear once buyer or seller organizations exist."
       />
+      <section className="space-y-4">
+        <PageHeader
+          eyebrow="Governance campaigns"
+          title="Access review campaigns"
+          description="Campaigns bundle expiring support grants into a governed queue for recertification or revoke decisions."
+        />
+        {campaigns.length === 0 ? (
+          <Panel className="p-5">
+            <p className="text-sm text-[var(--atlas-muted)]">No access review campaigns have been created yet.</p>
+          </Panel>
+        ) : (
+          <div className="grid gap-4">
+            {campaigns.map((campaign) => (
+              <Panel key={campaign.id} className="space-y-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--atlas-ink)]">{campaign.title}</p>
+                  <p className="text-sm text-[var(--atlas-muted)]">{campaign.reason}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    {campaign.status} · {campaign.pendingItemCount} pending · due {new Date(campaign.dueAt).toLocaleString()} · opened by {campaign.createdByUserEmail}
+                  </p>
+                </div>
+                <div className="grid gap-4">
+                  {campaign.items.map((item) => (
+                    <Panel key={item.id} className="space-y-4 p-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                          {item.targetOrganizationName} ({item.targetWorkspace})
+                        </p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                          {item.status} · requested by {item.issuedByUserEmail} · grant {item.grantStatus.toLowerCase().replaceAll("_", " ")}
+                        </p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                          review expires {item.reviewExpiresAt ? new Date(item.reviewExpiresAt).toLocaleString() : "not set"} · grant expires{" "}
+                          {new Date(item.expiresAt).toLocaleString()}
+                        </p>
+                        {item.resolutionReason ? (
+                          <p className="text-sm text-[var(--atlas-muted)]">{item.resolutionReason}</p>
+                        ) : null}
+                      </div>
+                      {campaign.status === "OPEN" && item.status === "PENDING" ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <form
+                            action={resolveSupportAccessReviewCampaignItemAction.bind(null, campaign.id, item.id)}
+                            className="grid gap-3"
+                          >
+                            <input type="hidden" name="action" value="RECERTIFY" />
+                            <input
+                              type="text"
+                              name="reason"
+                              minLength={12}
+                              placeholder="Recertification reason for audit review"
+                              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                              required
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+                            >
+                              Recertify grant
+                            </button>
+                          </form>
+                          <form
+                            action={resolveSupportAccessReviewCampaignItemAction.bind(null, campaign.id, item.id)}
+                            className="grid gap-3"
+                          >
+                            <input type="hidden" name="action" value="REVOKE" />
+                            <input
+                              type="text"
+                              name="reason"
+                              minLength={12}
+                              placeholder="Revoke reason for audit review"
+                              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                              required
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-warn)] hover:text-[var(--atlas-ink)]"
+                            >
+                              Revoke grant
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
+                    </Panel>
+                  ))}
+                </div>
+              </Panel>
+            ))}
+          </div>
+        )}
+      </section>
       <section className="space-y-4">
         <PageHeader
           eyebrow="Review queue"
@@ -269,6 +435,52 @@ export default async function OperatorSupportAccessPage() {
                     A different operator admin or owner must recertify this grant.
                   </p>
                 )}
+              </Panel>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="space-y-4">
+        <PageHeader
+          eyebrow="Identity sessions"
+          title="Active provider-backed tenant sessions"
+          description="External and bridged Atlas sessions can now be revoked deliberately when support, security, or tenant-boundary review requires it."
+        />
+        {identitySessions.length === 0 ? (
+          <Panel className="p-5">
+            <p className="text-sm text-[var(--atlas-muted)]">No live buyer or seller identity sessions are active right now.</p>
+          </Panel>
+        ) : (
+          <div className="grid gap-4">
+            {identitySessions.map((session) => (
+              <Panel key={session.id} className="space-y-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                    {session.userEmail} · {session.organizationName}
+                  </p>
+                  <p className="text-sm text-[var(--atlas-muted)]">
+                    {session.provider} · {session.authProviderMode.toLowerCase().replaceAll("_", " ")} · {session.role}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--atlas-muted)]">
+                    last seen {new Date(session.lastSeenAt).toLocaleString()} · expires {new Date(session.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+                <form action={revokeIdentityProviderSessionAction.bind(null, session.id)} className="grid gap-3 md:max-w-xl">
+                  <input
+                    type="text"
+                    name="reason"
+                    minLength={12}
+                    placeholder="Reason for revoking this tenant session"
+                    className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-warn)] hover:text-[var(--atlas-ink)]"
+                  >
+                    Revoke identity session
+                  </button>
+                </form>
               </Panel>
             ))}
           </div>

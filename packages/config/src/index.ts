@@ -122,6 +122,7 @@ export const authRuntime = {
   localSessionTtlMinutes: readNumber(process.env.AUTH_LOCAL_SESSION_TTL_MINUTES, 480),
   supportAccessTtlMinutes: readNumber(process.env.AUTH_SUPPORT_ACCESS_TTL_MINUTES, 60),
   supportAccessReviewTtlHours: readNumber(process.env.AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS, 24),
+  supportAccessReviewLookaheadHours: readNumber(process.env.AUTH_SUPPORT_ACCESS_REVIEW_LOOKAHEAD_HOURS, 24),
   supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
 } as const;
 

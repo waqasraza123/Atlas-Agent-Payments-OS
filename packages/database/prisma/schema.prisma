@@ -169,6 +169,18 @@ enum SupportAccessGrantReviewType {
   RECERTIFICATION
 }
 
+enum SupportAccessReviewCampaignStatus {
+  OPEN
+  COMPLETED
+  CANCELED
+}
+
+enum SupportAccessReviewCampaignItemStatus {
+  PENDING
+  RECERTIFIED
+  REVOKED
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -188,6 +200,7 @@ model User {
   issuedSupportAccessGrants  SupportAccessGrant[] @relation("SupportAccessIssuedByUser")
   revokedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessRevokedByUser")
   supportAccessGrantReviews SupportAccessGrantReview[] @relation("SupportAccessReviewUser")
+  supportAccessReviewCampaigns SupportAccessReviewCampaign[] @relation("SupportAccessReviewCampaignUser")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -215,6 +228,7 @@ model Organization {
   issuedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessIssuedByOrganization")
   targetedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessTargetOrganization")
   supportAccessGrantReviews SupportAccessGrantReview[] @relation("SupportAccessReviewOrganization")
+  supportAccessReviewCampaigns SupportAccessReviewCampaign[] @relation("SupportAccessReviewCampaignOrganization")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -460,6 +474,7 @@ model SupportAccessGrant {
   targetOrganization   Organization             @relation("SupportAccessTargetOrganization", fields: [targetOrganizationId], references: [id], onDelete: Cascade)
   revokedByUser        User?                    @relation("SupportAccessRevokedByUser", fields: [revokedByUserId], references: [id], onDelete: SetNull)
   reviews              SupportAccessGrantReview[]
+  reviewCampaignItems  SupportAccessReviewCampaignItem[]
   createdAt            DateTime                 @default(now())
   updatedAt            DateTime                 @updatedAt
 
@@ -484,6 +499,42 @@ model SupportAccessGrantReview {
   @@index([supportAccessGrantId, createdAt])
   @@index([reviewerOrganizationId, createdAt])
   @@index([supportAccessGrantId, reviewType, createdAt])
+}
+
+model SupportAccessReviewCampaign {
+  id              String                            @id @default(cuid())
+  organizationId  String
+  createdByUserId String
+  title           String
+  reason          String
+  status          SupportAccessReviewCampaignStatus @default(OPEN)
+  dueAt           DateTime
+  completedAt     DateTime?
+  metadata        Json?
+  organization    Organization                      @relation("SupportAccessReviewCampaignOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser   User                              @relation("SupportAccessReviewCampaignUser", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  items           SupportAccessReviewCampaignItem[]
+  createdAt       DateTime                          @default(now())
+  updatedAt       DateTime                          @updatedAt
+
+  @@index([organizationId, status, dueAt])
+}
+
+model SupportAccessReviewCampaignItem {
+  id                   String                                @id @default(cuid())
+  campaignId           String
+  supportAccessGrantId String
+  status               SupportAccessReviewCampaignItemStatus @default(PENDING)
+  resolutionReason     String?
+  resolvedAt           DateTime?
+  metadata             Json?
+  campaign             SupportAccessReviewCampaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  supportAccessGrant   SupportAccessGrant                    @relation(fields: [supportAccessGrantId], references: [id], onDelete: Cascade)
+  createdAt            DateTime                              @default(now())
+  updatedAt            DateTime                              @updatedAt
+
+  @@unique([campaignId, supportAccessGrantId])
+  @@index([supportAccessGrantId, status])
 }
 
 model AuditEvent {
