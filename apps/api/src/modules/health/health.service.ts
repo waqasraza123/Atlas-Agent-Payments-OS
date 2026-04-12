@@ -8,8 +8,16 @@ import {
   validateAtlasRuntimeConfiguration,
   workerRuntime
 } from "@atlas/config";
+import {
+  buildAtlasIncidentReadinessRecord,
+  buildAtlasObservabilityAlerts,
+  type AtlasIncidentReadinessRecord
+} from "@atlas/domain";
+import { getApiRuntimeMetricsSnapshot, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
+import { getOperatorOverview } from "@atlas/database";
 import { prisma } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
+import type { AtlasActorContext } from "@atlas/auth";
 
 type AtlasHealthCheckStatus = "ok" | "degraded" | "skipped";
 
@@ -141,7 +149,7 @@ export class HealthService {
         ]
       : await Promise.all([this.checkDatabase(), this.checkRedis(), this.checkObjectStorage()]);
 
-    return {
+    const payload = {
       status: checks.every((check) => check.status !== "degraded") ? "ready" : "degraded",
       service: "api",
       product: atlasProduct.name,
@@ -149,7 +157,11 @@ export class HealthService {
       releaseStage: appRuntime.releaseStage,
       timestamp: this.createTimestamp(),
       checks
-    };
+    } satisfies AtlasReadinessPayload;
+
+    recordApiReadinessSnapshot(payload.status);
+
+    return payload;
   }
 
   getLiveness() {
@@ -197,5 +209,53 @@ export class HealthService {
       dependencies: readiness.checks,
       timestamp: this.createTimestamp()
     } as const;
+  }
+
+  getMetrics() {
+    const metrics = getApiRuntimeMetricsSnapshot();
+    const startup = this.getStartup();
+
+    return {
+      item: {
+        ...metrics,
+        configurationStatus: startup.configurationStatus,
+        verificationCommand: startup.verificationCommand
+      }
+    };
+  }
+
+  async getIncidentReadiness(actor: AtlasActorContext | null): Promise<AtlasIncidentReadinessRecord> {
+    const startup = this.getStartup();
+    const metrics = this.getMetrics().item;
+    const overview = actor
+      ? await getOperatorOverview(actor)
+      : {
+          openCaseCount: 0,
+          criticalCaseCount: 0,
+          actionRequiredCount: 0,
+          unreadNotificationCount: 0,
+          delayedCaseCount: 0,
+          failedCaseCount: 0,
+          recentCases: [],
+          recentNotifications: [],
+          recentAuditEvents: []
+        };
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics,
+      overview,
+      configurationStatus: startup.configurationStatus,
+      releaseStage: appRuntime.releaseStage
+    });
+
+    return buildAtlasIncidentReadinessRecord({
+      releaseStage: appRuntime.releaseStage,
+      configurationStatus: startup.configurationStatus,
+      hasRequestCorrelation: true,
+      hasMetricsEndpoint: true,
+      hasHealthEndpoints: true,
+      hasRollbackVerification: true,
+      hasBackupRestoreRunbook: true,
+      activeAlertCount: alerts.length
+    });
   }
 }

@@ -9,6 +9,7 @@ import { HealthModule } from "./modules/health/health.module";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { RequestContextMiddleware } from "./middleware/request-context.middleware";
 import { OperatorControlsModule } from "./modules/operator-controls/operator-controls.module";
+import { ObservabilityModule } from "./modules/observability/observability.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PlatformModule } from "./modules/platform/platform.module";
@@ -24,6 +25,7 @@ import { ServicesModule } from "./modules/services/services.module";
     HealthModule,
     ActorModule,
     AnalyticsModule,
+    ObservabilityModule,
     PlatformModule,
     IdentityModule,
     OrganizationsModule,

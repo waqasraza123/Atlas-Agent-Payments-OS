@@ -3,6 +3,12 @@ import { listAtlasQueueDefinitions } from "@atlas/domain";
 import { workerEnv } from "./env";
 import { log } from "./lib/logger";
 import { createRedisConnection } from "./lib/redis";
+import {
+  getWorkerRuntimeMetricsSnapshot,
+  recordWorkerQueueFailed,
+  recordWorkerQueueProcessed,
+  recordWorkerQueueReady
+} from "./lib/runtime-metrics";
 import { getAtlasQueueProcessor } from "./processors";
 
 type AtlasQueueBinding = {
@@ -14,6 +20,7 @@ type AtlasQueueBinding = {
 
 function createQueueBindings(connection: ConnectionOptions): AtlasQueueBinding[] {
   return listAtlasQueueDefinitions().map((definition) => {
+    const processor = getAtlasQueueProcessor(definition.key);
     const queue = new Queue(definition.name, {
       connection,
       defaultJobOptions: {
@@ -26,11 +33,25 @@ function createQueueBindings(connection: ConnectionOptions): AtlasQueueBinding[]
         removeOnFail: 500
       }
     });
-    const worker = new Worker(definition.name, getAtlasQueueProcessor(definition.key), {
-      connection
-    });
+    const worker = new Worker(
+      definition.name,
+      async (job, token) => {
+        try {
+          const result = await processor(job, token);
+          recordWorkerQueueProcessed(definition.key, definition.name);
+          return result;
+        } catch (error) {
+          recordWorkerQueueFailed(definition.key, definition.name);
+          throw error;
+        }
+      },
+      {
+        connection
+      }
+    );
 
     worker.on("ready", () => {
+      recordWorkerQueueReady(definition.key, definition.name);
       log(`queue processor ready for ${definition.name}`, {
         family: definition.family,
         queueKey: definition.key
@@ -78,7 +99,8 @@ async function main() {
     await Promise.all(bindings.map(async (binding) => binding.queue.close()));
     await connection.quit();
     log("worker.shutdown.completed", {
-      signal
+      signal,
+      metrics: getWorkerRuntimeMetricsSnapshot()
     });
     process.exit(0);
   }
@@ -95,7 +117,8 @@ async function main() {
     queues: bindings.map((binding) => binding.name),
     deploymentSlot: workerEnv.deploymentSlot,
     revision: workerEnv.revision,
-    requiredVariables: workerEnv.requiredVariables.length
+    requiredVariables: workerEnv.requiredVariables.length,
+    metrics: getWorkerRuntimeMetricsSnapshot()
   });
 }
 

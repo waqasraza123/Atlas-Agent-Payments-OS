@@ -9,7 +9,8 @@ This runbook defines the repo-level operational baseline that now exists after t
 - structured runtime config for app environment, release stage, log level, and healthcheck timeout
 - structured JSON logging for API and worker runtime events
 - API request correlation through `x-atlas-request-id`
-- API live, startup, and readiness endpoints under `/health`
+- API live, startup, readiness, and metrics endpoints under `/health`
+- operator observability routes for metrics, alerts, and incident readiness
 - release verification script through `pnpm verify:release`
 - runtime smoke verification script through `pnpm verify:ops`
 - environment-template validation through `pnpm verify:env`
@@ -33,7 +34,7 @@ Run this before a broader rollout candidate:
 With the API running:
 
 1. `pnpm verify:ops`
-2. Confirm `/health`, `/health/live`, `/health/startup`, and `/health/ready` return expected status payloads
+2. Confirm `/health`, `/health/live`, `/health/startup`, `/health/ready`, and `/health/metrics` return expected status payloads
 3. Confirm `/platform/queues` returns the registered queue map
 
 ## Required Environment Variables
@@ -50,5 +51,5 @@ With the API running:
 - readiness still depends on local database, Redis, and object storage availability
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
-- observability is currently structured logging plus readiness checks, not full tracing and alerting
+- observability now includes runtime metrics and operator alert posture, but not full tracing, external dispatch, or retained telemetry
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

@@ -1,9 +1,15 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 import { HealthService } from "./health.service";
 
 @Controller("health")
 export class HealthController {
-  private readonly healthService = new HealthService();
+  constructor(@Inject(HealthService) private readonly healthService: HealthService) {
+    this.health = this.health.bind(this);
+    this.live = this.live.bind(this);
+    this.startup = this.startup.bind(this);
+    this.ready = this.ready.bind(this);
+    this.metrics = this.metrics.bind(this);
+  }
 
   @Get()
   async health() {
@@ -23,5 +29,10 @@ export class HealthController {
   @Get("ready")
   async ready() {
     return this.healthService.getReadiness();
+  }
+
+  @Get("metrics")
+  metrics() {
+    return this.healthService.getMetrics();
   }
 }

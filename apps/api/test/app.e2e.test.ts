@@ -1065,7 +1065,7 @@ describe("atlas api e2e", () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it("serves health without actor context", async () => {
@@ -1082,6 +1082,7 @@ describe("atlas api e2e", () => {
     const liveResponse = await request(app.getHttpServer()).get("/health/live");
     const startupResponse = await request(app.getHttpServer()).get("/health/startup");
     const readinessResponse = await request(app.getHttpServer()).get("/health/ready");
+    const metricsResponse = await request(app.getHttpServer()).get("/health/metrics");
 
     expect(liveResponse.status).toBe(200);
     expect(liveResponse.body).toMatchObject({
@@ -1112,6 +1113,16 @@ describe("atlas api e2e", () => {
         expect.objectContaining({ dependency: "redis", status: "skipped" }),
         expect.objectContaining({ dependency: "object-storage", status: "skipped" })
       ]
+    });
+
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.body).toMatchObject({
+      item: expect.objectContaining({
+        service: "api",
+        totalRequests: expect.any(Number),
+        routeMetrics: expect.any(Array),
+        configurationStatus: expect.any(String)
+      })
     });
   });
 
@@ -1947,6 +1958,49 @@ describe("atlas api e2e", () => {
         targetType: "OperatorCase"
       })
     ]);
+  });
+
+  it("serves operator observability routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "OPERATOR",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "OPERATOR")
+    });
+
+    const summaryResponse = await request(app.getHttpServer())
+      .get("/observability/summary")
+      .set("x-atlas-local-session", "local-token");
+    const metricsResponse = await request(app.getHttpServer())
+      .get("/observability/metrics")
+      .set("x-atlas-local-session", "local-token");
+    const alertsResponse = await request(app.getHttpServer())
+      .get("/observability/alerts")
+      .set("x-atlas-local-session", "local-token");
+    const incidentsResponse = await request(app.getHttpServer())
+      .get("/observability/incidents")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.module.key).toBe("observability");
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.body.item).toMatchObject({
+      service: "api",
+      routeMetrics: expect.any(Array)
+    });
+    expect(alertsResponse.status).toBe(200);
+    expect(alertsResponse.body.items).toEqual(expect.any(Array));
+    expect(incidentsResponse.status).toBe(200);
+    expect(incidentsResponse.body.item).toMatchObject({
+      overallStatus: expect.any(String),
+      items: expect.any(Array)
+    });
   });
 
   it("records reason-captured operator case actions through the protected operator module", async () => {

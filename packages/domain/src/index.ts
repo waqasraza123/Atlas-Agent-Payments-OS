@@ -81,6 +81,18 @@ export {
   type AtlasOperatorOverviewRecord
 } from "./operator-workflow";
 export {
+  buildAtlasIncidentReadinessRecord,
+  buildAtlasObservabilityAlerts,
+  calculateAtlasApiErrorRate,
+  type AtlasApiRouteMetricRecord,
+  type AtlasApiRuntimeMetricsSnapshot,
+  type AtlasIncidentReadinessItem,
+  type AtlasIncidentReadinessRecord,
+  type AtlasObservabilityAlertRecord,
+  type AtlasObservabilityAlertSeverity,
+  type AtlasObservabilityReleaseStage
+} from "./observability";
+export {
   atlasPaymentMaximumAttemptCount,
   atlasPaymentExecutionSchema,
   atlasPaymentReconciliationStates,
@@ -174,7 +186,8 @@ export type AtlasWorkspaceSurfaceKey =
   | "organizations"
   | "transactions"
   | "exceptions"
-  | "audit";
+  | "audit"
+  | "alerts";
 
 export type AtlasWorkspaceSurfaceDefinition = {
   key: AtlasWorkspaceSurfaceKey;
@@ -209,7 +222,8 @@ export type AtlasApiDomainKey =
   | "receipts"
   | "programmable-settlement"
   | "analytics"
-  | "operator-controls";
+  | "operator-controls"
+  | "observability";
 
 export type AtlasApiDomainDefinition = {
   key: AtlasApiDomainKey;
@@ -470,6 +484,15 @@ const operatorWorkspaceDefinition: AtlasWorkspaceDefinition = {
       status: "available"
     },
     {
+      key: "alerts",
+      label: "Alerts",
+      title: "Observability alerts",
+      description: "Review runtime health, alert posture, and incident-readiness signals from one operator-facing surface.",
+      detail: "This route becomes the runtime alert and incident entry point for platform operators.",
+      href: "/operator/alerts",
+      status: "available"
+    },
+    {
       key: "audit",
       label: "Audit",
       title: "Audit explorer",
@@ -626,6 +649,16 @@ export const atlasApiDomainDefinitions: Record<AtlasApiDomainKey, AtlasApiDomain
     ownerWorkspaces: ["OPERATOR"],
     category: "operator",
     nextPhase: "Phase 5",
+    readiness: "skeleton"
+  },
+  observability: {
+    key: "observability",
+    title: "Observability",
+    description: "Runtime metrics, alert posture, and incident-readiness views for operator review.",
+    routePrefix: "/observability",
+    ownerWorkspaces: ["OPERATOR"],
+    category: "operator",
+    nextPhase: "Post-v1 operations",
     readiness: "skeleton"
   }
 };

@@ -98,6 +98,7 @@ These are placeholders for tracked future work, not current claims:
 
 ## Must Be Done Before Broad Real-World Rollout
 
+- keep the current observability and incident baseline intact while auth hardening deepens
 - real auth and session hardening beyond local-only development assumptions
 - tenant-boundary validation in application and support paths
 - incident handling and audit export readiness

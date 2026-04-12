@@ -31,6 +31,7 @@ describe("atlas domain registry", () => {
   it("resolves workspace surfaces by key and href", () => {
     expect(getAtlasWorkspaceSurfaceByKey("SELLER", "services")?.href).toBe("/seller/services");
     expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/audit")?.key).toBe("audit");
+    expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/alerts")?.key).toBe("alerts");
     expect(getAtlasWorkspaceSurfaceByHref("BUYER", "/buyer/receipts")?.key).toBe("receipts");
   });
 
@@ -55,6 +56,7 @@ describe("atlas domain registry", () => {
 
     expect(operatorModules).toContain("organizations");
     expect(operatorModules).toContain("operator-controls");
+    expect(operatorModules).toContain("observability");
     expect(operatorModules).not.toContain("agents");
   });
 
