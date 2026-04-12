@@ -5,12 +5,14 @@ import {
   AtlasOperatorWorkflowError,
   AtlasPaymentsWorkflowError,
   AtlasProgrammableSettlementError,
+  AtlasRolloutAutomationError,
   AtlasSellerWorkflowError
 } from "@atlas/database";
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException
 } from "@nestjs/common";
 
@@ -70,6 +72,18 @@ export function rethrowExternalIdentityAccessWorkflowError(error: unknown): neve
   rethrowAtlasWorkflowError(error);
 }
 
+export function rethrowRolloutAutomationError(error: unknown): never {
+  if (!(error instanceof AtlasRolloutAutomationError)) {
+    throw error;
+  }
+
+  if (error.code === "execution_failed") {
+    throw new InternalServerErrorException(error.message);
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
 function rethrowAtlasWorkflowError(
   error:
     | AtlasAnalyticsReportingError
@@ -80,6 +94,7 @@ function rethrowAtlasWorkflowError(
     | AtlasProgrammableSettlementError
     | AtlasOperatorWorkflowError
     | AtlasExternalIdentityAccessWorkflowError
+    | AtlasRolloutAutomationError
 ): never {
   if (error.code === "bad_request") {
     throw new BadRequestException(error.message);

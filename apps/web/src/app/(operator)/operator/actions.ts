@@ -8,6 +8,9 @@ import {
 import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import {
+  executeAtlasUpstreamIdentityLifecycle,
+  executeAtlasRestoreDrill,
+  executeAtlasSecretRotation,
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
   provisionExternalIdentityAssignment,
@@ -21,6 +24,7 @@ import {
   reviewSupportAccessGrant,
   revokeSupportAccessGrant,
   AtlasOperatorWorkflowError,
+  AtlasRolloutAutomationError,
   AtlasSupportAccessWorkflowError
 } from "@atlas/database";
 import { revalidatePath } from "next/cache";
@@ -53,7 +57,11 @@ async function requireOperatorActor() {
 }
 
 function normalizeActionError(error: unknown) {
-  if (error instanceof AtlasOperatorWorkflowError || error instanceof AtlasSupportAccessWorkflowError) {
+  if (
+    error instanceof AtlasOperatorWorkflowError ||
+    error instanceof AtlasSupportAccessWorkflowError ||
+    error instanceof AtlasRolloutAutomationError
+  ) {
     return error.message;
   }
 
@@ -66,6 +74,19 @@ function normalizeActionError(error: unknown) {
 
 function isSupportTargetWorkspace(value: string): value is AtlasSupportAccessTargetWorkspace {
   return value === "BUYER" || value === "SELLER";
+}
+
+function toBooleanValue(value: FormDataEntryValue | null) {
+  return value === "on" || value === "true";
+}
+
+function toCommaSeparatedValues(value: FormDataEntryValue | null) {
+  return typeof value === "string"
+    ? value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    : [];
 }
 
 export async function performOperatorCaseActionAction(caseId: string, formData: FormData) {
@@ -377,6 +398,16 @@ export async function provisionExternalIdentityAssignmentAction(formData: FormDa
       userName: toTextValue(formData.get("userName")) || null,
       reason: toTextValue(formData.get("reason"))
     });
+
+    if (toBooleanValue(formData.get("syncUpstream"))) {
+      executeAtlasUpstreamIdentityLifecycle({
+        actor,
+        assignment,
+        action: "PROVISION",
+        reason: toTextValue(formData.get("reason"))
+      });
+    }
+
     revalidatePath("/operator/identity-access");
     redirectWithFeedback(
       "/operator/identity-access",
@@ -401,6 +432,21 @@ export async function updateExternalIdentityAssignmentLifecycleAction(assignment
             : "SUSPEND",
       reason: toTextValue(formData.get("reason"))
     });
+
+    if (toBooleanValue(formData.get("syncUpstream"))) {
+      executeAtlasUpstreamIdentityLifecycle({
+        actor,
+        assignment: result.assignment,
+        action:
+          toTextValue(formData.get("action")) === "REVOKE"
+            ? "REVOKE"
+            : toTextValue(formData.get("action")) === "REACTIVATE"
+              ? "REACTIVATE"
+              : "SUSPEND",
+        reason: toTextValue(formData.get("reason"))
+      });
+    }
+
     revalidatePath("/operator/identity-access");
     redirectWithFeedback(
       "/operator/identity-access",
@@ -409,5 +455,48 @@ export async function updateExternalIdentityAssignmentLifecycleAction(assignment
     );
   } catch (error) {
     redirectWithFeedback("/operator/identity-access", "External identity update failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function executeRestoreDrillAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const result = executeAtlasRestoreDrill({
+      backupPath: toTextValue(formData.get("backupPath")) || "scripts/fixtures/restore-drill.sql",
+      targetEnvironment: toTextValue(formData.get("targetEnvironment")),
+      targetLabel: toTextValue(formData.get("targetLabel")),
+      targetHost: toTextValue(formData.get("targetHost")) || null,
+      executeRestore: toBooleanValue(formData.get("executeRestore"))
+    });
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Restore drill recorded",
+      `${actor.user.email} stored restore proof for ${result.report.targetEnvironment} at ${result.reportPath}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Restore drill failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function executeSecretRotationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const result = executeAtlasSecretRotation({
+      environment: toTextValue(formData.get("environment")),
+      rotatedBy: actor.user.email,
+      reason: toTextValue(formData.get("reason")),
+      secretKeys: toCommaSeparatedValues(formData.get("secretKeys"))
+    });
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Secret rotation proof recorded",
+      `${actor.user.email} stored rotation proof for ${result.report.environment} at ${result.reportPath}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Secret rotation failed", normalizeActionError(error), "error");
   }
 }

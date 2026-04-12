@@ -1,4 +1,4 @@
-import { listExternalIdentityAssignments, prisma } from "@atlas/database";
+import { listAtlasUpstreamIdentityLifecycleReports, listExternalIdentityAssignments, prisma } from "@atlas/database";
 import { authRuntime } from "@atlas/config";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -35,6 +35,7 @@ export default async function OperatorIdentityAccessPage() {
     }),
     listExternalIdentityAssignments(resolution.actor)
   ]);
+  const upstreamReports = listAtlasUpstreamIdentityLifecycleReports(8);
 
   const activeAssignments = assignments.filter((assignment) => assignment.status === "ACTIVE");
   const suspendedAssignments = assignments.filter((assignment) => assignment.status === "SUSPENDED");
@@ -141,7 +142,29 @@ export default async function OperatorIdentityAccessPage() {
             required
           />
         </WorkflowFormField>
+        <label className="flex items-center gap-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.52)] px-4 py-3 text-sm text-[var(--atlas-muted)]">
+          <input type="checkbox" name="syncUpstream" defaultChecked className="size-4 accent-[var(--atlas-accent)]" />
+          Synchronize the same lifecycle action to the configured upstream identity provider.
+        </label>
       </WorkflowFormPanel>
+      <RecordListPanel
+        eyebrow="Upstream lifecycle"
+        title="Recent upstream identity executions"
+        description="Atlas now stores direct upstream lifecycle execution reports alongside the local identity assignment ledger."
+        items={upstreamReports.map((report) => ({
+          id: `${report.assignmentId}-${report.generatedAt}`,
+          title: `${report.action} ${report.externalEmail}`,
+          description: `${report.provider} · ${report.organizationSlug} · ${report.role}`,
+          detail:
+            report.command && report.command.exitCode !== null
+              ? `Exit code ${report.command.exitCode} · ${new Date(report.generatedAt).toLocaleString()}`
+              : `Dry run · ${new Date(report.generatedAt).toLocaleString()}`,
+          statusLabel: report.mode === "command" ? "EXECUTED" : "DRY_RUN",
+          statusTone: report.mode === "command" ? "success" : "default"
+        }))}
+        emptyTitle="No upstream lifecycle executions"
+        emptyDescription="Assignment lifecycle can now synchronize directly to the configured upstream identity provider."
+      />
       <RecordListPanel
         eyebrow="Provider exchange posture"
         title="Assignments currently able to exchange"
@@ -205,6 +228,10 @@ export default async function OperatorIdentityAccessPage() {
                           required
                         />
                       </WorkflowFormField>
+                      <label className="flex items-center gap-3 text-xs text-[var(--atlas-muted)]">
+                        <input type="checkbox" name="syncUpstream" defaultChecked className="size-4 accent-[var(--atlas-accent)]" />
+                        Also suspend the upstream provider assignment.
+                      </label>
                       <button
                         type="submit"
                         className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-ink)] transition hover:border-[var(--atlas-accent)]"
@@ -229,6 +256,10 @@ export default async function OperatorIdentityAccessPage() {
                           required
                         />
                       </WorkflowFormField>
+                      <label className="flex items-center gap-3 text-xs text-[var(--atlas-muted)]">
+                        <input type="checkbox" name="syncUpstream" defaultChecked className="size-4 accent-[var(--atlas-accent)]" />
+                        Also reactivate the upstream provider assignment.
+                      </label>
                       <button
                         type="submit"
                         className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-ink)] transition hover:border-[var(--atlas-accent)]"
@@ -253,6 +284,10 @@ export default async function OperatorIdentityAccessPage() {
                           required
                         />
                       </WorkflowFormField>
+                      <label className="flex items-center gap-3 text-xs text-[var(--atlas-muted)]">
+                        <input type="checkbox" name="syncUpstream" defaultChecked className="size-4 accent-[var(--atlas-accent)]" />
+                        Also revoke the upstream provider assignment.
+                      </label>
                       <button
                         type="submit"
                         className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-ink)] transition hover:border-[var(--atlas-accent)]"

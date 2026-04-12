@@ -48,4 +48,4 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 ## Current Limitation
 
-The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation manifest coverage, promotion-manifest generation, and artifact-bound promotion bundles, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.
+The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation execution proof, promotion-manifest generation, artifact-bound promotion bundles, and promotion execution reports, but it still does not own a cloud-specific deployment target, secret-manager-native integration, or environment-specific deploy execution.

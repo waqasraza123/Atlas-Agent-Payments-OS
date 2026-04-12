@@ -972,6 +972,47 @@ const databaseMock = vi.hoisted(() => ({
       activeSessionCount: 1
     }
   ]),
+  listAtlasUpstreamIdentityLifecycleReports: vi.fn(async () => [
+    {
+      version: 1,
+      provider: "okta-scim-staging",
+      mode: "dry-run",
+      action: "PROVISION",
+      generatedAt: new Date().toISOString(),
+      actorUserEmail: "operator-admin@atlas.local",
+      assignmentId: "assignment-1",
+      externalEmail: "buyer-admin@example.com",
+      organizationSlug: "atlas-demo-buyer",
+      role: "ADMIN",
+      command: {
+        configured: false,
+        exitCode: null,
+        stdout: "",
+        stderr: ""
+      }
+    }
+  ]),
+  executeAtlasUpstreamIdentityLifecycle: vi.fn(() => ({
+    report: {
+      version: 1,
+      provider: "okta-scim-staging",
+      mode: "dry-run",
+      action: "PROVISION",
+      generatedAt: new Date().toISOString(),
+      actorUserEmail: "operator-admin@atlas.local",
+      assignmentId: "assignment-created",
+      externalEmail: "seller-admin@example.com",
+      organizationSlug: "atlas-demo-seller",
+      role: "ADMIN",
+      command: {
+        configured: false,
+        exitCode: null,
+        stdout: "",
+        stderr: ""
+      }
+    },
+    reportPath: "/tmp/upstream.json"
+  })),
   provisionExternalIdentityAssignment: vi.fn(async () => ({
     id: "assignment-created",
     provider: "okta-design-partner",
@@ -1057,6 +1098,8 @@ vi.mock("@atlas/database", async () => {
     listProgrammableSettlementOrganizations: databaseMock.listProgrammableSettlementOrganizations,
     verifyOrganizationWallet: databaseMock.verifyOrganizationWallet,
     listExternalIdentityAssignments: databaseMock.listExternalIdentityAssignments,
+    listAtlasUpstreamIdentityLifecycleReports: databaseMock.listAtlasUpstreamIdentityLifecycleReports,
+    executeAtlasUpstreamIdentityLifecycle: databaseMock.executeAtlasUpstreamIdentityLifecycle,
     provisionExternalIdentityAssignment: databaseMock.provisionExternalIdentityAssignment,
     updateExternalIdentityAssignmentLifecycle: databaseMock.updateExternalIdentityAssignmentLifecycle,
     listReceiptRecords: databaseMock.listReceiptRecords,
@@ -1362,7 +1405,8 @@ describe("atlas api e2e", () => {
         targetOrganizationSlug: "atlas-demo-seller",
         targetRole: "ADMIN",
         userName: "Seller Admin",
-        reason: "Provision seller administrator for rollout validation."
+        reason: "Provision seller administrator for rollout validation.",
+        syncUpstream: true
       });
 
     expect(response.status).toBe(201);
@@ -1370,6 +1414,9 @@ describe("atlas api e2e", () => {
       id: "assignment-created",
       organizationSlug: "atlas-demo-seller",
       role: "ADMIN"
+    });
+    expect(response.body.upstream).toMatchObject({
+      reportPath: "/tmp/upstream.json"
     });
   });
 
@@ -1392,7 +1439,8 @@ describe("atlas api e2e", () => {
       .set("x-atlas-local-session", "local-token")
       .send({
         action: "SUSPEND",
-        reason: "Temporarily suspend external access while tenant mapping is reviewed."
+        reason: "Temporarily suspend external access while tenant mapping is reviewed.",
+        syncUpstream: true
       });
 
     expect(response.status).toBe(201);
@@ -1401,6 +1449,9 @@ describe("atlas api e2e", () => {
       status: "SUSPENDED"
     });
     expect(response.body.revokedSessionCount).toBe(1);
+    expect(response.body.upstream).toMatchObject({
+      reportPath: "/tmp/upstream.json"
+    });
   });
 
   it("allows shared modules for supported workspaces", async () => {

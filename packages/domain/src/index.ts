@@ -188,6 +188,7 @@ export type AtlasWorkspaceSurfaceKey =
   | "exceptions"
   | "audit"
   | "alerts"
+  | "rollout"
   | "support-access"
   | "identity-access";
 
@@ -492,6 +493,15 @@ const operatorWorkspaceDefinition: AtlasWorkspaceDefinition = {
       description: "Review runtime health, alert posture, and incident-readiness signals from one operator-facing surface.",
       detail: "This route becomes the runtime alert and incident entry point for platform operators.",
       href: "/operator/alerts",
+      status: "available"
+    },
+    {
+      key: "rollout",
+      label: "Rollout",
+      title: "Rollout automation",
+      description: "Track restore proof, secret rotation execution, deployment promotion automation, and upstream identity lifecycle execution from one operator surface.",
+      detail: "This route anchors broader rollout-readiness controls beyond product completion.",
+      href: "/operator/rollout",
       status: "available"
     },
     {

@@ -35,6 +35,7 @@ export class IdentityController {
       targetRole: "OWNER" | "ADMIN" | "OPERATOR" | "REVIEWER" | "FINANCE";
       userName?: string | null;
       reason: string;
+      syncUpstream?: boolean;
     }
   ) {
     return this.identityService.provisionExternalAssignment(actor, body);
@@ -48,6 +49,7 @@ export class IdentityController {
     body: {
       action: "SUSPEND" | "REACTIVATE" | "REVOKE";
       reason: string;
+      syncUpstream?: boolean;
     }
   ) {
     return this.identityService.updateExternalAssignmentLifecycle(actor, assignmentId, body);

@@ -35,6 +35,7 @@ function readBoolean(value: string | undefined, fallback: boolean) {
 const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
+const atlasCommandAdapterModes = ["dry-run", "command"] as const;
 const atlasDefaultSecretRotationKeys = [
   "AUTH_SESSION_SIGNING_SECRET",
   "AUTH_IDENTITY_BRIDGE_SECRET",
@@ -75,6 +76,12 @@ function readIdentityProviderMode(value: string | undefined) {
     : "local-signed";
 }
 
+function readCommandAdapterMode(value: string | undefined, fallback: AtlasCommandAdapterMode) {
+  return atlasCommandAdapterModes.includes(value as AtlasCommandAdapterMode)
+    ? (value as AtlasCommandAdapterMode)
+    : fallback;
+}
+
 export const atlasProduct = {
   name: "Atlas Agent Payments OS",
   summary: "Premium controls for managed AI agent spend across paid APIs and digital services."
@@ -83,6 +90,7 @@ export const atlasProduct = {
 export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
+export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
 export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
 export type AtlasRuntimeService = "api" | "web" | "worker";
 export type AtlasPromotionTarget = Exclude<AtlasAppEnvironment, "local">;
@@ -139,6 +147,13 @@ export const authRuntime = {
   supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
 } as const;
 
+export const upstreamIdentityRuntime = {
+  mode: readCommandAdapterMode(process.env.AUTH_UPSTREAM_IDENTITY_MODE, "dry-run"),
+  provider: readText(process.env.AUTH_UPSTREAM_IDENTITY_PROVIDER, "generic-oidc-admin"),
+  command: readOptionalText(process.env.AUTH_UPSTREAM_IDENTITY_COMMAND),
+  reportDirectory: readText(process.env.AUTH_UPSTREAM_IDENTITY_REPORT_DIR, "operations-artifacts/upstream-identity")
+} as const;
+
 export const apiRuntime = {
   port: readNumber(process.env.API_PORT, 4000),
   baseUrl: readText(process.env.API_BASE_URL, `http://localhost:${readNumber(process.env.API_PORT, 4000)}`)
@@ -190,6 +205,26 @@ function readOperationsRuntime(env: Record<string, string | undefined>) {
 }
 
 export const operationsRuntime = readOperationsRuntime(process.env);
+
+export const restoreDrillRuntime = {
+  mode: readCommandAdapterMode(process.env.RESTORE_DRILL_MODE, "dry-run"),
+  command: readOptionalText(process.env.RESTORE_DRILL_COMMAND),
+  reportDirectory: readText(process.env.RESTORE_DRILL_REPORT_DIR, "restore-drills")
+} as const;
+
+export const secretRotationRuntime = {
+  mode: readCommandAdapterMode(process.env.SECRET_ROTATION_MODE, "dry-run"),
+  provider: readText(process.env.SECRET_ROTATION_PROVIDER, "generic-secret-manager"),
+  command: readOptionalText(process.env.SECRET_ROTATION_COMMAND),
+  reportDirectory: readText(process.env.SECRET_ROTATION_REPORT_DIR, "rotation-executions"),
+  manifestDirectory: readText(process.env.SECRET_ROTATION_MANIFEST_DIR, "rotation-manifests")
+} as const;
+
+export const deploymentAutomationRuntime = {
+  mode: readCommandAdapterMode(process.env.DEPLOYMENT_AUTOMATION_MODE, "dry-run"),
+  command: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_COMMAND),
+  reportDirectory: readText(process.env.DEPLOYMENT_AUTOMATION_REPORT_DIR, "promotion-executions")
+} as const;
 
 export function createAtlasStructuredLogPayload(
   service: string,
@@ -284,6 +319,24 @@ export type AtlasSecretRotationManifest = {
   }>;
 };
 
+export type AtlasSecretRotationExecutionReport = {
+  version: 1;
+  environment: AtlasPromotionTarget;
+  provider: string;
+  mode: AtlasCommandAdapterMode;
+  rotatedBy: string;
+  reason: string;
+  generatedAt: string;
+  manifestPath: string;
+  manifest: AtlasSecretRotationManifest;
+  command: {
+    configured: boolean;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+  } | null;
+};
+
 export type AtlasRestoreDrillReport = {
   version: 1;
   appEnv: AtlasAppEnvironment;
@@ -301,11 +354,53 @@ export type AtlasRestoreDrillReport = {
     sizeBytes: number;
     generatedAt: string;
   };
+  executionMode: AtlasCommandAdapterMode;
+  executor: string;
+  targetHost: string | null;
+  proofArtifactPath: string | null;
   execution: {
     databaseUrlRedacted: string;
     stdout: string;
   } | null;
   completedAt: string;
+};
+
+export type AtlasPromotionExecutionReport = {
+  version: 1;
+  fromEnv: AtlasPromotionTarget;
+  toEnv: AtlasPromotionTarget;
+  services: AtlasRuntimeService[];
+  mode: AtlasCommandAdapterMode;
+  generatedAt: string;
+  bundlePath: string;
+  bundleSha256: string;
+  command: {
+    configured: boolean;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+  } | null;
+};
+
+export type AtlasUpstreamIdentityLifecycleAction = "PROVISION" | "SUSPEND" | "REACTIVATE" | "REVOKE";
+
+export type AtlasUpstreamIdentityLifecycleReport = {
+  version: 1;
+  provider: string;
+  mode: AtlasCommandAdapterMode;
+  action: AtlasUpstreamIdentityLifecycleAction;
+  generatedAt: string;
+  actorUserEmail: string;
+  assignmentId: string;
+  externalEmail: string;
+  organizationSlug: string;
+  role: string;
+  command: {
+    configured: boolean;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+  } | null;
 };
 
 function atlasBaseRuntimeVariables() {
@@ -385,6 +480,42 @@ export function validateAtlasRuntimeConfiguration(
           }
         ];
   });
+
+  const commandModeRequirements = [
+    {
+      variable: "AUTH_UPSTREAM_IDENTITY_COMMAND",
+      modeVariable: "AUTH_UPSTREAM_IDENTITY_MODE",
+      modeValue: readCommandAdapterMode(env.AUTH_UPSTREAM_IDENTITY_MODE, "dry-run")
+    },
+    {
+      variable: "RESTORE_DRILL_COMMAND",
+      modeVariable: "RESTORE_DRILL_MODE",
+      modeValue: readCommandAdapterMode(env.RESTORE_DRILL_MODE, "dry-run")
+    },
+    {
+      variable: "SECRET_ROTATION_COMMAND",
+      modeVariable: "SECRET_ROTATION_MODE",
+      modeValue: readCommandAdapterMode(env.SECRET_ROTATION_MODE, "dry-run")
+    },
+    {
+      variable: "DEPLOYMENT_AUTOMATION_COMMAND",
+      modeVariable: "DEPLOYMENT_AUTOMATION_MODE",
+      modeValue: readCommandAdapterMode(env.DEPLOYMENT_AUTOMATION_MODE, "dry-run")
+    }
+  ];
+
+  for (const requirement of commandModeRequirements) {
+    if (requirement.modeValue === "command") {
+      const value = env[requirement.variable];
+
+      if (!value || value.trim().length === 0) {
+        issues.push({
+          variable: requirement.variable,
+          message: `${requirement.variable} is required when ${requirement.modeVariable}=command.`
+        });
+      }
+    }
+  }
 
   return {
     service,
@@ -568,6 +699,36 @@ export function validateAtlasSecretRotationManifest(
   return issues;
 }
 
+export function validateAtlasSecretRotationExecutionReport(
+  targetEnv: AtlasPromotionTarget,
+  report: AtlasSecretRotationExecutionReport,
+  env: Record<string, string | undefined> = process.env
+) {
+  const issues = validateAtlasSecretRotationManifest(targetEnv, report.manifest, env);
+
+  if (report.version !== 1) {
+    issues.push("Secret rotation execution report version must equal 1.");
+  }
+
+  if (report.environment !== targetEnv) {
+    issues.push(`Secret rotation execution report must target ${targetEnv}.`);
+  }
+
+  if (report.mode !== "dry-run" && report.mode !== "command") {
+    issues.push("Secret rotation execution report mode must be dry-run or command.");
+  }
+
+  if (typeof report.provider !== "string" || report.provider.trim().length < 2) {
+    issues.push("Secret rotation execution report must include a provider label.");
+  }
+
+  if (typeof report.manifestPath !== "string" || report.manifestPath.trim().length < 3) {
+    issues.push("Secret rotation execution report must include the stored manifest path.");
+  }
+
+  return issues;
+}
+
 export function validateAtlasRestoreDrillReport(
   targetEnv: AtlasPromotionTarget,
   report: AtlasRestoreDrillReport,
@@ -592,6 +753,14 @@ export function validateAtlasRestoreDrillReport(
     issues.push("Restore drill report must include a target label.");
   }
 
+  if (report.executionMode !== "dry-run" && report.executionMode !== "command") {
+    issues.push("Restore drill report executionMode must be dry-run or command.");
+  }
+
+  if (typeof report.executor !== "string" || report.executor.trim().length < 2) {
+    issues.push("Restore drill report must include the executor label.");
+  }
+
   validateTimestampAge("Restore drill completedAt", report.completedAt, runtime.restoreDrillMaxAgeHours, issues);
 
   if (!/^[a-f0-9]{64}$/i.test(report.backupIntegrity.sha256)) {
@@ -609,13 +778,21 @@ export function validateAtlasPromotionOperationalReadiness(
   targetEnv: AtlasPromotionTarget,
   evidence: {
     restoreDrillReport: AtlasRestoreDrillReport;
-    secretRotationManifest: AtlasSecretRotationManifest;
+    secretRotationManifest?: AtlasSecretRotationManifest;
+    secretRotationExecutionReport?: AtlasSecretRotationExecutionReport;
   },
   env: Record<string, string | undefined> = process.env
 ) {
+  const secretRotationIssues =
+    evidence.secretRotationExecutionReport
+      ? validateAtlasSecretRotationExecutionReport(targetEnv, evidence.secretRotationExecutionReport, env)
+      : evidence.secretRotationManifest
+        ? validateAtlasSecretRotationManifest(targetEnv, evidence.secretRotationManifest, env)
+        : ["Promotion operational readiness requires secret rotation evidence."];
+
   return [
     ...validateAtlasRestoreDrillReport(targetEnv, evidence.restoreDrillReport, env),
-    ...validateAtlasSecretRotationManifest(targetEnv, evidence.secretRotationManifest, env)
+    ...secretRotationIssues
   ];
 }
 
@@ -623,7 +800,8 @@ export function assertAtlasPromotionOperationalReadiness(
   targetEnv: AtlasPromotionTarget,
   evidence: {
     restoreDrillReport: AtlasRestoreDrillReport;
-    secretRotationManifest: AtlasSecretRotationManifest;
+    secretRotationManifest?: AtlasSecretRotationManifest;
+    secretRotationExecutionReport?: AtlasSecretRotationExecutionReport;
   },
   env: Record<string, string | undefined> = process.env
 ) {

@@ -3,14 +3,15 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   assertAtlasPromotionReadiness,
-  assertAtlasPromotionOperationalReadiness,
   canAtlasPromoteEnvironment,
   createAtlasReleaseManifest,
   type AtlasRestoreDrillReport,
+  type AtlasSecretRotationExecutionReport,
   type AtlasSecretRotationManifest,
   type AtlasPromotionTarget,
   type AtlasRuntimeService
 } from "../packages/config/src/index.ts";
+import { executeAtlasPromotionAutomation } from "../packages/database/src/rollout-automation.ts";
 import { parseEnvFile, resolveRepoPath } from "./lib/env-file";
 
 function readArgumentValue(flag: string) {
@@ -69,6 +70,10 @@ async function main() {
   const envFile = readArgumentValue("--file") ?? resolveEnvironmentExampleFile(toEnv);
   const services = resolveServices(readArgumentValue("--services"));
   const restoreReportPath = resolveProofPath("--restore-report", "ATLAS_RESTORE_DRILL_REPORT");
+  const secretRotationExecutionReportPath = resolveProofPath(
+    "--rotation-report",
+    "ATLAS_SECRET_ROTATION_REPORT"
+  );
   const secretRotationManifestPath = resolveProofPath("--rotation-manifest", "ATLAS_SECRET_ROTATION_MANIFEST");
 
   if (!canAtlasPromoteEnvironment(fromEnv, toEnv)) {
@@ -82,22 +87,19 @@ async function main() {
   };
   assertAtlasPromotionReadiness(toEnv, environment);
 
-  if (!restoreReportPath || !secretRotationManifestPath) {
+  if (!restoreReportPath || (!secretRotationExecutionReportPath && !secretRotationManifestPath)) {
     throw new Error(
-      `Promotion to ${toEnv} requires --restore-report and --rotation-manifest, or ATLAS_RESTORE_DRILL_REPORT and ATLAS_SECRET_ROTATION_MANIFEST.`
+      `Promotion to ${toEnv} requires --restore-report and either --rotation-report or --rotation-manifest, or the matching env vars.`
     );
   }
 
   const restoreDrillReport = readJsonFile<AtlasRestoreDrillReport>(restoreReportPath);
-  const secretRotationManifest = readJsonFile<AtlasSecretRotationManifest>(secretRotationManifestPath);
-  assertAtlasPromotionOperationalReadiness(
-    toEnv,
-    {
-      restoreDrillReport,
-      secretRotationManifest
-    },
-    environment
-  );
+  const secretRotationExecutionReport = secretRotationExecutionReportPath
+    ? readJsonFile<AtlasSecretRotationExecutionReport>(secretRotationExecutionReportPath)
+    : undefined;
+  const secretRotationManifest = secretRotationExecutionReport
+    ? secretRotationExecutionReport.manifest
+    : readJsonFile<AtlasSecretRotationManifest>(secretRotationManifestPath as string);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outputDirectory = resolveRepoPath(join("release-manifests", toEnv, timestamp));
@@ -134,6 +136,7 @@ async function main() {
           createdAt: new Date().toISOString(),
           envFile,
           restoreReportPath,
+          secretRotationExecutionReportPath,
           secretRotationManifestPath
         },
         artifact: {
@@ -149,11 +152,15 @@ async function main() {
             targetLabel: restoreDrillReport.targetLabel
           },
           secretRotation: {
-            path: secretRotationManifestPath,
-            sha256: createHash("sha256").update(readFileSync(secretRotationManifestPath)).digest("hex"),
-            generatedAt: secretRotationManifest.generatedAt,
+            path: secretRotationExecutionReportPath ?? secretRotationManifestPath,
+            sha256: createHash("sha256")
+              .update(readFileSync(secretRotationExecutionReportPath ?? (secretRotationManifestPath as string)))
+              .digest("hex"),
+            generatedAt: secretRotationExecutionReport?.generatedAt ?? secretRotationManifest.generatedAt,
             environment: secretRotationManifest.environment,
             rotatedBy: secretRotationManifest.rotatedBy,
+            provider: secretRotationExecutionReport?.provider ?? "manifest-only",
+            mode: secretRotationExecutionReport?.mode ?? "dry-run",
             secretKeys: secretRotationManifest.secrets.map((secret) => secret.key)
           }
         },
@@ -166,7 +173,20 @@ async function main() {
     "utf8"
   );
 
-  process.stdout.write(`${[...manifestPaths.map((manifest) => manifest.outputPath), promotionBundlePath].join("\n")}\n`);
+  const promotionExecution = executeAtlasPromotionAutomation({
+    fromEnv,
+    toEnv,
+    services,
+    restoreDrillReport,
+    secretRotationManifest,
+    secretRotationExecutionReport,
+    environment,
+    bundlePath: promotionBundlePath
+  });
+
+  process.stdout.write(
+    `${[...manifestPaths.map((manifest) => manifest.outputPath), promotionBundlePath, promotionExecution.reportPath].join("\n")}\n`
+  );
 }
 
 void main().catch((error) => {

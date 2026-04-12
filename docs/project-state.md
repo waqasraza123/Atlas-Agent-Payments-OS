@@ -32,10 +32,11 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Post-v1 rollout-hardening baseline now exists through structured runtime config, structured API and worker logs, request-correlation headers, live/startup/readiness health endpoints, release-verification scripts, and a GitHub Actions release gate
 - Deployment and recovery baseline now exists through environment-specific sample files, runtime env validation, release-manifest generation, promotion-manifest automation, rollback-readiness verification, and repo-owned database backup and restore scripts
 - Observability and incident-response baseline now exists through API runtime metrics, operator observability routes, operator alert and incident-readiness surfaces, worker queue runtime metrics, and repo-owned incident runbooks
-- Restore-drill verification and deployment artifact enforcement now exist through repo-owned restore-drill scripts, backup integrity manifests, artifact digest validation, and promotion bundles tied to release metadata
+- Restore-drill verification and deployment artifact enforcement now exist through repo-owned restore-drill scripts, backup integrity manifests, artifact digest validation, promotion bundles tied to release metadata, and stored promotion execution reports
 - Stricter tenancy validation now exists across analytics, reporting exports, and support inspection paths through actor-aware reporting wrappers and support-mode export blocking
 - Direct identity-provider lifecycle governance now exists through persisted provider links with suspend, reactivate, and revoke controls plus provider-session revocation from the operator support surface
-- Direct external identity provisioning and deprovisioning baseline now exists through persisted external identity assignments, operator-managed lifecycle controls, assignment-backed external OIDC exchange enforcement, and a dedicated operator identity-access surface
+- Direct external identity provisioning and deprovisioning baseline now exists through persisted external identity assignments, operator-managed lifecycle controls, assignment-backed external OIDC exchange enforcement, a dedicated operator identity-access surface, and optional upstream lifecycle synchronization
+- Rollout execution visibility now exists through an operator rollout surface, restore-drill execution reports, secret-rotation execution reports, promotion execution reports, and upstream identity execution reports
 
 ## Non-Negotiable Rules
 
@@ -65,7 +66,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Phase 5: operator controls and exceptions completed in repo scope
 - Phase 6: analytics and enterprise polish completed in repo scope
 - Phase 7: programmable settlement extension completed in repo scope
-- Next active implementation track: direct upstream identity-provider lifecycle controls, non-local restore-drill execution with stored proof, secret-manager-backed rotation execution, and deeper deployment automation tied to real environment promotion
+- Next active implementation track: vendor-specific upstream identity integration, real non-local restore ownership, secret-manager-native rotation adapters, and environment-specific deployment runner integration
 
 ## Completed Major Slices
 
@@ -127,7 +128,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - A first post-v1 operations baseline is now in place in repo scope
 - A deployment and recovery baseline is now in place in repo scope
 - An observability and incident-response baseline is now in place in repo scope
-- The current active execution slice is direct upstream identity-provider lifecycle controls, non-local restore-drill execution with stored proof, secret-manager-backed rotation execution, and deeper deployment automation tied to environment promotion
+- The current active execution slice is vendor-specific upstream identity integration, real non-local restore ownership, secret-manager-native rotation adapters, and environment-specific deployment runner integration
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships plus signed local session tokens carried in the shared session cookie and the `x-atlas-local-session` request header contract
 - The broader rollout baseline now supports direct external OIDC token verification, exchange into persisted Atlas sessions, provider-mode runtime enforcement, and signed session verification against stored auth-session records
@@ -167,8 +168,8 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Seller and operator detail routes still need broader automated runtime coverage than buyer-side seeded detail flows
 - The repo root `pnpm build` gate is still workspace typecheck by design even though standalone web production build is now green
 - The buyer, seller, and operator lifecycle now includes payment execution, receipt truth, reconciliation visibility, operator cases, analytics, exportable reporting, notifications, reason-captured interventions, and governed programmable settlement
-- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, assignment-backed external identity provisioning and deprovisioning, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, explicit activation, recertification support, campaign-driven access review, identity-session revocation, identity-link lifecycle governance, actor-scoped reporting and export enforcement, tenant-read audit events across analytics and support-governance paths, promotion-manifest generation, artifact-bound release metadata, backup integrity manifests, proof-bearing restore-drill reports, secret-rotation manifest validation, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but direct upstream IdP lifecycle controls, real non-local restore execution, and secret-manager-backed rotation execution are still not in place
-- Database backup and restore scripts now exist, and restore drills now emit proof-bearing reports, but scheduled backups, non-local restore execution, and cloud deployment automation are still not in place
+- The current rollout-hardening baseline now adds signed session handling, direct external OIDC exchange into persisted Atlas sessions, assignment-backed external identity provisioning and deprovisioning, reviewable and revocable support grants, support-mode read-only enforcement across API and workflow layers, tenant-targeted support access, explicit activation, recertification support, campaign-driven access review, identity-session revocation, identity-link lifecycle governance, actor-scoped reporting and export enforcement, tenant-read audit events across analytics and support-governance paths, upstream identity execution reports, promotion-manifest generation, artifact-bound release metadata, backup integrity manifests, proof-bearing restore-drill reports with execution metadata, secret-rotation execution reports, request correlation, runtime health surfaces, metrics, operator alert posture, incident runbooks, security headers, and CI release verification, but vendor-specific upstream IdP integration, real non-local restore ownership, and secret-manager-native rotation adapters are still not in place
+- Database backup and restore scripts now exist, and restore drills now emit proof-bearing reports with execution metadata, but scheduled backups, real non-local restore ownership, and cloud deployment automation are still not in place
 - The planning surface is now centralized; future tasks should update the master docs instead of introducing new parallel planning files
 - The new full-scale blueprint docs are guidance for later release maturity and must not be used as justification to skip the current focused v1 implementation sequence
 - Future tasks should avoid widening the stack or introducing extra infra unless it directly serves the platform, operations, security, or release-maturity blueprints

@@ -58,6 +58,7 @@
     "verify:release": "sh ./scripts/verify-release.sh",
     "verify:ops": "sh ./scripts/verify-ops.sh",
     "secrets:rotation:manifest": "pnpm exec tsx ./scripts/create-secret-rotation-manifest.ts",
+    "secrets:rotation:execute": "pnpm exec tsx ./scripts/execute-secret-rotation.ts",
     "release:manifest": "pnpm exec tsx ./scripts/create-release-manifest.ts --service api",
     "release:manifest:all": "pnpm exec tsx ./scripts/create-release-manifest.ts --service api && pnpm exec tsx ./scripts/create-release-manifest.ts --service web && pnpm exec tsx ./scripts/create-release-manifest.ts --service worker",
     "promote:staging": "pnpm exec tsx ./scripts/promote-release.ts --from development --to staging --services all",
