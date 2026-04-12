@@ -1,4 +1,4 @@
-import type { AtlasActorContext } from "@atlas/auth";
+import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import { programmableSettlementRuntime } from "@atlas/config";
 import {
   atlasProgrammableSettlementSettingsSchema,
@@ -24,6 +24,15 @@ export class AtlasProgrammableSettlementError extends Error {
   ) {
     super(message);
     this.name = "AtlasProgrammableSettlementError";
+  }
+}
+
+function assertProgrammableSettlementActor(actor: AtlasActorContext) {
+  if (!canAtlasActorMutate(actor)) {
+    throw new AtlasProgrammableSettlementError(
+      "Support-access sessions are limited to read-only programmable-settlement routes.",
+      "forbidden"
+    );
   }
 }
 
@@ -253,6 +262,7 @@ export async function getOrganizationProgrammableSettlement(actor: AtlasActorCon
 
 export async function createOrganizationWallet(actor: AtlasActorContext, input: unknown) {
   try {
+    assertProgrammableSettlementActor(actor);
     const parsed = atlasProgrammableWalletCreateSchema.parse(input);
     const normalizedAddress = normalizeAtlasWalletAddress(parsed.address);
 
@@ -319,6 +329,7 @@ export async function updateOrganizationProgrammableSettlementSettings(
   client: DatabaseClient = prisma
 ) {
   try {
+    assertProgrammableSettlementActor(actor);
     const parsed = atlasProgrammableSettlementSettingsSchema.parse(input);
 
     const organization = await requireProgrammableSettlementOrganization(actor, client);

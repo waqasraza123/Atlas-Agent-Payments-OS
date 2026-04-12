@@ -28,6 +28,7 @@ describe("atlas config", () => {
     expect(apiRuntime.baseUrl).toBe("http://localhost:4000");
     expect(appRuntime.appEnv).toBe("local");
     expect(appRuntime.logLevel).toBe("info");
+    expect(authRuntime.providerMode).toBe("local-signed");
     expect(authRuntime.sessionSigningSecret).toBe("atlas-local-session-secret");
     expect(deploymentRuntime.revision).toBe("local-development");
     expect(webRuntime.baseUrl).toBe("http://localhost:3000");
@@ -69,6 +70,9 @@ describe("atlas config", () => {
     vi.stubEnv("RELEASE_STAGE", "private-beta");
     vi.stubEnv("HEALTHCHECK_TIMEOUT_MS", "3500");
     vi.stubEnv("AUTH_SESSION_SIGNING_SECRET", "atlas-secret");
+    vi.stubEnv("AUTH_PROVIDER_MODE", "identity-bridge");
+    vi.stubEnv("AUTH_IDENTITY_BRIDGE_SECRET", "atlas-bridge-secret");
+    vi.stubEnv("AUTH_IDENTITY_BRIDGE_PROVIDER", "generic-sso");
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
@@ -118,6 +122,9 @@ describe("atlas config", () => {
     expect(appRuntime.releaseStage).toBe("private-beta");
     expect(appRuntime.healthcheckTimeoutMs).toBe(3500);
     expect(authRuntime.sessionSigningSecret).toBe("atlas-secret");
+    expect(authRuntime.providerMode).toBe("identity-bridge");
+    expect(authRuntime.identityBridgeSecret).toBe("atlas-bridge-secret");
+    expect(authRuntime.identityBridgeProvider).toBe("generic-sso");
     expect(authRuntime.localSessionTtlMinutes).toBe(120);
     expect(authRuntime.supportAccessTtlMinutes).toBe(30);
     expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
@@ -141,6 +148,7 @@ describe("atlas config", () => {
     expect(createAtlasReleaseManifest("worker")).toMatchObject({
       service: "worker",
       appEnv: "staging",
+      authProviderMode: "identity-bridge",
       revision: "rev-123",
       deploymentSlot: "blue"
     });
@@ -161,6 +169,7 @@ describe("atlas config", () => {
     });
 
     expect(result.ok).toBe(false);
+    expect(result.issues.map((issue) => issue.variable)).toContain("AUTH_PROVIDER_MODE");
     expect(result.issues.map((issue) => issue.variable)).toContain("AUTH_SESSION_SIGNING_SECRET");
     expect(result.issues.map((issue) => issue.variable)).toContain("DATABASE_URL");
     expect(() =>

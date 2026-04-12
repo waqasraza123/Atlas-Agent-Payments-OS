@@ -71,11 +71,38 @@ describe("local session route", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/operator");
   });
 
+  it("clears the local session cookie through the post intent path", async () => {
+    const response = await POST(
+      await createRequest([
+        ["intent", "clear"],
+        ["redirectTo", "/operator/support-access"]
+      ])
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/operator/support-access");
+  });
+
   it("does not create a local session outside local and development environments", async () => {
     vi.stubEnv("APP_ENV", "staging");
     const { POST: stagingPost } = await import("./route");
 
     const response = await stagingPost(
+      await createRequest([
+        ["profileKey", "seller-admin"],
+        ["redirectTo", "/seller"]
+      ])
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.cookies.get(atlasLocalSessionCookieName)).toBeUndefined();
+  });
+
+  it("does not create a local session when the auth provider mode is identity-bridge", async () => {
+    vi.stubEnv("AUTH_PROVIDER_MODE", "identity-bridge");
+    const { POST: providerPost } = await import("./route");
+
+    const response = await providerPost(
       await createRequest([
         ["profileKey", "seller-admin"],
         ["redirectTo", "/seller"]

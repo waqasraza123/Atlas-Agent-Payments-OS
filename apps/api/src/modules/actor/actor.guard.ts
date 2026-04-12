@@ -24,9 +24,7 @@ export class ActorGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<ActorRequest>();
-    const resolution = await this.actorResolutionService.resolveFromHeader(
-      this.actorResolutionService.readSessionHeader(request.headers)
-    );
+    const resolution = await this.actorResolutionService.resolveFromHeaders(request.headers);
 
     if (resolution.status === "missing" || resolution.status === "invalid") {
       throw new UnauthorizedException(resolution.message);

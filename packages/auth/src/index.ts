@@ -9,11 +9,13 @@ import {
 
 export const atlasLocalSessionCookieName = "atlas_local_session";
 export const atlasLocalSessionHeaderName = "x-atlas-local-session";
+export const atlasIdentityAssertionHeaderName = "x-atlas-auth-assertion";
 export const atlasSupportAccessMode = "read-only";
 export const atlasSignedSessionVersion = 1;
 export const atlasSupportAllowedMethods = ["GET", "HEAD", "OPTIONS"] as const;
 
-export type AtlasSessionSource = "local-development" | "internal-support";
+export type AtlasIdentityProviderMode = "local-signed" | "identity-bridge";
+export type AtlasSessionSource = "local-development" | "identity-bridge" | "internal-support";
 
 export type AtlasActorUser = {
   id: string;
@@ -36,6 +38,7 @@ export type AtlasActorMembership = {
 export type AtlasSupportAccessTargetWorkspace = Exclude<OrganizationKind, "OPERATOR">;
 
 export type AtlasSupportAccessRecord = {
+  grantId: string;
   mode: typeof atlasSupportAccessMode;
   reason: string;
   grantedByUserEmail: string;
@@ -50,6 +53,7 @@ export type AtlasActorContext = {
   workspace: OrganizationKind;
   agentId: string | null;
   source: AtlasSessionSource;
+  providerMode: AtlasIdentityProviderMode;
   principalOrganization?: AtlasActorOrganization | null;
   supportAccess?: AtlasSupportAccessRecord | null;
   sessionIssuedAt?: string;
@@ -74,7 +78,7 @@ export type AtlasLocalSessionProfile = {
 };
 
 export type AtlasLocalSessionSelection = {
-  profileKey: AtlasLocalSessionProfileKey;
+  profileKey: AtlasLocalSessionProfileKey | null;
   workspace: OrganizationKind;
   userEmail: string;
   organizationSlug: string;
@@ -96,7 +100,19 @@ export type AtlasSignedSessionPayload = {
   supportAccess: AtlasSupportAccessRecord | null;
 };
 
+export type AtlasIdentityAssertionPayload = {
+  version: typeof atlasSignedSessionVersion;
+  source: "identity-bridge";
+  issuedAt: string;
+  expiresAt: string;
+  selection: AtlasLocalSessionSelection;
+  subject: string;
+  provider: string;
+  userName: string | null;
+};
+
 export type AtlasSupportAccessGrantInput = {
+  grantId: string;
   targetOrganizationSlug: string;
   targetWorkspace: AtlasSupportAccessTargetWorkspace;
   reason: string;
@@ -182,6 +198,8 @@ export function isAtlasSupportAccessRecord(value: unknown): value is AtlasSuppor
 
   const candidate = value as Partial<AtlasSupportAccessRecord>;
   return (
+    typeof candidate.grantId === "string" &&
+    candidate.grantId.trim().length > 0 &&
     candidate.mode === atlasSupportAccessMode &&
     typeof candidate.reason === "string" &&
     candidate.reason.trim().length > 0 &&
@@ -233,8 +251,8 @@ export function parseAtlasLocalSessionSelection(value: string | null | undefined
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as Partial<AtlasLocalSessionSelection>;
     if (
-      typeof parsed.profileKey !== "string" ||
-      !isAtlasLocalSessionProfileKey(parsed.profileKey) ||
+      (parsed.profileKey !== null &&
+        (typeof parsed.profileKey !== "string" || !isAtlasLocalSessionProfileKey(parsed.profileKey))) ||
       typeof parsed.workspace !== "string" ||
       !isOrganizationKind(parsed.workspace) ||
       typeof parsed.userEmail !== "string" ||
@@ -260,6 +278,7 @@ export function parseAtlasLocalSessionSelection(value: string | null | undefined
 
 export function createAtlasSupportAccessRecord(input: AtlasSupportAccessGrantInput): AtlasSupportAccessRecord {
   return {
+    grantId: input.grantId.trim(),
     mode: atlasSupportAccessMode,
     reason: input.reason.trim(),
     grantedByUserEmail: input.grantedByUserEmail.trim().toLowerCase(),
@@ -292,12 +311,41 @@ export function createAtlasSignedSessionPayload(
   } satisfies AtlasSignedSessionPayload;
 }
 
+export function createAtlasIdentityAssertionPayload(
+  selection: AtlasLocalSessionSelection,
+  input: {
+    subject: string;
+    provider: string;
+    userName?: string | null;
+    issuedAt?: string;
+    expiresAt?: string;
+  }
+) {
+  const issuedAt = input.issuedAt ?? new Date().toISOString();
+  const expiresAt = input.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  return {
+    version: atlasSignedSessionVersion,
+    source: "identity-bridge",
+    issuedAt,
+    expiresAt,
+    selection,
+    subject: input.subject.trim(),
+    provider: input.provider.trim(),
+    userName: input.userName?.trim() ?? null
+  } satisfies AtlasIdentityAssertionPayload;
+}
+
 export function isAtlasSupportAccessActor(actor: AtlasActorContext) {
   return actor.source === "internal-support" && actor.supportAccess?.mode === atlasSupportAccessMode;
 }
 
 export function canAtlasSupportAccessMethod(method: string) {
   return atlasSupportAllowedMethods.includes(method.toUpperCase() as (typeof atlasSupportAllowedMethods)[number]);
+}
+
+export function canAtlasActorMutate(actor: AtlasActorContext) {
+  return !isAtlasSupportAccessActor(actor);
 }
 
 export function canAtlasActorAccessWorkspace(

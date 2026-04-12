@@ -7,8 +7,13 @@ import {
 } from "@atlas/auth";
 import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
-import { performOperatorCaseAction, AtlasOperatorWorkflowError } from "@atlas/database";
-import { prisma } from "@atlas/database";
+import {
+  performOperatorCaseAction,
+  issueSupportAccessGrant,
+  revokeSupportAccessGrant,
+  AtlasOperatorWorkflowError,
+  AtlasSupportAccessWorkflowError
+} from "@atlas/database";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -39,7 +44,7 @@ async function requireOperatorActor() {
 }
 
 function normalizeActionError(error: unknown) {
-  if (error instanceof AtlasOperatorWorkflowError) {
+  if (error instanceof AtlasOperatorWorkflowError || error instanceof AtlasSupportAccessWorkflowError) {
     return error.message;
   }
 
@@ -101,12 +106,14 @@ export async function createSupportAccessSessionAction(formData: FormData) {
   }
 
   if (appRuntime.appEnv === "production") {
-    redirectWithFeedback(
-      "/operator/support-access",
-      "Support scope rejected",
-      "Support-access session issuance remains disabled in production until a real auth provider replaces local operator identities.",
-      "error"
-    );
+    if (authRuntime.providerMode !== "identity-bridge") {
+      redirectWithFeedback(
+        "/operator/support-access",
+        "Support scope rejected",
+        "Production support-access issuance requires the identity-bridge auth mode so operator identity is not derived from local session profiles.",
+        "error"
+      );
+    }
   }
 
   if (reason.length < 12) {
@@ -130,29 +137,27 @@ export async function createSupportAccessSessionAction(formData: FormData) {
     );
   }
 
-  const targetOrganization = await prisma.organization.findFirst({
-    where: {
-      slug: targetOrganizationSlug,
-      kind: targetWorkspace
-    }
-  });
+  const expiresAt = new Date(Date.now() + authRuntime.supportAccessTtlMinutes * 60 * 1000).toISOString();
+  let grant;
 
-  if (!targetOrganization) {
-    redirectWithFeedback(
-      "/operator/support-access",
-      "Support scope rejected",
-      "The selected target organization could not be resolved for that workspace.",
-      "error"
-    );
+  try {
+    grant = await issueSupportAccessGrant(actor, {
+      targetOrganizationSlug,
+      targetWorkspace,
+      reason,
+      expiresAt
+    });
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Support scope rejected", normalizeActionError(error), "error");
   }
 
   const supportAccess = createAtlasSupportAccessRecord({
-    targetOrganizationSlug: targetOrganization.slug,
+    grantId: grant.id,
+    targetOrganizationSlug: grant.targetOrganizationSlug,
     targetWorkspace,
-    reason,
+    reason: grant.reason,
     grantedByUserEmail: actor.user.email
   });
-  const expiresAt = new Date(Date.now() + authRuntime.supportAccessTtlMinutes * 60 * 1000).toISOString();
   const token = createAtlasSupportSessionToken(
     authRuntime.sessionSigningSecret,
     {
@@ -181,6 +186,24 @@ export async function createSupportAccessSessionAction(formData: FormData) {
   redirectWithFeedback(
     targetWorkspace === "BUYER" ? "/buyer" : "/seller",
     "Support session issued",
-    `Atlas entered read-only support mode for ${targetOrganization.name}.`
+    `Atlas entered read-only support mode for ${grant.targetOrganizationName}.`
   );
+}
+
+export async function revokeSupportAccessGrantAction(grantId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const grant = await revokeSupportAccessGrant(actor, grantId, {
+      revokeReason: toTextValue(formData.get("revokeReason"))
+    });
+    revalidatePath("/operator/support-access");
+    redirectWithFeedback(
+      "/operator/support-access",
+      "Support grant revoked",
+      `Atlas revoked support scope for ${grant.targetOrganizationName}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/support-access", "Support revoke failed", normalizeActionError(error), "error");
+  }
 }

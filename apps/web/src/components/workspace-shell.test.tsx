@@ -34,7 +34,8 @@ const actor: AtlasActorContext = {
   },
   workspace: "BUYER",
   agentId: null,
-  source: "local-development"
+  source: "local-development",
+  providerMode: "local-signed"
 };
 
 const profiles: AtlasLocalSessionProfile[] = [

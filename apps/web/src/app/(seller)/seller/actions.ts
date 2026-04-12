@@ -1,5 +1,6 @@
 "use server";
 
+import { canAtlasActorMutate } from "@atlas/auth";
 import {
   AtlasProgrammableSettlementError,
   AtlasSellerWorkflowError,
@@ -36,6 +37,15 @@ async function requireSellerActor() {
       "/seller",
       "Seller session required",
       "Switch to a seeded seller session before submitting seller workflow actions.",
+      "warning"
+    );
+  }
+
+  if (!canAtlasActorMutate(resolution.actor)) {
+    redirectWithFeedback(
+      "/seller",
+      "Seller mutations blocked",
+      "Support-access sessions are read-only and cannot submit seller workflow changes.",
       "warning"
     );
   }

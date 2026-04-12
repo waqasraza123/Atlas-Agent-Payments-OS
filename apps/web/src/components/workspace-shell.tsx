@@ -70,7 +70,7 @@ function SessionSwitchForm({
 function ExitSupportModeForm() {
   return (
     <form action="/auth/session" method="post">
-      <input type="hidden" name="profileKey" value="operator-operator" />
+      <input type="hidden" name="intent" value="clear" />
       <input type="hidden" name="redirectTo" value="/operator/support-access" />
       <button
         type="submit"
@@ -124,7 +124,13 @@ export function WorkspaceShell({
               />
               <ContextDisplay
                 label="Source"
-                value={actor.source === "internal-support" ? "Internal support" : "Signed local session"}
+                value={
+                  actor.source === "internal-support"
+                    ? "Internal support"
+                    : actor.source === "identity-bridge"
+                      ? "Identity bridge"
+                      : "Signed local session"
+                }
               />
               {actor.supportAccess ? (
                 <ContextDisplay label="Support scope" value={`${actor.supportAccess.targetOrganizationSlug} / ${actor.supportAccess.reason}`} />

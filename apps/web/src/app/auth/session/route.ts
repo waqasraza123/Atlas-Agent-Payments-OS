@@ -26,9 +26,19 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const redirectTo = resolveRedirectPath(formData.get("redirectTo"));
   const profileKey = formData.get("profileKey");
+  const intent = formData.get("intent");
   const nextUrl = new URL(redirectTo, request.url);
 
-  if (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development") {
+  if (intent === "clear") {
+    const response = NextResponse.redirect(nextUrl);
+    response.cookies.delete(atlasLocalSessionCookieName);
+    return response;
+  }
+
+  if (
+    authRuntime.providerMode !== "local-signed" ||
+    (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development")
+  ) {
     return NextResponse.redirect(nextUrl);
   }
 

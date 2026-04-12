@@ -1,4 +1,4 @@
-import type { AtlasActorContext } from "@atlas/auth";
+import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import {
   atlasBuyerAgentCreateSchema,
   atlasBuyerAgentUpdateSchema,
@@ -220,6 +220,12 @@ function mapApprovalRecord(
   };
 }
 
+function assertBuyerMutationActor(actor: AtlasActorContext) {
+  if (!canAtlasActorMutate(actor)) {
+    throw new AtlasBuyerWorkflowError("Support-access sessions are limited to read-only buyer routes.", "forbidden");
+  }
+}
+
 function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
@@ -315,6 +321,7 @@ export async function listBuyerAgents(organizationId: string, client: PrismaClie
 
 export async function createBuyerAgent(actor: AtlasActorContext, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerAgentCreateSchema.parse(rawInput);
 
     const policy = input.policyId
@@ -380,6 +387,7 @@ export async function createBuyerAgent(actor: AtlasActorContext, rawInput: unkno
 
 export async function updateBuyerAgent(actor: AtlasActorContext, agentId: string, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerAgentUpdateSchema.parse(rawInput);
     const agent = await prisma.agent.findFirst({
       where: {
@@ -477,6 +485,7 @@ export async function listBuyerPolicies(organizationId: string, client: PrismaCl
 
 export async function createBuyerPolicy(actor: AtlasActorContext, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerPolicyCreateSchema.parse(rawInput);
     const rules = normalizeAtlasBuyerPolicyRules(input.rules);
 
@@ -521,6 +530,7 @@ export async function createBuyerPolicy(actor: AtlasActorContext, rawInput: unkn
 
 export async function updateBuyerPolicy(actor: AtlasActorContext, policyId: string, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerPolicyUpdateSchema.parse(rawInput);
     const current = await getOrganizationScopedPolicy(prisma, actor.organization.id, policyId);
     const rules = input.rules ? normalizeAtlasBuyerPolicyRules(input.rules) : undefined;
@@ -605,6 +615,7 @@ export async function listBuyerRequests(organizationId: string, client: PrismaCl
 
 export async function createBuyerRequest(actor: AtlasActorContext, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerRequestCreateSchema.parse(rawInput);
     const normalizedIdempotencyKey = input.idempotencyKey?.trim() || null;
 
@@ -894,6 +905,7 @@ export async function listBuyerApprovals(organizationId: string, client: PrismaC
 
 export async function decideBuyerApproval(actor: AtlasActorContext, approvalId: string, rawInput: unknown) {
   try {
+    assertBuyerMutationActor(actor);
     const input = atlasBuyerApprovalDecisionSchema.parse(rawInput);
 
     return await prisma.$transaction(async (transaction) => {

@@ -1,4 +1,5 @@
 import {
+  atlasIdentityAssertionHeaderName,
   atlasLocalSessionCookieName,
   atlasLocalSessionProfileList,
   canAtlasActorAccessWorkspace,
@@ -11,11 +12,11 @@ import {
   type AtlasLocalSessionSelection,
   type AtlasSupportAccessRecord
 } from "@atlas/auth";
-import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
+import { verifyAtlasIdentityAssertionToken, verifyAtlasSignedSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import { prisma } from "@atlas/database";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 export type WorkspaceActorResolution =
   | {
@@ -55,7 +56,10 @@ async function readSignedSessionSelection(workspace: OrganizationKind) {
     return verification.payload;
   }
 
-  if (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development") {
+  if (
+    authRuntime.providerMode !== "local-signed" ||
+    (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development")
+  ) {
     return null;
   }
 
@@ -71,6 +75,16 @@ async function readSignedSessionSelection(workspace: OrganizationKind) {
     issuedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
   };
+}
+
+async function readIdentityAssertionSelection() {
+  const requestHeaders = await headers();
+  const verification = verifyAtlasIdentityAssertionToken(
+    authRuntime.identityBridgeSecret,
+    requestHeaders.get(atlasIdentityAssertionHeaderName)
+  );
+
+  return verification.status === "ready" ? verification.payload : null;
 }
 
 async function loadMembership(input: {
@@ -103,6 +117,7 @@ function createBaseActorContext(
     workspace: OrganizationKind;
     agentId: string | null;
     source: AtlasActorContext["source"];
+    providerMode: AtlasActorContext["providerMode"];
     sessionIssuedAt: string;
     sessionExpiresAt: string;
   }
@@ -126,6 +141,7 @@ function createBaseActorContext(
     workspace: input.workspace,
     agentId: input.agentId,
     source: input.source,
+    providerMode: input.providerMode,
     sessionIssuedAt: input.sessionIssuedAt,
     sessionExpiresAt: input.sessionExpiresAt,
     principalOrganization: null,
@@ -133,13 +149,39 @@ function createBaseActorContext(
   } satisfies AtlasActorContext;
 }
 
-async function loadTargetOrganization(supportAccess: AtlasSupportAccessRecord) {
-  return prisma.organization.findFirst({
+async function loadSupportAccessGrant(supportAccess: AtlasSupportAccessRecord) {
+  const grant = await prisma.supportAccessGrant.findUnique({
     where: {
-      slug: supportAccess.targetOrganizationSlug,
-      kind: supportAccess.targetWorkspace
+      id: supportAccess.grantId
+    },
+    include: {
+      issuedByUser: true,
+      issuedByOrganization: true,
+      targetOrganization: true
     }
   });
+
+  if (!grant) {
+    return null;
+  }
+
+  if (grant.status === "ACTIVE" && grant.expiresAt.getTime() <= Date.now()) {
+    return prisma.supportAccessGrant.update({
+      where: {
+        id: grant.id
+      },
+      data: {
+        status: "EXPIRED"
+      },
+      include: {
+        issuedByUser: true,
+        issuedByOrganization: true,
+        targetOrganization: true
+      }
+    });
+  }
+
+  return grant;
 }
 
 function isSupportAccessAllowedEmail(userEmail: string) {
@@ -171,6 +213,7 @@ async function loadActorContext(input: {
     workspace: membership.organization.kind,
     agentId: input.selection.agentId,
     source: input.source,
+    providerMode: input.source === "identity-bridge" ? "identity-bridge" : authRuntime.providerMode,
     sessionIssuedAt: input.issuedAt,
     sessionExpiresAt: input.expiresAt
   });
@@ -186,20 +229,27 @@ async function loadActorContext(input: {
     return null;
   }
 
-  const targetOrganization = await loadTargetOrganization(input.supportAccess);
-  if (!targetOrganization) {
+  const supportGrant = await loadSupportAccessGrant(input.supportAccess);
+  if (
+    !supportGrant ||
+    supportGrant.status !== "ACTIVE" ||
+    supportGrant.issuedByUser.email.toLowerCase() !== input.selection.userEmail.toLowerCase() ||
+    supportGrant.issuedByOrganization.slug !== input.selection.organizationSlug ||
+    supportGrant.targetOrganization.slug !== input.supportAccess.targetOrganizationSlug ||
+    supportGrant.targetWorkspace !== input.supportAccess.targetWorkspace
+  ) {
     return null;
   }
 
   return {
     ...actor,
     organization: {
-      id: targetOrganization.id,
-      slug: targetOrganization.slug,
-      name: targetOrganization.name,
-      kind: targetOrganization.kind
+      id: supportGrant.targetOrganization.id,
+      slug: supportGrant.targetOrganization.slug,
+      name: supportGrant.targetOrganization.name,
+      kind: supportGrant.targetOrganization.kind
     },
-    workspace: targetOrganization.kind,
+    workspace: supportGrant.targetOrganization.kind,
     agentId: null,
     source: "internal-support",
     principalOrganization: actor.organization,
@@ -208,8 +258,11 @@ async function loadActorContext(input: {
 }
 
 export async function resolveWorkspaceActor(workspace: OrganizationKind): Promise<WorkspaceActorResolution> {
-  const profiles = atlasLocalSessionProfileList.filter((profile) => profile.workspace === workspace);
-  const session = await readSignedSessionSelection(workspace);
+  const profiles =
+    authRuntime.providerMode === "local-signed" && (appRuntime.appEnv === "local" || appRuntime.appEnv === "development")
+      ? atlasLocalSessionProfileList.filter((profile) => profile.workspace === workspace)
+      : [];
+  const session = (await readSignedSessionSelection(workspace)) ?? (await readIdentityAssertionSelection());
 
   if (!session) {
     return {
@@ -223,7 +276,7 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
     const actor = await loadActorContext({
       selection: session.selection,
       source: session.source,
-      supportAccess: session.supportAccess,
+      supportAccess: "supportAccess" in session ? session.supportAccess : null,
       issuedAt: session.issuedAt,
       expiresAt: session.expiresAt
     });

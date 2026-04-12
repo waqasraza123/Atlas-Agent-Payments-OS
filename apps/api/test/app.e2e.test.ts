@@ -1031,6 +1031,7 @@ function createActor(
     workspace,
     agentId: null,
     source: "local-development",
+    providerMode: "local-signed",
     ...overrides
   };
 }
@@ -1039,6 +1040,10 @@ describe("atlas api e2e", () => {
   let app: INestApplication;
   const actorResolutionServiceMock = {
     readSessionHeader: vi.fn((headers: Record<string, string | string[] | undefined>) => headers["x-atlas-local-session"]),
+    resolveFromHeaders: vi.fn(async () => ({
+      status: "missing" as const,
+      message: "Missing signed actor session header"
+    })),
     resolveFromHeader: vi.fn(async () => ({
       status: "missing" as const,
       message: "Missing signed actor session header"
@@ -1060,10 +1065,14 @@ describe("atlas api e2e", () => {
   beforeEach(() => {
     actorResolutionServiceMock.readSessionHeader.mockClear();
     actorResolutionServiceMock.resolveFromHeader.mockReset();
+    actorResolutionServiceMock.resolveFromHeaders.mockReset();
     actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
       status: "missing",
       message: "Missing signed actor session header"
     });
+    actorResolutionServiceMock.resolveFromHeaders.mockImplementation((headers: Record<string, string | string[] | undefined>) =>
+      actorResolutionServiceMock.resolveFromHeader(headers)
+    );
     for (const mockFn of Object.values(databaseMock)) {
       mockFn.mockClear();
     }
@@ -1181,7 +1190,7 @@ describe("atlas api e2e", () => {
   });
 
   it("returns service unavailable when actor resolution is not available", async () => {
-    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+    actorResolutionServiceMock.resolveFromHeaders.mockResolvedValue({
       status: "unavailable",
       message: "Database is unavailable"
     });
@@ -1195,7 +1204,7 @@ describe("atlas api e2e", () => {
   });
 
   it("enforces workspace boundaries for buyer-only modules", async () => {
-    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+    actorResolutionServiceMock.resolveFromHeaders.mockResolvedValue({
       status: "ready",
       selection: {
         profileKey: "seller-admin",

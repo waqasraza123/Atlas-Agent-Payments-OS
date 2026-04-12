@@ -1,4 +1,4 @@
-import type { AtlasActorContext } from "@atlas/auth";
+import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import {
   atlasSellerRequestFulfillmentSchema,
   atlasSellerServiceCreateSchema,
@@ -24,6 +24,12 @@ export class AtlasSellerWorkflowError extends Error {
   ) {
     super(message);
     this.name = "AtlasSellerWorkflowError";
+  }
+}
+
+function assertSellerMutationActor(actor: AtlasActorContext) {
+  if (!canAtlasActorMutate(actor)) {
+    throw new AtlasSellerWorkflowError("Support-access sessions are limited to read-only seller routes.", "forbidden");
   }
 }
 
@@ -483,6 +489,7 @@ export async function listSellerServices(
 
 export async function createSellerService(actor: AtlasActorContext, rawInput: unknown): Promise<AtlasSellerServiceRecord> {
   try {
+    assertSellerMutationActor(actor);
     const input = atlasSellerServiceCreateSchema.parse(rawInput);
     const service = await prisma.service.create({
       data: {
@@ -532,6 +539,7 @@ export async function updateSellerService(
   rawInput: unknown
 ): Promise<AtlasSellerServiceRecord> {
   try {
+    assertSellerMutationActor(actor);
     const input = atlasSellerServiceUpdateSchema.parse(rawInput);
     const current = await prisma.service.findFirst({
       where: {
@@ -679,6 +687,7 @@ export async function recordSellerRequestFulfillment(
   rawInput: unknown
 ): Promise<AtlasSellerRequestRecord> {
   try {
+    assertSellerMutationActor(actor);
     const input = atlasSellerRequestFulfillmentSchema.parse(rawInput);
 
     return await prisma.$transaction(async (transaction) => {

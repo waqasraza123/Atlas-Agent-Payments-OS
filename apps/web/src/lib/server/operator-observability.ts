@@ -1,4 +1,4 @@
-import type { AtlasLocalSessionSelection } from "@atlas/auth";
+import { atlasIdentityAssertionHeaderName, type AtlasLocalSessionSelection } from "@atlas/auth";
 import { createAtlasLocalSessionToken } from "@atlas/auth/server";
 import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
@@ -7,6 +7,7 @@ import type {
   AtlasObservabilityAlertRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
+import { headers } from "next/headers";
 
 type AtlasApiEnvelope<T> = {
   item?: T;
@@ -17,14 +18,21 @@ async function fetchOperatorObservabilityResource<T>(
   path: string,
   selection: AtlasLocalSessionSelection
 ): Promise<AtlasApiEnvelope<T>> {
+  const requestHeaders = await headers();
+  const identityAssertion = requestHeaders.get(atlasIdentityAssertionHeaderName);
   const response = await fetch(`${apiRuntime.baseUrl}${path}`, {
     method: "GET",
     cache: "no-store",
-    headers: {
-      "x-atlas-local-session": createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {
-        expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
-      })
-    }
+    headers:
+      identityAssertion && selection.profileKey === null
+        ? {
+            [atlasIdentityAssertionHeaderName]: identityAssertion
+          }
+        : {
+            "x-atlas-local-session": createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {
+              expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
+            })
+          }
   });
 
   if (!response.ok) {

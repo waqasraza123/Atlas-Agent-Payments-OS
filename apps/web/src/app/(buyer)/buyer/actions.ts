@@ -1,5 +1,6 @@
 "use server";
 
+import { canAtlasActorMutate } from "@atlas/auth";
 import {
   createBuyerAgent,
   createBuyerPolicy,
@@ -55,6 +56,15 @@ async function requireBuyerActor() {
       "/buyer",
       "Buyer session required",
       "Switch to a seeded buyer session before submitting buyer workflow actions.",
+      "warning"
+    );
+  }
+
+  if (!canAtlasActorMutate(resolution.actor)) {
+    redirectWithFeedback(
+      "/buyer",
+      "Buyer mutations blocked",
+      "Support-access sessions are read-only and cannot submit buyer workflow changes.",
       "warning"
     );
   }

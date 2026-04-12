@@ -1,4 +1,4 @@
-import type { AtlasActorContext } from "@atlas/auth";
+import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import { createHash } from "node:crypto";
 import { paymentRuntime, programmableSettlementRuntime } from "@atlas/config";
 import {
@@ -37,6 +37,12 @@ export class AtlasPaymentsWorkflowError extends Error {
   ) {
     super(message);
     this.name = "AtlasPaymentsWorkflowError";
+  }
+}
+
+function assertPaymentMutationActor(actor: AtlasActorContext) {
+  if (!canAtlasActorMutate(actor)) {
+    throw new AtlasPaymentsWorkflowError("Support-access sessions are limited to read-only payment routes.", "forbidden");
   }
 }
 
@@ -1266,6 +1272,7 @@ async function executePayment(actor: AtlasActorContext, requestId: string, rawIn
 }
 
 export async function executeBuyerPayment(actor: AtlasActorContext, requestId: string, rawInput: unknown) {
+  assertPaymentMutationActor(actor);
   return executePayment(actor, requestId, rawInput, "buyer");
 }
 

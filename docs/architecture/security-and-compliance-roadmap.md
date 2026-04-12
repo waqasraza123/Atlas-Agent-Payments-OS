@@ -27,7 +27,7 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - enterprise SSO
 - SCIM or directory provisioning if justified later
 - stronger admin and support access review workflows
-- persisted support-session issuance and approval history
+- external identity-provider exchange and session brokering
 
 ## Authorization Maturity Path
 
@@ -101,7 +101,7 @@ These are placeholders for tracked future work, not current claims:
 - formal access review systems
 - broad public rollout security posture
 - hardened production auth beyond the current local-first and guarded internal baseline
-- production identity-provider exchange and support-session persistence
+- production identity-provider exchange and formal access-review workflows
 
 ## Must Be Done Before Broad Real-World Rollout
 

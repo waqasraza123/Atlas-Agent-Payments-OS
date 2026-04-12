@@ -32,7 +32,7 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - A first production-operations baseline is now in place in repo scope through structured runtime config, request correlation, readiness endpoints, release scripts, and CI release gating.
 - A deployment and recovery baseline is now in place in repo scope through env-profile validation, release manifests, rollback-readiness checks, and backup/restore scripts.
 - An observability and incident-response baseline is now in place in repo scope through API runtime metrics, operator alerting surfaces, worker queue runtime metrics, and incident runbooks.
-- The next active implementation slice is auth-provider integration, stricter tenancy and support-access audit depth, and deployment automation for broader rollout readiness.
+- The next active implementation slice is real identity-provider exchange, stricter tenancy and access-review depth, and deployment automation for broader rollout readiness.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
@@ -127,7 +127,7 @@ The following are required before calling the focused wedge production-grade:
 - tenant-boundary guardrails in application logic and operational tooling
 - constrained support access and reason capture for internal actions
 - documented environments, incidents, and deployment procedures
-- signed session handling and constrained internal support access
+- signed session handling, identity-bridge assertions, and constrained internal support access
 
 Phase 7 is valuable but not required for a production-grade off-chain focused v1. It is required only for programmable settlement maturity.
 
@@ -393,4 +393,4 @@ The next safest implementation slice is now:
 - auth and tenancy hardening from [security-and-compliance-roadmap.md](./security-and-compliance-roadmap.md)
 - broader release-stage enforcement from [release-maturity-model.md](./release-maturity-model.md)
 
-The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, and observability/incident baselines also exist. Future work should concentrate on auth maturity, tenancy validation, support-access constraints, environment isolation, and stronger deployment automation before broader real-world rollout.
+The focused v1 and programmable-settlement tracks are now complete in repo scope. Operations, deployment/recovery, observability/incident, signed-session, identity-bridge, and persisted support-access baselines also exist. Future work should concentrate on production identity exchange, access reviews, deeper tenancy validation, environment isolation, and stronger deployment automation before broader real-world rollout.

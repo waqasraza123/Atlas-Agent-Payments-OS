@@ -173,8 +173,8 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - request-correlation headers and structured runtime logging exist
 - env-profile validation, release manifests, rollback-readiness verification, and backup/restore scripts now exist
 - API metrics, operator observability routes, and incident runbooks now exist
-- signed session handling, constrained support access, and promotion-manifest automation now exist
-- deeper deployment automation, restore drills, external alert dispatch, long-term metrics retention, and secret rotation execution are still pending
+- signed session handling, identity-bridge assertions, persisted support-access grants, revoke support, and promotion-manifest automation now exist
+- deeper deployment automation, restore drills, external alert dispatch, long-term metrics retention, formal access reviews, and secret rotation execution are still pending
 
 ### Required before a production-grade focused v1 rollout
 
@@ -187,6 +187,7 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - incident runbooks
 - signed session secret management
 - constrained support access for operator workflows
+- persisted support-access grant tracking and revoke capability
 
 ### Deferred toward fuller platform maturity
 
@@ -194,4 +195,4 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - multi-region or tenant-specific environment strategies
 - highly automated disaster recovery
 - deeper capacity and cost governance
-- production identity-provider rollout and session exchange
+- production identity-provider rollout and full session exchange

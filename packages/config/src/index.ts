@@ -34,6 +34,7 @@ function readBoolean(value: string | undefined, fallback: boolean) {
 
 const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
+const atlasIdentityProviderModes = ["local-signed", "identity-bridge"] as const;
 const atlasReleaseStages = [
   "internal-concept-demo",
   "functional-alpha",
@@ -60,6 +61,12 @@ function readReleaseStage(value: string | undefined) {
     : "functional-alpha";
 }
 
+function readIdentityProviderMode(value: string | undefined) {
+  return atlasIdentityProviderModes.includes(value as AtlasIdentityProviderMode)
+    ? (value as AtlasIdentityProviderMode)
+    : "local-signed";
+}
+
 export const atlasProduct = {
   name: "Atlas Agent Payments OS",
   summary: "Premium controls for managed AI agent spend across paid APIs and digital services."
@@ -67,6 +74,7 @@ export const atlasProduct = {
 
 export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
+export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
 export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
 export type AtlasRuntimeService = "api" | "web" | "worker";
 export type AtlasPromotionTarget = Exclude<AtlasAppEnvironment, "local">;
@@ -102,7 +110,10 @@ export const deploymentRuntime = {
 } as const;
 
 export const authRuntime = {
+  providerMode: readIdentityProviderMode(process.env.AUTH_PROVIDER_MODE),
   sessionSigningSecret: readText(process.env.AUTH_SESSION_SIGNING_SECRET, "atlas-local-session-secret"),
+  identityBridgeSecret: readText(process.env.AUTH_IDENTITY_BRIDGE_SECRET, "atlas-identity-bridge-secret"),
+  identityBridgeProvider: readText(process.env.AUTH_IDENTITY_BRIDGE_PROVIDER, "generic-sso"),
   localSessionTtlMinutes: readNumber(process.env.AUTH_LOCAL_SESSION_TTL_MINUTES, 480),
   supportAccessTtlMinutes: readNumber(process.env.AUTH_SUPPORT_ACCESS_TTL_MINUTES, 60),
   supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
@@ -205,6 +216,7 @@ export type AtlasReleaseManifest = {
   service: AtlasRuntimeService;
   appEnv: AtlasAppEnvironment;
   releaseStage: AtlasReleaseStage;
+  authProviderMode: AtlasIdentityProviderMode;
   revision: string;
   deploymentSlot: string;
   generatedAt: string;
@@ -230,6 +242,7 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
   if (service === "api") {
     return [
       ...atlasBaseRuntimeVariables(),
+      "AUTH_PROVIDER_MODE",
       "AUTH_SESSION_SIGNING_SECRET",
       "API_PORT",
       "API_BASE_URL",
@@ -248,7 +261,7 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
     return [...atlasBaseRuntimeVariables(), "REDIS_URL", "DATABASE_URL"] as const;
   }
 
-  return [...atlasBaseRuntimeVariables(), "AUTH_SESSION_SIGNING_SECRET", "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
+  return [...atlasBaseRuntimeVariables(), "AUTH_SESSION_SIGNING_SECRET", "AUTH_PROVIDER_MODE", "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
 }
 
 export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
@@ -260,7 +273,11 @@ export function validateAtlasRuntimeConfiguration(
   env: Record<string, string | undefined> = process.env
 ): AtlasRuntimeValidationResult {
   const appEnv = readAppEnvironment(env.APP_ENV);
-  const requiredVariables = listAtlasRuntimeVariables(service);
+  const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
+  const requiredVariables = [
+    ...listAtlasRuntimeVariables(service),
+    ...(service !== "worker" && providerMode === "identity-bridge" ? ["AUTH_IDENTITY_BRIDGE_SECRET", "AUTH_IDENTITY_BRIDGE_PROVIDER"] : [])
+  ];
   const issues = requiredVariables.flatMap((variable) => {
     const value = env[variable];
     return value && value.trim().length > 0
@@ -306,6 +323,7 @@ export function createAtlasReleaseManifest(
     service,
     appEnv: readAppEnvironment(env.APP_ENV),
     releaseStage: readReleaseStage(env.RELEASE_STAGE),
+    authProviderMode: readIdentityProviderMode(env.AUTH_PROVIDER_MODE),
     revision: readText(env.APP_REVISION, deploymentRuntime.revision),
     deploymentSlot: readText(env.DEPLOYMENT_SLOT, deploymentRuntime.deploymentSlot),
     generatedAt: new Date().toISOString(),

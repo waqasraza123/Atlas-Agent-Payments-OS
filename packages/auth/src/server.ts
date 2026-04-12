@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
+  createAtlasIdentityAssertionPayload,
   atlasSignedSessionVersion,
   createAtlasSignedSessionPayload,
+  type AtlasIdentityAssertionPayload,
   isAtlasSupportAccessRecord,
   parseAtlasLocalSessionSelection,
   type AtlasLocalSessionSelection,
@@ -13,6 +15,16 @@ export type AtlasSignedSessionVerificationResult =
   | {
       status: "ready";
       payload: AtlasSignedSessionPayload;
+    }
+  | {
+      status: "invalid" | "expired";
+      message: string;
+    };
+
+export type AtlasIdentityAssertionVerificationResult =
+  | {
+      status: "ready";
+      payload: AtlasIdentityAssertionPayload;
     }
   | {
       status: "invalid" | "expired";
@@ -45,6 +57,12 @@ function parseAtlasIsoTimestamp(value: string) {
 }
 
 export function createAtlasSignedSessionToken(secret: string, payload: AtlasSignedSessionPayload) {
+  const payloadSegment = encodeBase64Url(JSON.stringify(payload));
+  const signatureSegment = createAtlasSessionSignature(secret, payloadSegment);
+  return `${payloadSegment}.${signatureSegment}`;
+}
+
+export function createAtlasIdentityAssertionToken(secret: string, payload: AtlasIdentityAssertionPayload) {
   const payloadSegment = encodeBase64Url(JSON.stringify(payload));
   const signatureSegment = createAtlasSessionSignature(secret, payloadSegment);
   return `${payloadSegment}.${signatureSegment}`;
@@ -150,6 +168,89 @@ export function verifyAtlasSignedSessionToken(
   }
 }
 
+export function verifyAtlasIdentityAssertionToken(
+  secret: string,
+  token: string | null | undefined,
+  now: Date = new Date()
+): AtlasIdentityAssertionVerificationResult {
+  if (!token || token.trim().length === 0) {
+    return {
+      status: "invalid",
+      message: "Missing identity assertion token"
+    };
+  }
+
+  const [payloadSegment, signatureSegment] = token.split(".");
+  if (!payloadSegment || !signatureSegment) {
+    return {
+      status: "invalid",
+      message: "Identity assertion token is malformed"
+    };
+  }
+
+  const expectedSignature = createAtlasSessionSignature(secret, payloadSegment);
+  if (!hasMatchingSignature(expectedSignature, signatureSegment)) {
+    return {
+      status: "invalid",
+      message: "Identity assertion token could not be verified"
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(decodeBase64Url(payloadSegment)) as Partial<AtlasIdentityAssertionPayload>;
+    const issuedAt = typeof parsed.issuedAt === "string" ? parseAtlasIsoTimestamp(parsed.issuedAt) : null;
+    const expiresAt = typeof parsed.expiresAt === "string" ? parseAtlasIsoTimestamp(parsed.expiresAt) : null;
+    const selection =
+      parsed.selection && typeof parsed.selection === "object"
+        ? parseAtlasLocalSessionSelection(encodeURIComponent(JSON.stringify(parsed.selection)))
+        : null;
+
+    if (
+      parsed.version !== atlasSignedSessionVersion ||
+      parsed.source !== "identity-bridge" ||
+      !selection ||
+      typeof parsed.subject !== "string" ||
+      parsed.subject.trim().length === 0 ||
+      typeof parsed.provider !== "string" ||
+      parsed.provider.trim().length === 0 ||
+      issuedAt === null ||
+      expiresAt === null ||
+      expiresAt <= issuedAt
+    ) {
+      return {
+        status: "invalid",
+        message: "Identity assertion token contains invalid session fields"
+      };
+    }
+
+    if (expiresAt <= now.getTime()) {
+      return {
+        status: "expired",
+        message: "Identity assertion token has expired"
+      };
+    }
+
+    return {
+      status: "ready",
+      payload: {
+        version: atlasSignedSessionVersion,
+        source: "identity-bridge",
+        issuedAt: new Date(issuedAt).toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
+        selection,
+        subject: parsed.subject.trim(),
+        provider: parsed.provider.trim(),
+        userName: typeof parsed.userName === "string" && parsed.userName.trim().length > 0 ? parsed.userName.trim() : null
+      }
+    };
+  } catch {
+    return {
+      status: "invalid",
+      message: "Identity assertion token could not be decoded"
+    };
+  }
+}
+
 export function createAtlasLocalSessionToken(
   secret: string,
   selection: AtlasLocalSessionSelection,
@@ -187,4 +288,18 @@ export function createAtlasSupportSessionToken(
       supportAccess
     })
   );
+}
+
+export function createAtlasIdentityAssertionTokenForSelection(
+  secret: string,
+  selection: AtlasLocalSessionSelection,
+  input: {
+    subject: string;
+    provider: string;
+    userName?: string | null;
+    issuedAt?: string;
+    expiresAt?: string;
+  }
+) {
+  return createAtlasIdentityAssertionToken(secret, createAtlasIdentityAssertionPayload(selection, input));
 }
