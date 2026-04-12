@@ -7,6 +7,7 @@ import {
   AtlasPaymentsWorkflowError,
   AtlasProgrammableSettlementError,
   AtlasRolloutAutomationError,
+  AtlasRolloutExecutionWorkflowError,
   AtlasSellerWorkflowError
 } from "@atlas/database";
 import {
@@ -93,6 +94,14 @@ export function rethrowOperationalIntegrationWorkflowError(error: unknown): neve
   rethrowAtlasWorkflowError(error);
 }
 
+export function rethrowRolloutExecutionWorkflowError(error: unknown): never {
+  if (!(error instanceof AtlasRolloutExecutionWorkflowError)) {
+    throw error;
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
 function rethrowAtlasWorkflowError(
   error:
     | AtlasAnalyticsReportingError
@@ -105,6 +114,7 @@ function rethrowAtlasWorkflowError(
     | AtlasOperatorWorkflowError
     | AtlasExternalIdentityAccessWorkflowError
     | AtlasRolloutAutomationError
+    | AtlasRolloutExecutionWorkflowError
 ): never {
   if (error.code === "bad_request") {
     throw new BadRequestException(error.message);

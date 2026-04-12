@@ -219,6 +219,30 @@ enum OperationalTargetEnvironment {
   PRODUCTION
 }
 
+enum OperationalExecutionKind {
+  RESTORE_DRILL
+  SECRET_ROTATION
+  DEPLOYMENT_PROMOTION
+  UPSTREAM_IDENTITY
+}
+
+enum OperationalExecutionMode {
+  DRY_RUN
+  COMMAND
+}
+
+enum OperationalExecutionStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum OperationalProofArtifactKind {
+  REPORT
+  MANIFEST
+  BACKUP
+  BUNDLE
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -387,12 +411,53 @@ model OperationalIntegration {
   updatedByUserId    String?
   createdByUser      User                                    @relation("OperationalIntegrationCreatedByUser", fields: [createdByUserId], references: [id], onDelete: Restrict)
   updatedByUser      User?                                   @relation("OperationalIntegrationUpdatedByUser", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  executions         OperationalExecution[]
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
 
   @@unique([kind, targetEnvironment, provider, label])
   @@index([kind, targetEnvironment, status, verificationStatus])
   @@index([targetEnvironment, provider, status])
+}
+
+model OperationalExecution {
+  id                     String                     @id @default(cuid())
+  kind                   OperationalExecutionKind
+  mode                   OperationalExecutionMode
+  status                 OperationalExecutionStatus
+  targetEnvironment      OperationalTargetEnvironment?
+  provider               String
+  actorUserEmail         String
+  summary                String
+  providerOperationId    String?
+  targetReference        String?
+  reportPath             String?
+  metadata               Json?
+  operationalIntegrationId String?
+  operationalIntegration OperationalIntegration?   @relation(fields: [operationalIntegrationId], references: [id], onDelete: SetNull)
+  proofArtifacts         OperationalProofArtifact[]
+  completedAt            DateTime
+  createdAt              DateTime                   @default(now())
+
+  @@index([kind, completedAt])
+  @@index([targetEnvironment, completedAt])
+  @@index([provider, completedAt])
+  @@index([operationalIntegrationId, completedAt])
+}
+
+model OperationalProofArtifact {
+  id          String                    @id @default(cuid())
+  executionId String
+  kind        OperationalProofArtifactKind
+  label       String
+  filePath    String
+  sha256      String
+  sizeBytes   Int
+  metadata    Json?
+  execution   OperationalExecution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                  @default(now())
+
+  @@index([executionId, kind])
 }
 
 model Agent {

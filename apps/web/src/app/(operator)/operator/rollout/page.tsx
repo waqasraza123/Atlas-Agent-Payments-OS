@@ -5,10 +5,12 @@ import {
   upstreamIdentityRuntime
 } from "@atlas/config";
 import {
+  getOperationalExecutionSummary,
   listAtlasPromotionExecutionReports,
   listAtlasRestoreDrillReports,
   listAtlasSecretRotationExecutionReports,
   listAtlasUpstreamIdentityLifecycleReports,
+  listOperationalExecutions,
   listOperationalIntegrations
 } from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
@@ -43,7 +45,16 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
   const secretRotationReports = listAtlasSecretRotationExecutionReports(6);
   const promotionReports = listAtlasPromotionExecutionReports(6);
   const upstreamReports = listAtlasUpstreamIdentityLifecycleReports(6);
-  const integrations = await listOperationalIntegrations(resolution.actor);
+  const [integrations, executionSummary, recentExecutions] = await Promise.all([
+    listOperationalIntegrations(resolution.actor),
+    getOperationalExecutionSummary(resolution.actor),
+    listOperationalExecutions(
+      resolution.actor,
+      {
+        limit: 12
+      }
+    )
+  ]);
   const activeVerifiedIntegrations = integrations.filter(
     (integration) => integration.status === "ACTIVE" && integration.verificationStatus === "VERIFIED"
   ).length;
@@ -80,14 +91,14 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
         <MetricCard label="Owned targets" value={String(integrations.length)} detail="Persisted rollout integrations" />
         <MetricCard label="Verified targets" value={String(activeVerifiedIntegrations)} detail="Active and execution-ready" />
         <MetricCard
-          label="Staging coverage"
-          value={String(integrations.filter((integration) => integration.targetEnvironment === "STAGING").length)}
-          detail="Staging integration records"
+          label="Execution runs"
+          value={String(executionSummary.totalCount)}
+          detail={executionSummary.latestCompletedAt ? `Latest ${new Date(executionSummary.latestCompletedAt).toLocaleString()}` : "No executions yet"}
         />
         <MetricCard
-          label="Production coverage"
-          value={String(integrations.filter((integration) => integration.targetEnvironment === "PRODUCTION").length)}
-          detail="Production integration records"
+          label="Failed runs"
+          value={String(executionSummary.failedCount)}
+          detail={`${executionSummary.commandCount} command · ${executionSummary.dryRunCount} dry run`}
         />
       </section>
       <section className="grid gap-6 xl:grid-cols-[1.1fr_1.9fr]">
@@ -397,6 +408,38 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
         </WorkflowFormPanel>
       </section>
       <div className="grid gap-6 xl:grid-cols-2">
+        <RecordListPanel
+          eyebrow="Execution ledger"
+          title="Recent rollout executions"
+          description="Atlas now persists rollout execution records and proof artifacts in the database instead of relying only on filesystem reports."
+          items={recentExecutions.map((execution) => ({
+            id: execution.id,
+            title: `${execution.kind.replaceAll("_", " ").toLowerCase()} · ${execution.provider}`,
+            description: execution.summary,
+            detail: `${execution.mode} · ${execution.status} · ${execution.proofArtifacts.length} proof artifacts · ${new Date(execution.completedAt).toLocaleString()}`,
+            statusLabel: execution.status,
+            statusTone: execution.status === "SUCCEEDED" ? "success" : "critical"
+          }))}
+          emptyTitle="No rollout executions"
+          emptyDescription="Execution records will appear here after the first restore, rotation, promotion, or upstream lifecycle run."
+        />
+        <RecordListPanel
+          eyebrow="Proof registry"
+          title="Latest stored proof artifacts"
+          description="Every persisted rollout execution now carries integrity-tracked proof artifacts."
+          items={recentExecutions.flatMap((execution) =>
+            execution.proofArtifacts.slice(0, 1).map((artifact) => ({
+              id: artifact.id,
+              title: `${artifact.kind.toLowerCase()} · ${execution.kind.replaceAll("_", " ").toLowerCase()}`,
+              description: artifact.label,
+              detail: `${artifact.sizeBytes} bytes · ${artifact.sha256.slice(0, 12)}… · ${new Date(artifact.createdAt).toLocaleString()}`,
+              statusLabel: execution.targetEnvironment ?? "GLOBAL",
+              statusTone: execution.status === "SUCCEEDED" ? "default" : "warning"
+            }))
+          )}
+          emptyTitle="No proof artifacts"
+          emptyDescription="Proof artifacts will appear once execution records are stored."
+        />
         <RecordListPanel
           eyebrow="Restore drills"
           title="Latest restore proof"

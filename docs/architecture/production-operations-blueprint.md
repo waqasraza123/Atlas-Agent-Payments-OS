@@ -175,7 +175,7 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - API metrics, operator observability routes, and incident runbooks now exist
 - signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and recertifiable support-access grants, campaign-driven review automation, provider-session revocation, and promotion-manifest automation now exist
 - actor-scoped reporting and export enforcement, tenant-read audit events, restore-drill verification, proof-bearing restore reports, backup integrity manifests, secret-rotation manifest enforcement, and artifact-bound promotion bundles now exist
-- provider-aware rollout adapters plus a persisted operational integration ownership registry now exist, but vendor-native deployment-runner ownership, stored non-local restore ownership, external alert dispatch, long-term metrics retention, live upstream identity-provider ownership, and secret-manager-native rotation ownership are still pending
+- provider-aware rollout adapters, a persisted operational integration ownership registry, and a durable rollout execution ledger with integrity-tracked proof artifacts now exist, but vendor-native deployment-runner ownership, stored remote restore ownership, external alert dispatch, long-term metrics retention, live upstream identity-provider ownership, and secret-manager-native rotation ownership are still pending
 
 ### Required before a production-grade focused v1 rollout
 

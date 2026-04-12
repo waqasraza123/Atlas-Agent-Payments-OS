@@ -45,6 +45,7 @@ import {
   touchOperationalIntegrationUsage,
   type AtlasOperationalIntegrationRecord
 } from "./operational-integrations";
+import { createOperationalExecutionRecord } from "./rollout-executions";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
@@ -112,6 +113,45 @@ function toExecutionTargetEnvironment(
 function truncateOutput(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized.length > 4000 ? normalized.slice(0, 4000) : normalized;
+}
+
+function createExecutionMetadata(fields: Record<string, Prisma.JsonValue | null | undefined>) {
+  return Object.fromEntries(
+    Object.entries(fields).filter((entry) => entry[1] !== undefined)
+  ) as Prisma.JsonObject;
+}
+
+function createExecutionArtifacts(
+  artifacts: Array<{
+    kind: "REPORT" | "MANIFEST" | "BACKUP" | "BUNDLE";
+    label: string;
+    filePath: string | null | undefined;
+    metadata?: Prisma.JsonObject | null;
+  }>
+) {
+  return artifacts
+    .filter((artifact) => typeof artifact.filePath === "string" && artifact.filePath.trim().length > 0)
+    .map((artifact) => ({
+      kind: artifact.kind,
+      label: artifact.label,
+      filePath: resolve(artifact.filePath as string),
+      metadata: artifact.metadata ?? null
+    }));
+}
+
+async function persistOperationalExecutionIfAvailable(
+  input: Parameters<typeof createOperationalExecutionRecord>[0],
+  client: DatabaseClient
+) {
+  if ((process.env.DATABASE_URL?.trim() ?? "").length === 0) {
+    return null;
+  }
+
+  if (!("operationalExecution" in client) || !client.operationalExecution || typeof client.operationalExecution.create !== "function") {
+    return null;
+  }
+
+  return createOperationalExecutionRecord(input, client);
 }
 
 function readAdapterResult(stdout: string | null | undefined): AtlasAutomationAdapterResult | null {
@@ -282,6 +322,7 @@ export async function executeAtlasRestoreDrill(input: {
   targetHost?: string | null;
   reportPath?: string | null;
   executeRestore: boolean;
+  actorUserEmail?: string | null;
 }, client: DatabaseClient = prisma) {
   const backupPath = resolve(input.backupPath);
   const targetEnvironment = assertRestoreEnvironment(input.targetEnvironment);
@@ -410,6 +451,61 @@ export async function executeAtlasRestoreDrill(input: {
   };
 
   writeJsonArtifact(reportPath, report);
+  await persistOperationalExecutionIfAvailable(
+    {
+      kind: "RESTORE_DRILL",
+      mode: report.executionMode,
+      status: "SUCCEEDED",
+      targetEnvironment: report.targetEnvironment,
+      provider: restoreDrillRuntime.provider,
+      actorUserEmail: input.actorUserEmail?.trim() || "atlas-automation@atlas.local",
+      summary: `Restore drill ${report.executedRestore ? "executed" : "validated"} for ${report.targetEnvironment}:${report.targetLabel}.`,
+      providerOperationId: report.adapterResult?.operationId ?? null,
+      targetReference: report.adapterResult?.targetRef ?? report.targetHost ?? null,
+      reportPath,
+      metadata: createExecutionMetadata({
+        executedRestore: report.executedRestore,
+        executionMode: report.executionMode,
+        executor: report.executor,
+        targetLabel: report.targetLabel,
+        targetHost: report.targetHost,
+        adapterResult: report.adapterResult,
+        execution: report.execution
+      }),
+      operationalIntegration: operationalIntegration,
+      completedAt: report.completedAt,
+      proofArtifacts: createExecutionArtifacts([
+        {
+          kind: "BACKUP",
+          label: "restore backup",
+          filePath: backupPath,
+          metadata: createExecutionMetadata({
+            backupPath,
+            targetEnvironment: report.targetEnvironment
+          })
+        },
+        {
+          kind: "MANIFEST",
+          label: "backup manifest",
+          filePath: manifestPath,
+          metadata: createExecutionMetadata({
+            backupPath,
+            targetEnvironment: report.targetEnvironment
+          })
+        },
+        {
+          kind: "REPORT",
+          label: "restore report",
+          filePath: reportPath,
+          metadata: createExecutionMetadata({
+            targetEnvironment: report.targetEnvironment,
+            targetLabel: report.targetLabel
+          })
+        }
+      ])
+    },
+    client
+  );
   return {
     report,
     reportPath
@@ -511,6 +607,49 @@ export async function executeAtlasSecretRotation(input: {
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
+  await persistOperationalExecutionIfAvailable(
+    {
+      kind: "SECRET_ROTATION",
+      mode: report.mode,
+      status: "SUCCEEDED",
+      targetEnvironment: environment,
+      provider: report.provider,
+      actorUserEmail: rotatedBy,
+      summary: `Secret rotation executed for ${environment} across ${secretKeys.length} keys.`,
+      providerOperationId: report.adapterResult?.operationId ?? null,
+      targetReference: report.adapterResult?.targetRef ?? resolvedIntegration?.secretReference ?? null,
+      reportPath,
+      metadata: createExecutionMetadata({
+        reason,
+        secretKeys,
+        adapterResult: report.adapterResult,
+        command: report.command
+      }),
+      operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
+      completedAt: generatedAt,
+      proofArtifacts: createExecutionArtifacts([
+        {
+          kind: "MANIFEST",
+          label: "rotation manifest",
+          filePath: manifestPath,
+          metadata: createExecutionMetadata({
+            environment,
+            secretCount: secretKeys.length
+          })
+        },
+        {
+          kind: "REPORT",
+          label: "rotation report",
+          filePath: reportPath,
+          metadata: createExecutionMetadata({
+            environment,
+            provider: report.provider
+          })
+        }
+      ])
+    },
+    client
+  );
   return {
     report,
     reportPath,
@@ -629,6 +768,7 @@ export async function executeAtlasPromotionAutomation(input: {
   secretRotationExecutionReport?: AtlasSecretRotationExecutionReport;
   environment: Record<string, string | undefined>;
   bundlePath: string;
+  actorUserEmail?: string | null;
 }, client: DatabaseClient = prisma) {
   const fromEnv = assertPromotionTarget(input.fromEnv);
   const toEnv = assertPromotionTarget(input.toEnv);
@@ -703,6 +843,51 @@ export async function executeAtlasPromotionAutomation(input: {
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
+  await persistOperationalExecutionIfAvailable(
+    {
+      kind: "DEPLOYMENT_PROMOTION",
+      mode: report.mode,
+      status: "SUCCEEDED",
+      targetEnvironment: toEnv,
+      provider: report.provider,
+      actorUserEmail: input.actorUserEmail?.trim() || "atlas-automation@atlas.local",
+      summary: `Promotion dispatched from ${fromEnv} to ${toEnv} for ${input.services.join(", ")}.`,
+      providerOperationId: report.adapterResult?.operationId ?? null,
+      targetReference: report.adapterResult?.targetRef ?? resolvedIntegration?.endpointReference ?? null,
+      reportPath,
+      metadata: createExecutionMetadata({
+        fromEnv,
+        toEnv,
+        services: input.services,
+        adapterResult: report.adapterResult,
+        command: report.command,
+        bundleSha256
+      }),
+      operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
+      completedAt: report.generatedAt,
+      proofArtifacts: createExecutionArtifacts([
+        {
+          kind: "BUNDLE",
+          label: "promotion bundle",
+          filePath: bundlePath,
+          metadata: createExecutionMetadata({
+            fromEnv,
+            toEnv
+          })
+        },
+        {
+          kind: "REPORT",
+          label: "promotion report",
+          filePath: reportPath,
+          metadata: createExecutionMetadata({
+            fromEnv,
+            toEnv
+          })
+        }
+      ])
+    },
+    client
+  );
   return {
     report,
     reportPath
@@ -779,6 +964,43 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
+  await persistOperationalExecutionIfAvailable(
+    {
+      kind: "UPSTREAM_IDENTITY",
+      mode: report.mode,
+      status: "SUCCEEDED",
+      targetEnvironment: runtimeTargetEnvironment,
+      provider: report.provider,
+      actorUserEmail: input.actor.user.email,
+      summary: `${input.action} ${input.assignment.externalEmail} in ${input.assignment.organizationSlug}.`,
+      providerOperationId: report.adapterResult?.operationId ?? null,
+      targetReference: report.adapterResult?.targetRef ?? resolvedIntegration?.endpointReference ?? null,
+      reportPath,
+      metadata: createExecutionMetadata({
+        action: input.action,
+        assignmentId: input.assignment.id,
+        externalEmail: input.assignment.externalEmail,
+        organizationSlug: input.assignment.organizationSlug,
+        role: input.assignment.role,
+        adapterResult: report.adapterResult,
+        command: report.command
+      }),
+      operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
+      completedAt: report.generatedAt,
+      proofArtifacts: createExecutionArtifacts([
+        {
+          kind: "REPORT",
+          label: "upstream identity report",
+          filePath: reportPath,
+          metadata: createExecutionMetadata({
+            action: input.action,
+            organizationSlug: input.assignment.organizationSlug
+          })
+        }
+      ])
+    },
+    client
+  );
   return {
     report,
     reportPath

@@ -487,7 +487,8 @@ export async function executeRestoreDrillAction(formData: FormData) {
       targetEnvironment: toTextValue(formData.get("targetEnvironment")),
       targetLabel: toTextValue(formData.get("targetLabel")),
       targetHost: toTextValue(formData.get("targetHost")) || null,
-      executeRestore: toBooleanValue(formData.get("executeRestore"))
+      executeRestore: toBooleanValue(formData.get("executeRestore")),
+      actorUserEmail: actor.user.email
     });
     revalidatePath("/operator/rollout");
     redirectWithFeedback(
@@ -522,7 +523,7 @@ export async function executeSecretRotationAction(formData: FormData) {
 }
 
 export async function executePromotionAutomationAction(formData: FormData) {
-  await requireOperatorActor();
+  const actor = await requireOperatorActor();
 
   try {
     const fromEnv = toTextValue(formData.get("fromEnv"));
@@ -601,7 +602,8 @@ export async function executePromotionAutomationAction(formData: FormData) {
       secretRotationExecutionReport,
       secretRotationManifest: secretRotationExecutionReport.manifest,
       environment,
-      bundlePath: bundle.promotionBundlePath
+      bundlePath: bundle.promotionBundlePath,
+      actorUserEmail: actor.user.email
     });
 
     revalidatePath("/operator/rollout");

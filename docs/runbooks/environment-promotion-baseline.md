@@ -48,4 +48,4 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 ## Current Limitation
 
-The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation execution proof, provider-aware promotion adapter output, promotion-manifest generation, artifact-bound promotion bundles, promotion execution reports, and owned verified rollout targets for command-mode execution, but it still does not own a vendor-native deployment target, secret-manager-native execution ownership, or environment-specific deploy execution.
+The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation execution proof, provider-aware promotion adapter output, promotion-manifest generation, artifact-bound promotion bundles, promotion execution reports, owned verified rollout targets for command-mode execution, and a durable rollout execution ledger with integrity-tracked proof artifacts, but it still does not own a vendor-native deployment target, secret-manager-native execution ownership, or environment-specific deploy execution.

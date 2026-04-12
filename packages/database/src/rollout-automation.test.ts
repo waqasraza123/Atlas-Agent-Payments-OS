@@ -69,6 +69,26 @@ function createOperationalIntegrationClient(record = createOperationalIntegratio
     operationalIntegration: {
       findMany: vi.fn(async () => [record]),
       update: vi.fn(async () => undefined)
+    },
+    operationalExecution: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "execution-1",
+        kind: data.kind,
+        mode: data.mode,
+        status: data.status,
+        targetEnvironment: data.targetEnvironment ?? null,
+        provider: data.provider,
+        actorUserEmail: data.actorUserEmail,
+        summary: data.summary,
+        providerOperationId: data.providerOperationId ?? null,
+        targetReference: data.targetReference ?? null,
+        reportPath: data.reportPath ?? null,
+        metadata: data.metadata ?? null,
+        completedAt: new Date("2026-04-12T00:00:00.000Z"),
+        createdAt: new Date("2026-04-12T00:00:00.000Z"),
+        operationalIntegration: null,
+        proofArtifacts: []
+      }))
     }
   };
 }
@@ -87,12 +107,13 @@ describe("rollout automation", { timeout: 15000 }, () => {
     vi.stubEnv("RESTORE_DRILL_REPORT_DIR", join(sandbox, "restore-reports"));
 
     const { executeAtlasRestoreDrill, listAtlasRestoreDrillReports } = await import("./rollout-automation");
+    const client = createOperationalIntegrationClient();
     const result = await executeAtlasRestoreDrill({
       backupPath,
       targetEnvironment: "staging",
       targetLabel: "staging-restore-slot",
       executeRestore: false
-    });
+    }, client as never);
 
     expect(result.report.executedRestore).toBe(false);
     expect(result.report.executionMode).toBe("dry-run");
@@ -114,6 +135,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
     vi.stubEnv("SECRET_ROTATION_MANIFEST_DIR", join(sandbox, "rotation-manifests"));
 
     const { executeAtlasSecretRotation, listAtlasSecretRotationExecutionReports } = await import("./rollout-automation");
+    const client = createOperationalIntegrationClient();
     const result = await executeAtlasSecretRotation({
       environment: "staging",
       rotatedBy: "operator-admin@atlas.local",
@@ -126,7 +148,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
         "STRIPE_WEBHOOK_SECRET",
         "MINIO_SECRET_KEY"
       ]
-    });
+    }, client as never);
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);
@@ -153,6 +175,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_REPORT_DIR", join(sandbox, "promotion-reports"));
 
     const { executeAtlasPromotionAutomation, listAtlasPromotionExecutionReports } = await import("./rollout-automation");
+    const client = createOperationalIntegrationClient();
     const now = new Date().toISOString();
     const result = await executeAtlasPromotionAutomation({
       fromEnv: "development",
@@ -233,7 +256,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
         RELEASE_ARTIFACT_SHA256: "a".repeat(64)
       },
       bundlePath
-    });
+    }, client as never);
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);
@@ -254,6 +277,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
     const { executeAtlasUpstreamIdentityLifecycle, listAtlasUpstreamIdentityLifecycleReports } = await import(
       "./rollout-automation"
     );
+    const client = createOperationalIntegrationClient();
     const result = await executeAtlasUpstreamIdentityLifecycle({
       actor: createOperatorActor(),
       assignment: {
@@ -280,7 +304,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
       },
       action: "SUSPEND",
       reason: "Suspend upstream tenant access while ownership evidence is reviewed."
-    });
+    }, client as never);
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);

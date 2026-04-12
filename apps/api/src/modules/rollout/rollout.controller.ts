@@ -11,6 +11,7 @@ export class RolloutController {
   constructor(@Inject(RolloutService) private readonly rolloutService: RolloutService) {
     this.summary = this.summary.bind(this);
     this.integrations = this.integrations.bind(this);
+    this.executions = this.executions.bind(this);
   }
 
   @Get("summary")
@@ -23,5 +24,11 @@ export class RolloutController {
   @RequireRoles("OWNER", "ADMIN")
   integrations(@CurrentActor() actor: AtlasActorContext) {
     return this.rolloutService.listIntegrations(actor);
+  }
+
+  @Get("executions")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  executions(@CurrentActor() actor: AtlasActorContext) {
+    return this.rolloutService.listExecutions(actor);
   }
 }

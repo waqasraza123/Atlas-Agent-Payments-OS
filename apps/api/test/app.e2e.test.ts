@@ -1091,6 +1091,44 @@ const databaseMock = vi.hoisted(() => ({
   listAtlasRestoreDrillReports: vi.fn(() => []),
   listAtlasSecretRotationExecutionReports: vi.fn(() => []),
   listAtlasPromotionExecutionReports: vi.fn(() => []),
+  getOperationalExecutionSummary: vi.fn(async () => ({
+    totalCount: 5,
+    commandCount: 3,
+    dryRunCount: 2,
+    failedCount: 1,
+    latestCompletedAt: new Date().toISOString()
+  })),
+  listOperationalExecutions: vi.fn(async () => [
+    {
+      id: "execution-1",
+      kind: "DEPLOYMENT_PROMOTION",
+      mode: "COMMAND",
+      status: "SUCCEEDED",
+      targetEnvironment: "STAGING",
+      provider: "github-actions",
+      actorUserEmail: "operator-admin@atlas.local",
+      summary: "Promotion dispatched from development to staging for api, web, worker.",
+      providerOperationId: "deploy-123",
+      targetReference: "atlas/payments-os/deploy.yml",
+      reportPath: "/tmp/promotion-report.json",
+      metadata: null,
+      completedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      operationalIntegration: null,
+      proofArtifacts: [
+        {
+          id: "artifact-1",
+          kind: "BUNDLE",
+          label: "promotion bundle",
+          filePath: "/tmp/promotion.json",
+          sha256: "a".repeat(64),
+          sizeBytes: 128,
+          metadata: null,
+          createdAt: new Date().toISOString()
+        }
+      ]
+    }
+  ]),
   listOperationalIntegrations: vi.fn(async () => [
     {
       id: "integration-1",
@@ -1158,6 +1196,8 @@ vi.mock("@atlas/database", async () => {
     listAtlasRestoreDrillReports: databaseMock.listAtlasRestoreDrillReports,
     listAtlasSecretRotationExecutionReports: databaseMock.listAtlasSecretRotationExecutionReports,
     listAtlasPromotionExecutionReports: databaseMock.listAtlasPromotionExecutionReports,
+    getOperationalExecutionSummary: databaseMock.getOperationalExecutionSummary,
+    listOperationalExecutions: databaseMock.listOperationalExecutions,
     listAtlasUpstreamIdentityLifecycleReports: databaseMock.listAtlasUpstreamIdentityLifecycleReports,
     executeAtlasUpstreamIdentityLifecycle: databaseMock.executeAtlasUpstreamIdentityLifecycle,
     provisionExternalIdentityAssignment: databaseMock.provisionExternalIdentityAssignment,
@@ -2372,16 +2412,31 @@ describe("atlas api e2e", () => {
     const integrationsResponse = await request(app.getHttpServer())
       .get("/rollout/integrations")
       .set("x-atlas-local-session", "local-token");
+    const executionsResponse = await request(app.getHttpServer())
+      .get("/rollout/executions")
+      .set("x-atlas-local-session", "local-token");
 
     expect(summaryResponse.status).toBe(200);
     expect(summaryResponse.body.module.key).toBe("rollout");
     expect(summaryResponse.body.automation.upstreamIdentity.provider).toBe("okta-scim");
+    expect(summaryResponse.body.executionSummary).toMatchObject({
+      totalCount: 5,
+      failedCount: 1
+    });
     expect(integrationsResponse.status).toBe(200);
     expect(integrationsResponse.body.items).toEqual([
       expect.objectContaining({
         id: "integration-1",
         label: "staging github runner",
         verificationStatus: "VERIFIED"
+      })
+    ]);
+    expect(executionsResponse.status).toBe(200);
+    expect(executionsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "execution-1",
+        kind: "DEPLOYMENT_PROMOTION",
+        status: "SUCCEEDED"
       })
     ]);
   });
