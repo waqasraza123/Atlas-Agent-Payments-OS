@@ -17,6 +17,7 @@ import { PoliciesModule } from "./modules/policies/policies.module";
 import { ProgrammableSettlementModule } from "./modules/programmable-settlement/programmable-settlement.module";
 import { ReceiptsModule } from "./modules/receipts/receipts.module";
 import { RequestsModule } from "./modules/requests/requests.module";
+import { RolloutModule } from "./modules/rollout/rollout.module";
 import { SellersModule } from "./modules/sellers/sellers.module";
 import { ServicesModule } from "./modules/services/services.module";
 
@@ -36,6 +37,7 @@ import { ServicesModule } from "./modules/services/services.module";
     AuditModule,
     SellersModule,
     ServicesModule,
+    RolloutModule,
     PaymentsModule,
     ProgrammableSettlementModule,
     ReceiptsModule,

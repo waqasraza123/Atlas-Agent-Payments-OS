@@ -139,6 +139,19 @@ describe("atlas config", () => {
           databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
           stdout: "RESTORE"
         },
+        operationalIntegration: {
+          id: "integration-restore-1",
+          kind: "RESTORE_DRILL",
+          targetEnvironment: "STAGING",
+          provider: "local-psql",
+          label: "staging restore owner",
+          ownerEmail: "platform-ops@atlas.local",
+          endpointReference: "postgres.staging.internal",
+          secretReference: "aws-secrets://atlas/staging/restore",
+          configReference: "atlas-restore-job",
+          verificationStatus: "VERIFIED",
+          lastVerifiedAt: new Date().toISOString()
+        },
         adapterResult: {
           version: 1,
           adapter: "kubernetes-restore-job",
@@ -177,6 +190,19 @@ describe("atlas config", () => {
             { key: "STRIPE_WEBHOOK_SECRET", rotatedAt: new Date().toISOString() },
             { key: "MINIO_SECRET_KEY", rotatedAt: new Date().toISOString() }
           ]
+        },
+        operationalIntegration: {
+          id: "integration-rotation-1",
+          kind: "SECRET_ROTATION",
+          targetEnvironment: "STAGING",
+          provider: "aws-secrets-manager",
+          label: "staging secret owner",
+          ownerEmail: "platform-ops@atlas.local",
+          endpointReference: "us-east-1",
+          secretReference: "atlas/staging",
+          configReference: null,
+          verificationStatus: "VERIFIED",
+          lastVerifiedAt: new Date().toISOString()
         },
         command: {
           configured: true,
@@ -222,6 +248,19 @@ describe("atlas config", () => {
             databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas_restore",
             stdout: "RESTORE"
           },
+          operationalIntegration: {
+            id: "integration-restore-1",
+            kind: "RESTORE_DRILL",
+            targetEnvironment: "STAGING",
+            provider: "local-psql",
+            label: "staging restore owner",
+            ownerEmail: "platform-ops@atlas.local",
+            endpointReference: "postgres.staging.internal",
+            secretReference: "aws-secrets://atlas/staging/restore",
+            configReference: "atlas-restore-job",
+            verificationStatus: "VERIFIED",
+            lastVerifiedAt: new Date().toISOString()
+          },
           adapterResult: {
             version: 1,
             adapter: "kubernetes-restore-job",
@@ -258,6 +297,19 @@ describe("atlas config", () => {
               { key: "STRIPE_WEBHOOK_SECRET", rotatedAt: new Date().toISOString() },
               { key: "MINIO_SECRET_KEY", rotatedAt: new Date().toISOString() }
             ]
+          },
+          operationalIntegration: {
+            id: "integration-rotation-1",
+            kind: "SECRET_ROTATION",
+            targetEnvironment: "STAGING",
+            provider: "aws-secrets-manager",
+            label: "staging secret owner",
+            ownerEmail: "platform-ops@atlas.local",
+            endpointReference: "us-east-1",
+            secretReference: "atlas/staging",
+            configReference: null,
+            verificationStatus: "VERIFIED",
+            lastVerifiedAt: new Date().toISOString()
           },
           command: {
             configured: true,
@@ -665,6 +717,7 @@ describe("atlas config", () => {
         targetHost: null,
         proofArtifactPath: null,
         execution: null,
+        operationalIntegration: null,
         adapterResult: null,
         completedAt: new Date("2020-01-01T00:00:00.000Z").toISOString()
       },
@@ -693,6 +746,7 @@ describe("atlas config", () => {
           stdout: "",
           stderr: ""
         },
+        operationalIntegration: null,
         adapterResult: null
       }
       })

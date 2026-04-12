@@ -63,4 +63,4 @@ Requirements:
 
 ## Current Limitation
 
-The repo now owns the scripts, integrity checks, dry-run restore-drill verification, executed restore-drill reporting, provider-aware restore adapter contracts, and proof-bearing restore-drill reports with target metadata, but backup scheduling and real non-local restore ownership still need a real deployment environment and documented ownership.
+The repo now owns the scripts, integrity checks, dry-run restore-drill verification, executed restore-drill reporting, provider-aware restore adapter contracts, proof-bearing restore-drill reports with target metadata, and owned verified rollout targets for command-mode restore execution, but backup scheduling and stored non-local restore proof ownership still need a real deployment environment and documented ownership.

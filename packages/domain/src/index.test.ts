@@ -41,6 +41,7 @@ describe("atlas domain registry", () => {
   it("creates API domain snapshots with actor context", () => {
     expect(getAtlasApiDomainDefinition("payments").ownerWorkspaces).toEqual(["BUYER", "SELLER", "OPERATOR"]);
     expect(getAtlasApiDomainDefinition("programmable-settlement").routePrefix).toBe("/programmable-settlement");
+    expect(getAtlasApiDomainDefinition("rollout").routePrefix).toBe("/rollout");
 
     expect(
       createAtlasApiDomainSnapshot("payments", {
@@ -59,6 +60,7 @@ describe("atlas domain registry", () => {
 
     expect(operatorModules).toContain("organizations");
     expect(operatorModules).toContain("operator-controls");
+    expect(operatorModules).toContain("rollout");
     expect(operatorModules).toContain("observability");
     expect(operatorModules).not.toContain("agents");
   });

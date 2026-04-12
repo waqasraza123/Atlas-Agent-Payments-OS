@@ -2,6 +2,7 @@ import {
   AtlasAnalyticsReportingError,
   AtlasBuyerWorkflowError,
   AtlasExternalIdentityAccessWorkflowError,
+  AtlasOperationalIntegrationWorkflowError,
   AtlasOperatorWorkflowError,
   AtlasPaymentsWorkflowError,
   AtlasProgrammableSettlementError,
@@ -84,6 +85,14 @@ export function rethrowRolloutAutomationError(error: unknown): never {
   rethrowAtlasWorkflowError(error);
 }
 
+export function rethrowOperationalIntegrationWorkflowError(error: unknown): never {
+  if (!(error instanceof AtlasOperationalIntegrationWorkflowError)) {
+    throw error;
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
 function rethrowAtlasWorkflowError(
   error:
     | AtlasAnalyticsReportingError
@@ -92,6 +101,7 @@ function rethrowAtlasWorkflowError(
     | AtlasSellerWorkflowError
     | AtlasPaymentsWorkflowError
     | AtlasProgrammableSettlementError
+    | AtlasOperationalIntegrationWorkflowError
     | AtlasOperatorWorkflowError
     | AtlasExternalIdentityAccessWorkflowError
     | AtlasRolloutAutomationError

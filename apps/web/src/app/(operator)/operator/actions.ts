@@ -20,7 +20,10 @@ import {
   parseAtlasEnvFile,
   provisionExternalIdentityAssignment,
   performOperatorCaseAction,
+  registerOperationalIntegration,
   updateIdentityProviderLinkLifecycle,
+  updateOperationalIntegrationLifecycle,
+  updateOperationalIntegrationVerification,
   updateExternalIdentityAssignmentLifecycle,
   revokeIdentityProviderSession,
   issueSupportAccessGrant,
@@ -28,6 +31,7 @@ import {
   resolveSupportAccessReviewCampaignItem,
   reviewSupportAccessGrant,
   revokeSupportAccessGrant,
+  AtlasOperationalIntegrationWorkflowError,
   AtlasOperatorWorkflowError,
   AtlasRolloutAutomationError,
   AtlasSupportAccessWorkflowError
@@ -63,6 +67,7 @@ async function requireOperatorActor() {
 
 function normalizeActionError(error: unknown) {
   if (
+    error instanceof AtlasOperationalIntegrationWorkflowError ||
     error instanceof AtlasOperatorWorkflowError ||
     error instanceof AtlasSupportAccessWorkflowError ||
     error instanceof AtlasRolloutAutomationError
@@ -415,7 +420,7 @@ export async function provisionExternalIdentityAssignmentAction(formData: FormDa
     });
 
     if (toBooleanValue(formData.get("syncUpstream"))) {
-      executeAtlasUpstreamIdentityLifecycle({
+      await executeAtlasUpstreamIdentityLifecycle({
         actor,
         assignment,
         action: "PROVISION",
@@ -449,7 +454,7 @@ export async function updateExternalIdentityAssignmentLifecycleAction(assignment
     });
 
     if (toBooleanValue(formData.get("syncUpstream"))) {
-      executeAtlasUpstreamIdentityLifecycle({
+      await executeAtlasUpstreamIdentityLifecycle({
         actor,
         assignment: result.assignment,
         action:
@@ -477,7 +482,7 @@ export async function executeRestoreDrillAction(formData: FormData) {
   const actor = await requireOperatorActor();
 
   try {
-    const result = executeAtlasRestoreDrill({
+    const result = await executeAtlasRestoreDrill({
       backupPath: toTextValue(formData.get("backupPath")) || "scripts/fixtures/restore-drill.sql",
       targetEnvironment: toTextValue(formData.get("targetEnvironment")),
       targetLabel: toTextValue(formData.get("targetLabel")),
@@ -499,7 +504,7 @@ export async function executeSecretRotationAction(formData: FormData) {
   const actor = await requireOperatorActor();
 
   try {
-    const result = executeAtlasSecretRotation({
+    const result = await executeAtlasSecretRotation({
       environment: toTextValue(formData.get("environment")),
       rotatedBy: actor.user.email,
       reason: toTextValue(formData.get("reason")),
@@ -588,7 +593,7 @@ export async function executePromotionAutomationAction(formData: FormData) {
       secretRotationManifest: secretRotationExecutionReport.manifest
     });
 
-    const execution = executeAtlasPromotionAutomation({
+    const execution = await executeAtlasPromotionAutomation({
       fromEnv,
       toEnv,
       services: [...services],
@@ -607,5 +612,73 @@ export async function executePromotionAutomationAction(formData: FormData) {
     );
   } catch (error) {
     redirectWithFeedback("/operator/rollout", "Promotion execution failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function registerOperationalIntegrationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const integration = await registerOperationalIntegration(actor, {
+      kind: toTextValue(formData.get("kind")),
+      targetEnvironment: toTextValue(formData.get("targetEnvironment")),
+      provider: toTextValue(formData.get("provider")),
+      label: toTextValue(formData.get("label")),
+      ownerEmail: toTextValue(formData.get("ownerEmail")),
+      endpointReference: toTextValue(formData.get("endpointReference")) || null,
+      secretReference: toTextValue(formData.get("secretReference")) || null,
+      configReference: toTextValue(formData.get("configReference")) || null
+    });
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Operational integration registered",
+      `Atlas registered ${integration.label} for ${integration.targetEnvironment.toLowerCase()}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Operational integration failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateOperationalIntegrationVerificationAction(integrationId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const integration = await updateOperationalIntegrationVerification(actor, integrationId, {
+      verificationStatus: toTextValue(formData.get("verificationStatus")),
+      verificationReason: toTextValue(formData.get("verificationReason"))
+    });
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Operational integration updated",
+      `Atlas marked ${integration.label} as ${integration.verificationStatus.toLowerCase()}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Operational integration failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function updateOperationalIntegrationLifecycleAction(integrationId: string, formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const integration = await updateOperationalIntegrationLifecycle(actor, integrationId, {
+      action:
+        toTextValue(formData.get("action")) === "REVOKE"
+          ? "REVOKE"
+          : toTextValue(formData.get("action")) === "REACTIVATE"
+            ? "REACTIVATE"
+            : "SUSPEND",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/rollout",
+      "Operational integration lifecycle updated",
+      `Atlas set ${integration.label} to ${integration.status.toLowerCase()}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/rollout", "Operational integration failed", normalizeActionError(error), "error");
   }
 }

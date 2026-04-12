@@ -28,8 +28,11 @@ import {
   type AtlasUpstreamIdentityProvider,
   type AtlasUpstreamIdentityLifecycleAction,
   type AtlasUpstreamIdentityLifecycleReport,
-  upstreamIdentityRuntime
+  upstreamIdentityRuntime,
+  type AtlasOperationalIntegrationSnapshot
 } from "../../config/src/index";
+import { Prisma, type PrismaClient } from "./generated/client/index.js";
+import { prisma } from "./client";
 import type { AtlasExternalIdentityAssignmentRecord } from "./external-identity-access";
 import {
   createAtlasFileIntegrityManifest,
@@ -37,6 +40,13 @@ import {
   writeAtlasFileIntegrityManifest,
   computeAtlasFileSha256
 } from "./file-integrity";
+import {
+  resolveOperationalIntegrationForExecution,
+  touchOperationalIntegrationUsage,
+  type AtlasOperationalIntegrationRecord
+} from "./operational-integrations";
+
+type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 export class AtlasRolloutAutomationError extends Error {
   constructor(message: string, readonly code: "bad_request" | "conflict" | "execution_failed") {
@@ -61,6 +71,42 @@ function writeJsonArtifact(filePath: string, payload: unknown) {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   return filePath;
+}
+
+function mapOperationalIntegrationSnapshot(
+  integration: AtlasOperationalIntegrationRecord
+): AtlasOperationalIntegrationSnapshot {
+  return {
+    id: integration.id,
+    kind: integration.kind,
+    targetEnvironment: integration.targetEnvironment,
+    provider: integration.provider,
+    label: integration.label,
+    ownerEmail: integration.ownerEmail,
+    endpointReference: integration.endpointReference,
+    secretReference: integration.secretReference,
+    configReference: integration.configReference,
+    verificationStatus: integration.verificationStatus,
+    lastVerifiedAt: integration.lastVerifiedAt
+  };
+}
+
+function toExecutionTargetEnvironment(
+  value: AtlasAppEnvironment
+): Uppercase<AtlasPromotionTarget> | null {
+  if (value === "development") {
+    return "DEVELOPMENT";
+  }
+
+  if (value === "staging") {
+    return "STAGING";
+  }
+
+  if (value === "production") {
+    return "PRODUCTION";
+  }
+
+  return null;
 }
 
 function truncateOutput(value: string | null | undefined) {
@@ -229,14 +275,14 @@ export function listAtlasUpstreamIdentityLifecycleReports(limit = 12) {
   return listArtifacts<AtlasUpstreamIdentityLifecycleReport>(resolveRepoPath(upstreamIdentityRuntime.reportDirectory), limit);
 }
 
-export function executeAtlasRestoreDrill(input: {
+export async function executeAtlasRestoreDrill(input: {
   backupPath: string;
   targetEnvironment: string;
   targetLabel: string;
   targetHost?: string | null;
   reportPath?: string | null;
   executeRestore: boolean;
-}) {
+}, client: DatabaseClient = prisma) {
   const backupPath = resolve(input.backupPath);
   const targetEnvironment = assertRestoreEnvironment(input.targetEnvironment);
   const targetLabel = readArgumentSafeText(input.targetLabel);
@@ -263,17 +309,35 @@ export function executeAtlasRestoreDrill(input: {
   let executionMode: AtlasCommandAdapterMode = "dry-run";
   let executor = "dry-run";
   let adapterResult: AtlasAutomationAdapterResult | null = null;
+  let operationalIntegration: AtlasOperationalIntegrationSnapshot | null = null;
 
   if (input.executeRestore) {
     executionMode = "command";
 
     if (restoreDrillRuntime.mode === "command") {
+      const integrationTarget = toExecutionTargetEnvironment(targetEnvironment);
+      const resolvedIntegration =
+        integrationTarget
+          ? await resolveOperationalIntegrationForExecution(
+              {
+                kind: "RESTORE_DRILL",
+                targetEnvironment: integrationTarget,
+                provider: restoreDrillRuntime.provider
+              },
+              client
+            )
+          : null;
       const result = executeConfiguredCommand(restoreDrillRuntime.mode, restoreDrillRuntime.command, {
         backupPath,
         targetEnvironment,
         targetLabel,
         targetHost: targetHost || null,
         provider: restoreDrillRuntime.provider,
+        operationalIntegrationId: resolvedIntegration?.id ?? null,
+        ownerEmail: resolvedIntegration?.ownerEmail ?? null,
+        endpointReference: resolvedIntegration?.endpointReference ?? null,
+        secretReference: resolvedIntegration?.secretReference ?? null,
+        configReference: resolvedIntegration?.configReference ?? null,
         executeRestore: input.executeRestore
       });
 
@@ -286,10 +350,14 @@ export function executeAtlasRestoreDrill(input: {
 
       executor = "configured-command";
       adapterResult = result.adapterResult;
+      operationalIntegration = resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null;
       execution = {
         databaseUrlRedacted: targetHost || "remote-target",
         stdout: result.stdout
       };
+      if (resolvedIntegration) {
+        await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
+      }
     } else {
       const targetDatabaseUrl = process.env.ATLAS_RESTORE_DRILL_DATABASE_URL?.trim() ?? "";
 
@@ -336,6 +404,7 @@ export function executeAtlasRestoreDrill(input: {
     targetHost: targetHost || null,
     proofArtifactPath: reportPath,
     execution,
+    operationalIntegration,
     adapterResult,
     completedAt: new Date().toISOString()
   };
@@ -347,14 +416,14 @@ export function executeAtlasRestoreDrill(input: {
   };
 }
 
-export function executeAtlasSecretRotation(input: {
+export async function executeAtlasSecretRotation(input: {
   environment: string;
   rotatedBy: string;
   reason: string;
   secretKeys: string[];
   reportPath?: string | null;
   manifestPath?: string | null;
-}) {
+}, client: DatabaseClient = prisma) {
   const environment = assertPromotionTarget(input.environment);
   const rotatedBy = readArgumentSafeText(input.rotatedBy).toLowerCase();
   const reason = readArgumentSafeText(input.reason);
@@ -387,12 +456,28 @@ export function executeAtlasSecretRotation(input: {
       : resolveRepoPath(secretRotationRuntime.manifestDirectory, environment, `${createTimestampFileFragment()}.json`);
   writeJsonArtifact(manifestPath, manifest);
 
+  const resolvedIntegration =
+    secretRotationRuntime.mode === "command"
+      ? await resolveOperationalIntegrationForExecution(
+          {
+            kind: "SECRET_ROTATION",
+            targetEnvironment: environment.toUpperCase() as Uppercase<AtlasPromotionTarget>,
+            provider: secretRotationRuntime.provider
+          },
+          client
+        )
+      : null;
   const command = executeConfiguredCommand(secretRotationRuntime.mode, secretRotationRuntime.command, {
     environment,
     provider: secretRotationRuntime.provider,
     rotatedBy,
     reason,
-    secretKeys
+    secretKeys,
+    operationalIntegrationId: resolvedIntegration?.id ?? null,
+    ownerEmail: resolvedIntegration?.ownerEmail ?? null,
+    endpointReference: resolvedIntegration?.endpointReference ?? null,
+    secretReference: resolvedIntegration?.secretReference ?? null,
+    configReference: resolvedIntegration?.configReference ?? null
   });
 
   if (command.exitCode !== null && command.exitCode !== 0) {
@@ -417,11 +502,15 @@ export function executeAtlasSecretRotation(input: {
     reportPath,
     manifestPath,
     manifest,
+    operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
     command,
     adapterResult: command.adapterResult
   };
 
   writeJsonArtifact(reportPath, report);
+  if (resolvedIntegration) {
+    await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
+  }
   return {
     report,
     reportPath,
@@ -531,7 +620,7 @@ export function createAtlasPromotionBundle(input: {
   };
 }
 
-export function executeAtlasPromotionAutomation(input: {
+export async function executeAtlasPromotionAutomation(input: {
   fromEnv: string;
   toEnv: string;
   services: AtlasRuntimeService[];
@@ -540,7 +629,7 @@ export function executeAtlasPromotionAutomation(input: {
   secretRotationExecutionReport?: AtlasSecretRotationExecutionReport;
   environment: Record<string, string | undefined>;
   bundlePath: string;
-}) {
+}, client: DatabaseClient = prisma) {
   const fromEnv = assertPromotionTarget(input.fromEnv);
   const toEnv = assertPromotionTarget(input.toEnv);
 
@@ -557,13 +646,29 @@ export function executeAtlasPromotionAutomation(input: {
 
   const bundlePath = resolve(input.bundlePath);
   const bundleSha256 = computeAtlasFileSha256(bundlePath);
+  const resolvedIntegration =
+    deploymentAutomationRuntime.mode === "command"
+      ? await resolveOperationalIntegrationForExecution(
+          {
+            kind: "DEPLOYMENT_AUTOMATION",
+            targetEnvironment: toEnv.toUpperCase() as Uppercase<AtlasPromotionTarget>,
+            provider: deploymentAutomationRuntime.provider
+          },
+          client
+        )
+      : null;
   const command = executeConfiguredCommand(deploymentAutomationRuntime.mode, deploymentAutomationRuntime.command, {
     fromEnv,
     toEnv,
     services: input.services,
     bundlePath,
     bundleSha256,
-    provider: deploymentAutomationRuntime.provider
+    provider: deploymentAutomationRuntime.provider,
+    operationalIntegrationId: resolvedIntegration?.id ?? null,
+    ownerEmail: resolvedIntegration?.ownerEmail ?? null,
+    endpointReference: resolvedIntegration?.endpointReference ?? null,
+    secretReference: resolvedIntegration?.secretReference ?? null,
+    configReference: resolvedIntegration?.configReference ?? null
   });
 
   if (command.exitCode !== null && command.exitCode !== 0) {
@@ -589,26 +694,42 @@ export function executeAtlasPromotionAutomation(input: {
     bundlePath,
     bundleSha256,
     provider: deploymentAutomationRuntime.provider,
+    operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
     command,
     adapterResult: command.adapterResult
   };
 
   writeJsonArtifact(reportPath, report);
+  if (resolvedIntegration) {
+    await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
+  }
   return {
     report,
     reportPath
   };
 }
 
-export function executeAtlasUpstreamIdentityLifecycle(input: {
+export async function executeAtlasUpstreamIdentityLifecycle(input: {
   actor: AtlasActorContext;
   assignment: AtlasExternalIdentityAssignmentRecord;
   action: AtlasUpstreamIdentityLifecycleAction;
   reason: string;
-}) {
+}, client: DatabaseClient = prisma) {
   assertActorEmail(input.actor.user.email);
   assertNonEmptyReason(input.reason, "Upstream identity lifecycle reason");
 
+  const runtimeTargetEnvironment = toExecutionTargetEnvironment(appRuntime.appEnv);
+  const resolvedIntegration =
+    upstreamIdentityRuntime.mode === "command" && runtimeTargetEnvironment
+      ? await resolveOperationalIntegrationForExecution(
+          {
+            kind: "UPSTREAM_IDENTITY",
+            targetEnvironment: runtimeTargetEnvironment,
+            provider: upstreamIdentityRuntime.provider
+          },
+          client
+        )
+      : null;
   const command = executeConfiguredCommand(upstreamIdentityRuntime.mode, upstreamIdentityRuntime.command, {
     provider: upstreamIdentityRuntime.provider,
     action: input.action,
@@ -617,7 +738,12 @@ export function executeAtlasUpstreamIdentityLifecycle(input: {
     externalEmail: input.assignment.externalEmail,
     organizationSlug: input.assignment.organizationSlug,
     role: input.assignment.role,
-    reason: input.reason
+    reason: input.reason,
+    operationalIntegrationId: resolvedIntegration?.id ?? null,
+    ownerEmail: resolvedIntegration?.ownerEmail ?? null,
+    endpointReference: resolvedIntegration?.endpointReference ?? null,
+    secretReference: resolvedIntegration?.secretReference ?? null,
+    configReference: resolvedIntegration?.configReference ?? null
   });
 
   if (command.exitCode !== null && command.exitCode !== 0) {
@@ -644,11 +770,15 @@ export function executeAtlasUpstreamIdentityLifecycle(input: {
     externalEmail: input.assignment.externalEmail,
     organizationSlug: input.assignment.organizationSlug,
     role: input.assignment.role,
+    operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
     command,
     adapterResult: command.adapterResult
   };
 
   writeJsonArtifact(reportPath, report);
+  if (resolvedIntegration) {
+    await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
+  }
   return {
     report,
     reportPath

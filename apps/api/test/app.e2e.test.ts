@@ -985,6 +985,7 @@ const databaseMock = vi.hoisted(() => ({
       externalEmail: "buyer-admin@example.com",
       organizationSlug: "atlas-demo-buyer",
       role: "ADMIN",
+      operationalIntegration: null,
       command: {
         configured: false,
         exitCode: null,
@@ -994,7 +995,7 @@ const databaseMock = vi.hoisted(() => ({
       adapterResult: null
     }
   ]),
-  executeAtlasUpstreamIdentityLifecycle: vi.fn(() => ({
+  executeAtlasUpstreamIdentityLifecycle: vi.fn(async () => ({
     report: {
       version: 1,
       provider: "okta-scim",
@@ -1007,6 +1008,7 @@ const databaseMock = vi.hoisted(() => ({
       externalEmail: "seller-admin@example.com",
       organizationSlug: "atlas-demo-seller",
       role: "ADMIN",
+      operationalIntegration: null,
       command: {
         configured: false,
         exitCode: null,
@@ -1063,7 +1065,56 @@ const databaseMock = vi.hoisted(() => ({
       activeSessionCount: 0
     },
     revokedSessionCount: 1
-  }))
+  })),
+  listAtlasRolloutAutomationSummary: vi.fn(() => ({
+    upstreamIdentity: {
+      mode: "command",
+      provider: "okta-scim",
+      reportDirectory: "operations-artifacts/upstream-identity"
+    },
+    restoreDrill: {
+      mode: "command",
+      provider: "kubernetes-job",
+      reportDirectory: "restore-drills"
+    },
+    secretRotation: {
+      mode: "command",
+      provider: "aws-secrets-manager",
+      reportDirectory: "rotation-executions"
+    },
+    deploymentAutomation: {
+      mode: "command",
+      provider: "github-actions",
+      reportDirectory: "promotion-executions"
+    }
+  })),
+  listAtlasRestoreDrillReports: vi.fn(() => []),
+  listAtlasSecretRotationExecutionReports: vi.fn(() => []),
+  listAtlasPromotionExecutionReports: vi.fn(() => []),
+  listOperationalIntegrations: vi.fn(async () => [
+    {
+      id: "integration-1",
+      kind: "DEPLOYMENT_AUTOMATION",
+      targetEnvironment: "STAGING",
+      provider: "github-actions",
+      label: "staging github runner",
+      ownerEmail: "platform-ops@atlas.local",
+      endpointReference: "atlas/payments-os",
+      secretReference: "aws-secrets://atlas/staging/deployer",
+      configReference: "deploy-staging",
+      status: "ACTIVE",
+      verificationStatus: "VERIFIED",
+      verificationReason: "Verified against the owned staging deployment runner.",
+      statusReason: null,
+      metadata: null,
+      lastVerifiedAt: new Date().toISOString(),
+      lastUsedAt: null,
+      createdByUserEmail: "operator-admin@atlas.local",
+      updatedByUserEmail: "operator-admin@atlas.local",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ])
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -1102,6 +1153,11 @@ vi.mock("@atlas/database", async () => {
     listProgrammableSettlementOrganizations: databaseMock.listProgrammableSettlementOrganizations,
     verifyOrganizationWallet: databaseMock.verifyOrganizationWallet,
     listExternalIdentityAssignments: databaseMock.listExternalIdentityAssignments,
+    listOperationalIntegrations: databaseMock.listOperationalIntegrations,
+    listAtlasRolloutAutomationSummary: databaseMock.listAtlasRolloutAutomationSummary,
+    listAtlasRestoreDrillReports: databaseMock.listAtlasRestoreDrillReports,
+    listAtlasSecretRotationExecutionReports: databaseMock.listAtlasSecretRotationExecutionReports,
+    listAtlasPromotionExecutionReports: databaseMock.listAtlasPromotionExecutionReports,
     listAtlasUpstreamIdentityLifecycleReports: databaseMock.listAtlasUpstreamIdentityLifecycleReports,
     executeAtlasUpstreamIdentityLifecycle: databaseMock.executeAtlasUpstreamIdentityLifecycle,
     provisionExternalIdentityAssignment: databaseMock.provisionExternalIdentityAssignment,
@@ -2294,6 +2350,40 @@ describe("atlas api e2e", () => {
       overallStatus: expect.any(String),
       items: expect.any(Array)
     });
+  });
+
+  it("serves operator rollout routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const summaryResponse = await request(app.getHttpServer())
+      .get("/rollout/summary")
+      .set("x-atlas-local-session", "local-token");
+    const integrationsResponse = await request(app.getHttpServer())
+      .get("/rollout/integrations")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.module.key).toBe("rollout");
+    expect(summaryResponse.body.automation.upstreamIdentity.provider).toBe("okta-scim");
+    expect(integrationsResponse.status).toBe(200);
+    expect(integrationsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "integration-1",
+        label: "staging github runner",
+        verificationStatus: "VERIFIED"
+      })
+    ]);
   });
 
   it("records reason-captured operator case actions through the protected operator module", async () => {

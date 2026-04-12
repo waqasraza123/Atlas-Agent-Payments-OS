@@ -226,6 +226,7 @@ export type AtlasApiDomainKey =
   | "programmable-settlement"
   | "analytics"
   | "operator-controls"
+  | "rollout"
   | "observability";
 
 export type AtlasApiDomainDefinition = {
@@ -679,6 +680,16 @@ export const atlasApiDomainDefinitions: Record<AtlasApiDomainKey, AtlasApiDomain
     ownerWorkspaces: ["OPERATOR"],
     category: "operator",
     nextPhase: "Phase 5",
+    readiness: "skeleton"
+  },
+  rollout: {
+    key: "rollout",
+    title: "Rollout",
+    description: "Operational ownership, promotion execution, restore proof, and secret rotation control plane for operator teams.",
+    routePrefix: "/rollout",
+    ownerWorkspaces: ["OPERATOR"],
+    category: "operator",
+    nextPhase: "Post-v1 operations",
     readiness: "skeleton"
   },
   observability: {

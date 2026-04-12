@@ -34,7 +34,46 @@ function adapterScriptPath(fileName: string) {
   return fileURLToPath(new URL(`../../../scripts/adapters/${fileName}`, import.meta.url));
 }
 
-describe("rollout automation", () => {
+function createOperationalIntegrationRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "integration-1",
+    kind: "RESTORE_DRILL",
+    targetEnvironment: "STAGING",
+    provider: "kubernetes-job",
+    label: "staging restore owner",
+    ownerEmail: "platform-ops@atlas.local",
+    endpointReference: "atlas-staging/atlas-restore-job",
+    secretReference: "aws-secrets://atlas/staging/restore",
+    configReference: "atlas-restore-job",
+    status: "ACTIVE",
+    verificationStatus: "VERIFIED",
+    verificationReason: "Verified against the owned staging restore target.",
+    statusReason: null,
+    metadata: null,
+    lastVerifiedAt: new Date("2026-04-12T00:00:00.000Z"),
+    lastUsedAt: null,
+    createdByUser: {
+      email: "operator-admin@atlas.local"
+    },
+    updatedByUser: {
+      email: "operator-admin@atlas.local"
+    },
+    createdAt: new Date("2026-04-12T00:00:00.000Z"),
+    updatedAt: new Date("2026-04-12T00:00:00.000Z"),
+    ...overrides
+  };
+}
+
+function createOperationalIntegrationClient(record = createOperationalIntegrationRecord()) {
+  return {
+    operationalIntegration: {
+      findMany: vi.fn(async () => [record]),
+      update: vi.fn(async () => undefined)
+    }
+  };
+}
+
+describe("rollout automation", { timeout: 15000 }, () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -48,7 +87,7 @@ describe("rollout automation", () => {
     vi.stubEnv("RESTORE_DRILL_REPORT_DIR", join(sandbox, "restore-reports"));
 
     const { executeAtlasRestoreDrill, listAtlasRestoreDrillReports } = await import("./rollout-automation");
-    const result = executeAtlasRestoreDrill({
+    const result = await executeAtlasRestoreDrill({
       backupPath,
       targetEnvironment: "staging",
       targetLabel: "staging-restore-slot",
@@ -58,6 +97,7 @@ describe("rollout automation", () => {
     expect(result.report.executedRestore).toBe(false);
     expect(result.report.executionMode).toBe("dry-run");
     expect(result.report.executor).toBe("dry-run");
+    expect(result.report.operationalIntegration).toBeNull();
     expect(result.report.adapterResult).toBeNull();
     expect(listAtlasRestoreDrillReports(1)).toEqual([
       expect.objectContaining({
@@ -74,7 +114,7 @@ describe("rollout automation", () => {
     vi.stubEnv("SECRET_ROTATION_MANIFEST_DIR", join(sandbox, "rotation-manifests"));
 
     const { executeAtlasSecretRotation, listAtlasSecretRotationExecutionReports } = await import("./rollout-automation");
-    const result = executeAtlasSecretRotation({
+    const result = await executeAtlasSecretRotation({
       environment: "staging",
       rotatedBy: "operator-admin@atlas.local",
       reason: "Rotate staging secrets before validating release promotion.",
@@ -90,6 +130,7 @@ describe("rollout automation", () => {
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);
+    expect(result.report.operationalIntegration).toBeNull();
     expect(result.report.command).toEqual(
       expect.objectContaining({
         configured: false,
@@ -113,7 +154,7 @@ describe("rollout automation", () => {
 
     const { executeAtlasPromotionAutomation, listAtlasPromotionExecutionReports } = await import("./rollout-automation");
     const now = new Date().toISOString();
-    const result = executeAtlasPromotionAutomation({
+    const result = await executeAtlasPromotionAutomation({
       fromEnv: "development",
       toEnv: "staging",
       services: ["api"],
@@ -142,6 +183,7 @@ describe("rollout automation", () => {
           databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas",
           stdout: "RESTORE"
         },
+        operationalIntegration: null,
         adapterResult: null,
         completedAt: now
       },
@@ -171,6 +213,7 @@ describe("rollout automation", () => {
             { key: "MINIO_SECRET_KEY", rotatedAt: now }
           ]
         },
+        operationalIntegration: null,
         command: {
           configured: true,
           exitCode: 0,
@@ -194,6 +237,7 @@ describe("rollout automation", () => {
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);
+    expect(result.report.operationalIntegration).toBeNull();
     expect(listAtlasPromotionExecutionReports(1)).toEqual([
       expect.objectContaining({
         toEnv: "staging",
@@ -210,7 +254,7 @@ describe("rollout automation", () => {
     const { executeAtlasUpstreamIdentityLifecycle, listAtlasUpstreamIdentityLifecycleReports } = await import(
       "./rollout-automation"
     );
-    const result = executeAtlasUpstreamIdentityLifecycle({
+    const result = await executeAtlasUpstreamIdentityLifecycle({
       actor: createOperatorActor(),
       assignment: {
         id: "assignment-1",
@@ -240,6 +284,7 @@ describe("rollout automation", () => {
 
     expect(result.report.mode).toBe("dry-run");
     expect(result.report.reportPath).toBe(result.reportPath);
+    expect(result.report.operationalIntegration).toBeNull();
     expect(listAtlasUpstreamIdentityLifecycleReports(1)).toEqual([
       expect.objectContaining({
         assignmentId: "assignment-1",
@@ -261,18 +306,25 @@ describe("rollout automation", () => {
     vi.stubEnv("RESTORE_DRILL_REPORT_DIR", join(sandbox, "restore-reports"));
 
     const { executeAtlasRestoreDrill } = await import("./rollout-automation");
-    const result = executeAtlasRestoreDrill({
+    const client = createOperationalIntegrationClient();
+    const result = await executeAtlasRestoreDrill({
       backupPath,
       targetEnvironment: "staging",
       targetLabel: "staging-restore-slot",
       targetHost: "postgres.staging.internal",
       executeRestore: true
-    });
+    }, client as never);
 
     expect(result.report.adapterResult).toEqual(
       expect.objectContaining({
         provider: "kubernetes-job",
         adapter: "kubernetes-restore-job"
+      })
+    );
+    expect(result.report.operationalIntegration).toEqual(
+      expect.objectContaining({
+        id: "integration-1",
+        kind: "RESTORE_DRILL"
       })
     );
   });
@@ -289,17 +341,32 @@ describe("rollout automation", () => {
     vi.stubEnv("SECRET_ROTATION_MANIFEST_DIR", join(sandbox, "rotation-manifests"));
 
     const { executeAtlasSecretRotation } = await import("./rollout-automation");
-    const result = executeAtlasSecretRotation({
+    const client = createOperationalIntegrationClient(
+      createOperationalIntegrationRecord({
+        kind: "SECRET_ROTATION",
+        provider: "aws-secrets-manager",
+        label: "staging secret rotation",
+        endpointReference: "us-east-1",
+        secretReference: "atlas/staging"
+      })
+    );
+    const result = await executeAtlasSecretRotation({
       environment: "staging",
       rotatedBy: "operator-admin@atlas.local",
       reason: "Rotate staging secrets before validating release promotion.",
       secretKeys: ["AUTH_SESSION_SIGNING_SECRET"]
-    });
+    }, client as never);
 
     expect(result.report.adapterResult).toEqual(
       expect.objectContaining({
         provider: "aws-secrets-manager",
         adapter: "aws-secrets-manager-rotation"
+      })
+    );
+    expect(result.report.operationalIntegration).toEqual(
+      expect.objectContaining({
+        kind: "SECRET_ROTATION",
+        provider: "aws-secrets-manager"
       })
     );
   });
@@ -318,7 +385,15 @@ describe("rollout automation", () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_REPORT_DIR", join(sandbox, "promotion-reports"));
 
     const { executeAtlasPromotionAutomation } = await import("./rollout-automation");
-    const result = executeAtlasPromotionAutomation({
+    const client = createOperationalIntegrationClient(
+      createOperationalIntegrationRecord({
+        kind: "DEPLOYMENT_AUTOMATION",
+        provider: "github-actions",
+        label: "staging github deployment",
+        endpointReference: "atlas/payments-os"
+      })
+    );
+    const result = await executeAtlasPromotionAutomation({
       fromEnv: "development",
       toEnv: "staging",
       services: ["api"],
@@ -347,6 +422,7 @@ describe("rollout automation", () => {
           databaseUrlRedacted: "postgresql://atlas:***@postgres.staging.internal:5432/atlas",
           stdout: "RESTORE"
         },
+        operationalIntegration: null,
         adapterResult: {
           version: 1,
           adapter: "kubernetes-restore-job",
@@ -384,6 +460,7 @@ describe("rollout automation", () => {
             { key: "MINIO_SECRET_KEY", rotatedAt: now }
           ]
         },
+        operationalIntegration: null,
         command: {
           configured: true,
           exitCode: 0,
@@ -412,12 +489,18 @@ describe("rollout automation", () => {
         RELEASE_ARTIFACT_SHA256: "a".repeat(64)
       },
       bundlePath
-    });
+    }, client as never);
 
     expect(result.report.adapterResult).toEqual(
       expect.objectContaining({
         provider: "github-actions",
         adapter: "github-actions-dispatch"
+      })
+    );
+    expect(result.report.operationalIntegration).toEqual(
+      expect.objectContaining({
+        kind: "DEPLOYMENT_AUTOMATION",
+        provider: "github-actions"
       })
     );
   });
@@ -432,8 +515,18 @@ describe("rollout automation", () => {
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", `${process.execPath} ${adapterScriptPath("upstream-identity.mjs")}`);
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_REPORT_DIR", join(sandbox, "upstream-reports"));
 
+    vi.stubEnv("APP_ENV", "staging");
+
     const { executeAtlasUpstreamIdentityLifecycle } = await import("./rollout-automation");
-    const result = executeAtlasUpstreamIdentityLifecycle({
+    const client = createOperationalIntegrationClient(
+      createOperationalIntegrationRecord({
+        kind: "UPSTREAM_IDENTITY",
+        provider: "okta-scim",
+        label: "staging okta lifecycle",
+        endpointReference: "https://atlas.okta.example"
+      })
+    );
+    const result = await executeAtlasUpstreamIdentityLifecycle({
       actor: createOperatorActor(),
       assignment: {
         id: "assignment-1",
@@ -459,12 +552,18 @@ describe("rollout automation", () => {
       },
       action: "REVOKE",
       reason: "Revoke upstream tenant access after access review closure."
-    });
+    }, client as never);
 
     expect(result.report.adapterResult).toEqual(
       expect.objectContaining({
         provider: "okta-scim",
         adapter: "okta-scim-admin"
+      })
+    );
+    expect(result.report.operationalIntegration).toEqual(
+      expect.objectContaining({
+        kind: "UPSTREAM_IDENTITY",
+        provider: "okta-scim"
       })
     );
   });

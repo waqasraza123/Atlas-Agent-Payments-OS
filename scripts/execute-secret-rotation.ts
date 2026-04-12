@@ -25,7 +25,7 @@ function readArgumentValues(flag: string) {
 }
 
 async function main() {
-  const result = executeAtlasSecretRotation({
+  const result = await executeAtlasSecretRotation({
     environment: readArgumentValue("--environment") ?? "",
     rotatedBy: readArgumentValue("--rotated-by") ?? "",
     reason: readArgumentValue("--reason") ?? "",

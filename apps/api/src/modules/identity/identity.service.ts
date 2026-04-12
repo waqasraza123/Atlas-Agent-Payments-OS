@@ -43,7 +43,7 @@ export class IdentityService {
       const assignment = await provisionExternalIdentityAssignment(actor, input);
       const upstream =
         input.syncUpstream
-          ? executeAtlasUpstreamIdentityLifecycle({
+          ? await executeAtlasUpstreamIdentityLifecycle({
               actor,
               assignment,
               action: "PROVISION",
@@ -74,7 +74,7 @@ export class IdentityService {
       const result = await updateExternalIdentityAssignmentLifecycle(actor, assignmentId, input);
       const upstream =
         input.syncUpstream
-          ? executeAtlasUpstreamIdentityLifecycle({
+          ? await executeAtlasUpstreamIdentityLifecycle({
               actor,
               assignment: result.assignment,
               action: input.action,

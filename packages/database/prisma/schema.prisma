@@ -193,6 +193,32 @@ enum ExternalIdentityAssignmentStatus {
   REVOKED
 }
 
+enum OperationalIntegrationKind {
+  UPSTREAM_IDENTITY
+  RESTORE_DRILL
+  SECRET_ROTATION
+  DEPLOYMENT_AUTOMATION
+}
+
+enum OperationalIntegrationStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum OperationalIntegrationVerificationStatus {
+  PENDING
+  VERIFIED
+  STALE
+  FAILED
+}
+
+enum OperationalTargetEnvironment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
 enum AuditActorType {
   HUMAN
   AGENT
@@ -217,6 +243,8 @@ model User {
   revokedSupportAccessGrants SupportAccessGrant[] @relation("SupportAccessRevokedByUser")
   supportAccessGrantReviews SupportAccessGrantReview[] @relation("SupportAccessReviewUser")
   supportAccessReviewCampaigns SupportAccessReviewCampaign[] @relation("SupportAccessReviewCampaignUser")
+  createdOperationalIntegrations OperationalIntegration[] @relation("OperationalIntegrationCreatedByUser")
+  updatedOperationalIntegrations OperationalIntegration[] @relation("OperationalIntegrationUpdatedByUser")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -336,6 +364,35 @@ model AuthSession {
   @@index([organizationId, expiresAt])
   @@index([membershipId, expiresAt])
   @@index([source, expiresAt])
+}
+
+model OperationalIntegration {
+  id                 String                                  @id @default(cuid())
+  kind               OperationalIntegrationKind
+  targetEnvironment  OperationalTargetEnvironment
+  provider           String
+  label              String
+  ownerEmail         String
+  endpointReference  String?
+  secretReference    String?
+  configReference    String?
+  status             OperationalIntegrationStatus            @default(ACTIVE)
+  verificationStatus OperationalIntegrationVerificationStatus @default(PENDING)
+  verificationReason String?
+  statusReason       String?
+  metadata           Json?
+  lastVerifiedAt     DateTime?
+  lastUsedAt         DateTime?
+  createdByUserId    String
+  updatedByUserId    String?
+  createdByUser      User                                    @relation("OperationalIntegrationCreatedByUser", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUser      User?                                   @relation("OperationalIntegrationUpdatedByUser", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                                @default(now())
+  updatedAt          DateTime                                @updatedAt
+
+  @@unique([kind, targetEnvironment, provider, label])
+  @@index([kind, targetEnvironment, status, verificationStatus])
+  @@index([targetEnvironment, provider, status])
 }
 
 model Agent {

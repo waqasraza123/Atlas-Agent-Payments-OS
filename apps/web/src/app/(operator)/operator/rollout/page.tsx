@@ -8,7 +8,8 @@ import {
   listAtlasPromotionExecutionReports,
   listAtlasRestoreDrillReports,
   listAtlasSecretRotationExecutionReports,
-  listAtlasUpstreamIdentityLifecycleReports
+  listAtlasUpstreamIdentityLifecycleReports,
+  listOperationalIntegrations
 } from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { WorkflowFeedbackPanel } from "@/components/workflow-feedback-panel";
@@ -16,7 +17,14 @@ import { WorkflowFormField } from "@/components/workflow-form-field";
 import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { readWorkflowFeedback } from "@/lib/workflow-feedback";
-import { executePromotionAutomationAction, executeRestoreDrillAction, executeSecretRotationAction } from "../actions";
+import {
+  executePromotionAutomationAction,
+  executeRestoreDrillAction,
+  executeSecretRotationAction,
+  registerOperationalIntegrationAction,
+  updateOperationalIntegrationLifecycleAction,
+  updateOperationalIntegrationVerificationAction
+} from "../actions";
 
 type OperatorRolloutPageProps = Readonly<{
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -35,6 +43,10 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
   const secretRotationReports = listAtlasSecretRotationExecutionReports(6);
   const promotionReports = listAtlasPromotionExecutionReports(6);
   const upstreamReports = listAtlasUpstreamIdentityLifecycleReports(6);
+  const integrations = await listOperationalIntegrations(resolution.actor);
+  const activeVerifiedIntegrations = integrations.filter(
+    (integration) => integration.status === "ACTIVE" && integration.verificationStatus === "VERIFIED"
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -63,6 +75,191 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
           value={upstreamIdentityRuntime.mode.toUpperCase()}
           detail={`${upstreamIdentityRuntime.provider} · ${upstreamIdentityRuntime.reportDirectory}`}
         />
+      </section>
+      <section className="grid gap-4 xl:grid-cols-4">
+        <MetricCard label="Owned targets" value={String(integrations.length)} detail="Persisted rollout integrations" />
+        <MetricCard label="Verified targets" value={String(activeVerifiedIntegrations)} detail="Active and execution-ready" />
+        <MetricCard
+          label="Staging coverage"
+          value={String(integrations.filter((integration) => integration.targetEnvironment === "STAGING").length)}
+          detail="Staging integration records"
+        />
+        <MetricCard
+          label="Production coverage"
+          value={String(integrations.filter((integration) => integration.targetEnvironment === "PRODUCTION").length)}
+          detail="Production integration records"
+        />
+      </section>
+      <section className="grid gap-6 xl:grid-cols-[1.1fr_1.9fr]">
+        <WorkflowFormPanel
+          eyebrow="Execution ownership"
+          title="Register rollout integration"
+          description="Command-mode automation now requires one active verified owned target for each integration kind and environment."
+          action={registerOperationalIntegrationAction}
+          submitLabel="Register integration"
+        >
+          <WorkflowFormField label="Kind" hint="Use one record per execution boundary and environment.">
+            <select
+              name="kind"
+              defaultValue="RESTORE_DRILL"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            >
+              <option value="UPSTREAM_IDENTITY">Upstream identity</option>
+              <option value="RESTORE_DRILL">Restore drill</option>
+              <option value="SECRET_ROTATION">Secret rotation</option>
+              <option value="DEPLOYMENT_AUTOMATION">Deployment automation</option>
+            </select>
+          </WorkflowFormField>
+          <WorkflowFormField label="Target environment" hint="Atlas resolves command-mode ownership against the target environment.">
+            <select
+              name="targetEnvironment"
+              defaultValue="STAGING"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            >
+              <option value="DEVELOPMENT">Development</option>
+              <option value="STAGING">Staging</option>
+              <option value="PRODUCTION">Production</option>
+            </select>
+          </WorkflowFormField>
+          <WorkflowFormField label="Provider" hint="Match the configured provider for this environment.">
+            <input
+              type="text"
+              name="provider"
+              placeholder="github-actions"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              required
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Label" hint="Use a stable human-readable target name.">
+            <input
+              type="text"
+              name="label"
+              placeholder="staging primary deployment runner"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              required
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Owner email" hint="This should be the accountable team or operator owner.">
+            <input
+              type="email"
+              name="ownerEmail"
+              placeholder="platform-ops@atlas.local"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              required
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Endpoint reference" hint="Optional external endpoint, namespace, or repository target.">
+            <input
+              type="text"
+              name="endpointReference"
+              placeholder="argo://atlas-production/api"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Secret reference" hint="Optional secret-manager path or credential alias.">
+            <input
+              type="text"
+              name="secretReference"
+              placeholder="aws-secrets://atlas/production/deployer"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            />
+          </WorkflowFormField>
+          <WorkflowFormField label="Config reference" hint="Optional config file, app id, or job template reference.">
+            <input
+              type="text"
+              name="configReference"
+              placeholder="workflow:deploy-production"
+              className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+            />
+          </WorkflowFormField>
+        </WorkflowFormPanel>
+        <Panel className="space-y-4 p-5">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--atlas-ink)]">Owned rollout integrations</p>
+            <p className="text-sm text-[var(--atlas-muted)]">
+              Command-mode restore, rotation, promotion, and upstream identity execution now resolve against this owned integration registry.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {integrations.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--atlas-line)] bg-[rgba(7,10,18,0.45)] px-4 py-5 text-sm text-[var(--atlas-muted)]">
+                No owned rollout integrations are registered yet.
+              </div>
+            ) : (
+              integrations.map((integration) => (
+                <div key={integration.id} className="rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.5)] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-[var(--atlas-ink)]">
+                        {integration.label} · {integration.targetEnvironment.toLowerCase()}
+                      </p>
+                      <p className="text-sm text-[var(--atlas-muted)]">
+                        {integration.kind.replaceAll("_", " ").toLowerCase()} · {integration.provider} · owner {integration.ownerEmail}
+                      </p>
+                      <p className="text-xs text-[var(--atlas-muted)]">
+                        Status {integration.status.toLowerCase()} · verification {integration.verificationStatus.toLowerCase()} · last used{" "}
+                        {integration.lastUsedAt ? new Date(integration.lastUsedAt).toLocaleString() : "never"}
+                      </p>
+                      <p className="text-xs text-[var(--atlas-muted)]">
+                        Endpoint {integration.endpointReference ?? "none"} · secret {integration.secretReference ?? "none"} · config{" "}
+                        {integration.configReference ?? "none"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <form action={updateOperationalIntegrationVerificationAction.bind(null, integration.id)} className="space-y-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.4)] p-3">
+                      <input type="hidden" name="integrationId" value={integration.id} />
+                      <select
+                        name="verificationStatus"
+                        defaultValue={integration.verificationStatus}
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                      >
+                        <option value="VERIFIED">Verified</option>
+                        <option value="STALE">Stale</option>
+                        <option value="FAILED">Failed</option>
+                        <option value="PENDING">Pending</option>
+                      </select>
+                      <textarea
+                        name="verificationReason"
+                        rows={3}
+                        minLength={12}
+                        placeholder="Verified against the owned staging runner and secret references."
+                        className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button type="submit" className="w-full rounded-2xl bg-[var(--atlas-accent)] px-4 py-3 text-sm font-semibold text-[var(--atlas-ink-inverse)]">
+                        Update verification
+                      </button>
+                    </form>
+                    <form action={updateOperationalIntegrationLifecycleAction.bind(null, integration.id)} className="space-y-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.4)] p-3">
+                      <input type="hidden" name="integrationId" value={integration.id} />
+                      <select
+                        name="action"
+                        defaultValue={integration.status === "SUSPENDED" ? "REACTIVATE" : integration.status === "REVOKED" ? "REACTIVATE" : "SUSPEND"}
+                        className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                      >
+                        <option value="SUSPEND">Suspend</option>
+                        <option value="REACTIVATE">Reactivate</option>
+                        <option value="REVOKE">Revoke</option>
+                      </select>
+                      <textarea
+                        name="reason"
+                        rows={3}
+                        minLength={12}
+                        placeholder="Suspend this target while credentials are rotated or ownership is reassigned."
+                        className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                        required
+                      />
+                      <button type="submit" className="w-full rounded-2xl border border-[var(--atlas-line-strong)] px-4 py-3 text-sm font-semibold text-[var(--atlas-ink)]">
+                        Update lifecycle
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
       </section>
       <section className="grid gap-6 xl:grid-cols-3">
         <WorkflowFormPanel

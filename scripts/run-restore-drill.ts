@@ -11,7 +11,7 @@ function readArgumentValue(flag: string) {
 }
 
 async function main() {
-  const result = executeAtlasRestoreDrill({
+  const result = await executeAtlasRestoreDrill({
     backupPath: readArgumentValue("--backup") ?? "scripts/fixtures/restore-drill.sql",
     targetEnvironment: readArgumentValue("--environment") ?? appRuntime.appEnv,
     targetLabel: readArgumentValue("--label") ?? process.env.ATLAS_RESTORE_DRILL_TARGET_LABEL ?? "default-restore-target",

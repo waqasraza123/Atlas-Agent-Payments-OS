@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   assertAtlasPromotionReadiness,
   canAtlasPromoteEnvironment,
@@ -111,7 +112,7 @@ async function main() {
     secretRotationManifest
   });
 
-  const promotionExecution = executeAtlasPromotionAutomation({
+  const promotionExecution = await executeAtlasPromotionAutomation({
     fromEnv,
     toEnv,
     services,

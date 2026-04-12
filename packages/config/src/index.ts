@@ -126,6 +126,12 @@ export type AtlasDeploymentAutomationProvider = (typeof atlasDeploymentAutomatio
 export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
 export type AtlasRuntimeService = "api" | "web" | "worker";
 export type AtlasPromotionTarget = Exclude<AtlasAppEnvironment, "local">;
+export type AtlasOperationalIntegrationKind =
+  | "UPSTREAM_IDENTITY"
+  | "RESTORE_DRILL"
+  | "SECRET_ROTATION"
+  | "DEPLOYMENT_AUTOMATION";
+export type AtlasOperationalIntegrationVerificationStatus = "PENDING" | "VERIFIED" | "STALE" | "FAILED";
 
 export type AtlasStructuredLogPayload = {
   timestamp: string;
@@ -385,6 +391,20 @@ export type AtlasAutomationAdapterResult = {
   metadata: Record<string, string | number | boolean | null>;
 };
 
+export type AtlasOperationalIntegrationSnapshot = {
+  id: string;
+  kind: AtlasOperationalIntegrationKind;
+  targetEnvironment: Uppercase<AtlasPromotionTarget>;
+  provider: string;
+  label: string;
+  ownerEmail: string;
+  endpointReference: string | null;
+  secretReference: string | null;
+  configReference: string | null;
+  verificationStatus: AtlasOperationalIntegrationVerificationStatus;
+  lastVerifiedAt: string | null;
+};
+
 export type AtlasSecretRotationExecutionReport = {
   version: 1;
   environment: AtlasPromotionTarget;
@@ -396,6 +416,7 @@ export type AtlasSecretRotationExecutionReport = {
   reportPath: string;
   manifestPath: string;
   manifest: AtlasSecretRotationManifest;
+  operationalIntegration: AtlasOperationalIntegrationSnapshot | null;
   command: AtlasAutomationCommandResult | null;
   adapterResult: AtlasAutomationAdapterResult | null;
 };
@@ -425,6 +446,7 @@ export type AtlasRestoreDrillReport = {
     databaseUrlRedacted: string;
     stdout: string;
   } | null;
+  operationalIntegration: AtlasOperationalIntegrationSnapshot | null;
   adapterResult: AtlasAutomationAdapterResult | null;
   completedAt: string;
 };
@@ -440,6 +462,7 @@ export type AtlasPromotionExecutionReport = {
   bundlePath: string;
   bundleSha256: string;
   provider: string;
+  operationalIntegration: AtlasOperationalIntegrationSnapshot | null;
   command: AtlasAutomationCommandResult | null;
   adapterResult: AtlasAutomationAdapterResult | null;
 };
@@ -458,6 +481,7 @@ export type AtlasUpstreamIdentityLifecycleReport = {
   externalEmail: string;
   organizationSlug: string;
   role: string;
+  operationalIntegration: AtlasOperationalIntegrationSnapshot | null;
   command: AtlasAutomationCommandResult | null;
   adapterResult: AtlasAutomationAdapterResult | null;
 };
@@ -931,6 +955,17 @@ export function validateAtlasSecretRotationExecutionReport(
     issues.push("Secret rotation execution report must include the stored manifest path.");
   }
 
+  if (report.operationalIntegration) {
+    issues.push(
+      ...validateAtlasOperationalIntegrationSnapshot(
+        report.operationalIntegration,
+        "SECRET_ROTATION",
+        targetEnv.toUpperCase() as Uppercase<AtlasPromotionTarget>,
+        report.provider
+      )
+    );
+  }
+
   if (report.adapterResult) {
     issues.push(...validateAtlasAutomationAdapterResult(report.adapterResult, report.provider));
   }
@@ -975,6 +1010,75 @@ export function validateAtlasAutomationAdapterResult(
   return issues;
 }
 
+export function validateAtlasOperationalIntegrationSnapshot(
+  integration: AtlasOperationalIntegrationSnapshot,
+  expectedKind?: AtlasOperationalIntegrationKind,
+  expectedTargetEnvironment?: Uppercase<AtlasPromotionTarget>,
+  expectedProvider?: string
+) {
+  const issues: string[] = [];
+
+  if (typeof integration.id !== "string" || integration.id.trim().length < 6) {
+    issues.push("Operational integration snapshot must include a durable id.");
+  }
+
+  if (
+    integration.kind !== "UPSTREAM_IDENTITY" &&
+    integration.kind !== "RESTORE_DRILL" &&
+    integration.kind !== "SECRET_ROTATION" &&
+    integration.kind !== "DEPLOYMENT_AUTOMATION"
+  ) {
+    issues.push("Operational integration snapshot must include a valid kind.");
+  }
+
+  if (expectedKind && integration.kind !== expectedKind) {
+    issues.push(`Operational integration snapshot kind must equal ${expectedKind}.`);
+  }
+
+  if (
+    integration.targetEnvironment !== "DEVELOPMENT" &&
+    integration.targetEnvironment !== "STAGING" &&
+    integration.targetEnvironment !== "PRODUCTION"
+  ) {
+    issues.push("Operational integration snapshot must include a valid target environment.");
+  }
+
+  if (expectedTargetEnvironment && integration.targetEnvironment !== expectedTargetEnvironment) {
+    issues.push(`Operational integration snapshot target environment must equal ${expectedTargetEnvironment}.`);
+  }
+
+  if (typeof integration.provider !== "string" || integration.provider.trim().length < 2) {
+    issues.push("Operational integration snapshot must include a provider label.");
+  }
+
+  if (expectedProvider && integration.provider !== expectedProvider) {
+    issues.push(`Operational integration snapshot provider must equal ${expectedProvider}.`);
+  }
+
+  if (typeof integration.label !== "string" || integration.label.trim().length < 3) {
+    issues.push("Operational integration snapshot must include a human-readable label.");
+  }
+
+  if (typeof integration.ownerEmail !== "string" || !integration.ownerEmail.includes("@")) {
+    issues.push("Operational integration snapshot must include an owner email.");
+  }
+
+  if (
+    integration.verificationStatus !== "PENDING" &&
+    integration.verificationStatus !== "VERIFIED" &&
+    integration.verificationStatus !== "STALE" &&
+    integration.verificationStatus !== "FAILED"
+  ) {
+    issues.push("Operational integration snapshot must include a valid verification status.");
+  }
+
+  if (integration.verificationStatus !== "VERIFIED") {
+    issues.push("Operational integration snapshot must be verified for executable automation.");
+  }
+
+  return issues;
+}
+
 export function validateAtlasRestoreDrillReport(
   targetEnv: AtlasPromotionTarget,
   report: AtlasRestoreDrillReport,
@@ -1006,6 +1110,17 @@ export function validateAtlasRestoreDrillReport(
 
   if (typeof report.executor !== "string" || report.executor.trim().length < 2) {
     issues.push("Restore drill report must include the executor label.");
+  }
+
+  if (report.operationalIntegration) {
+    issues.push(
+      ...validateAtlasOperationalIntegrationSnapshot(
+        report.operationalIntegration,
+        "RESTORE_DRILL",
+        targetEnv.toUpperCase() as Uppercase<AtlasPromotionTarget>,
+        restoreProvider
+      )
+    );
   }
 
   if (report.adapterResult) {
