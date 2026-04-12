@@ -67,6 +67,21 @@ function SessionSwitchForm({
   );
 }
 
+function ExitSupportModeForm() {
+  return (
+    <form action="/auth/session" method="post">
+      <input type="hidden" name="profileKey" value="operator-operator" />
+      <input type="hidden" name="redirectTo" value="/operator/support-access" />
+      <button
+        type="submit"
+        className="rounded-full border border-[var(--atlas-line)] bg-white/4 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--atlas-muted)] transition hover:border-[var(--atlas-accent)] hover:text-[var(--atlas-ink)]"
+      >
+        Exit support mode
+      </button>
+    </form>
+  );
+}
+
 export function WorkspaceShell({
   actor,
   title,
@@ -107,12 +122,20 @@ export function WorkspaceShell({
                 label="Session"
                 value={`${actor.user.name ?? actor.user.email} / ${formatAtlasRoleLabel(actor.membership.role)}`}
               />
+              <ContextDisplay
+                label="Source"
+                value={actor.source === "internal-support" ? "Internal support" : "Signed local session"}
+              />
+              {actor.supportAccess ? (
+                <ContextDisplay label="Support scope" value={`${actor.supportAccess.targetOrganizationSlug} / ${actor.supportAccess.reason}`} />
+              ) : null}
             </Panel>
           }
         />
       }
       topBar={
         <TopBar title={actor.organization.name} subtitle={`${actor.user.name ?? actor.user.email} · ${formatAtlasRoleLabel(actor.membership.role)}`}>
+          {actor.source === "internal-support" ? <ExitSupportModeForm /> : null}
           {profiles.map((profile) => (
             <SessionSwitchForm
               key={profile.key}

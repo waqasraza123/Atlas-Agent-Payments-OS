@@ -19,6 +19,7 @@
     "baseUrl": ".",
     "paths": {
       "@atlas/auth": ["packages/auth/src/index.ts"],
+      "@atlas/auth/server": ["packages/auth/src/server.ts"],
       "@atlas/config": ["packages/config/src/index.ts"],
       "@atlas/database": ["packages/database/src/index.ts"],
       "@atlas/database/seed-data": ["packages/database/src/seed-data.ts"],

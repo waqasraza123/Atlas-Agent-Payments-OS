@@ -13,6 +13,13 @@ function readText(value: string | undefined, fallback: string) {
   return normalized && normalized.length > 0 ? normalized : fallback;
 }
 
+function readTextList(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
 function readBoolean(value: string | undefined, fallback: boolean) {
   if (value === "true") {
     return true;
@@ -62,6 +69,7 @@ export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasReleaseStage = (typeof atlasReleaseStages)[number];
 export type AtlasRuntimeService = "api" | "web" | "worker";
+export type AtlasPromotionTarget = Exclude<AtlasAppEnvironment, "local">;
 
 export type AtlasStructuredLogPayload = {
   timestamp: string;
@@ -91,6 +99,13 @@ export const deploymentRuntime = {
   revision: readText(process.env.APP_REVISION, "local-development"),
   deploymentSlot: readText(process.env.DEPLOYMENT_SLOT, "local"),
   backupDirectory: readText(process.env.DATABASE_BACKUP_DIR, "backups")
+} as const;
+
+export const authRuntime = {
+  sessionSigningSecret: readText(process.env.AUTH_SESSION_SIGNING_SECRET, "atlas-local-session-secret"),
+  localSessionTtlMinutes: readNumber(process.env.AUTH_LOCAL_SESSION_TTL_MINUTES, 480),
+  supportAccessTtlMinutes: readNumber(process.env.AUTH_SUPPORT_ACCESS_TTL_MINUTES, 60),
+  supportAccessAllowedEmails: readTextList(process.env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS)
 } as const;
 
 export const apiRuntime = {
@@ -215,6 +230,7 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
   if (service === "api") {
     return [
       ...atlasBaseRuntimeVariables(),
+      "AUTH_SESSION_SIGNING_SECRET",
       "API_PORT",
       "API_BASE_URL",
       "NEXT_PUBLIC_APP_URL",
@@ -232,7 +248,7 @@ function atlasServiceRuntimeVariables(service: AtlasRuntimeService) {
     return [...atlasBaseRuntimeVariables(), "REDIS_URL", "DATABASE_URL"] as const;
   }
 
-  return [...atlasBaseRuntimeVariables(), "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
+  return [...atlasBaseRuntimeVariables(), "AUTH_SESSION_SIGNING_SECRET", "NEXT_PUBLIC_APP_URL", "API_BASE_URL"] as const;
 }
 
 export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
@@ -306,4 +322,13 @@ export function createAtlasReleaseManifest(
       rollbackReadiness: "pnpm verify:rollback"
     }
   };
+}
+
+const atlasPromotionOrder: AtlasPromotionTarget[] = ["development", "staging", "production"];
+
+export function canAtlasPromoteEnvironment(fromEnv: AtlasPromotionTarget, toEnv: AtlasPromotionTarget) {
+  const fromIndex = atlasPromotionOrder.indexOf(fromEnv);
+  const toIndex = atlasPromotionOrder.indexOf(toEnv);
+
+  return fromIndex >= 0 && toIndex >= 0 && toIndex === fromIndex + 1;
 }

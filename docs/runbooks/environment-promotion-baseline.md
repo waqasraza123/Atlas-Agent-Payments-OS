@@ -17,7 +17,9 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 1. `pnpm verify:env`
 2. `pnpm release:manifest`
-3. `pnpm verify:rollback`
+3. `pnpm promote:staging`
+4. `pnpm promote:production`
+5. `pnpm verify:rollback`
 
 ## Promotion Sequence
 
@@ -26,6 +28,7 @@ These files are templates only. Real secrets must come from a secret manager or 
 3. Run `pnpm verify:release`.
 4. Capture a database backup before applying schema changes.
 5. Promote the same revision forward from development to staging to production.
+6. Store the generated promotion manifest with the release record for later rollback and incident review.
 
 ## Expected Metadata
 
@@ -37,4 +40,4 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 ## Current Limitation
 
-The repo now validates environment shape and release metadata, but it still does not own a cloud-specific deployment target or automated environment promotion pipeline.
+The repo now validates environment shape, release metadata, and promotion-manifest generation, but it still does not own a cloud-specific deployment target, secret-manager integration, or environment-specific deploy execution.

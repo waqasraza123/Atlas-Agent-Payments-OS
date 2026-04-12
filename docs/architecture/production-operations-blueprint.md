@@ -45,6 +45,7 @@ Exact cloud provider, hosting target, and network design are intentionally defer
 - production secrets must live in a secret management system, not in repo files
 - secrets should be rotated through a controlled operational process
 - configuration drift between environments should be minimized and reviewable
+- signing secrets for app sessions and support-access flows must be environment-specific and rotation-ready
 
 ## Logging, Tracing, Metrics, And Alerting
 
@@ -172,7 +173,8 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - request-correlation headers and structured runtime logging exist
 - env-profile validation, release manifests, rollback-readiness verification, and backup/restore scripts now exist
 - API metrics, operator observability routes, and incident runbooks now exist
-- deeper deployment automation, restore drills, external alert dispatch, and long-term metrics retention are still pending
+- signed session handling, constrained support access, and promotion-manifest automation now exist
+- deeper deployment automation, restore drills, external alert dispatch, long-term metrics retention, and secret rotation execution are still pending
 
 ### Required before a production-grade focused v1 rollout
 
@@ -183,6 +185,8 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - release gating
 - rollback readiness
 - incident runbooks
+- signed session secret management
+- constrained support access for operator workflows
 
 ### Deferred toward fuller platform maturity
 
@@ -190,3 +194,4 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - multi-region or tenant-specific environment strategies
 - highly automated disaster recovery
 - deeper capacity and cost governance
+- production identity-provider rollout and session exchange

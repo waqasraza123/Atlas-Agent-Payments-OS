@@ -32,6 +32,7 @@ describe("atlas domain registry", () => {
     expect(getAtlasWorkspaceSurfaceByKey("SELLER", "services")?.href).toBe("/seller/services");
     expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/audit")?.key).toBe("audit");
     expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/alerts")?.key).toBe("alerts");
+    expect(getAtlasWorkspaceSurfaceByHref("OPERATOR", "/operator/support-access")?.key).toBe("support-access");
     expect(getAtlasWorkspaceSurfaceByHref("BUYER", "/buyer/receipts")?.key).toBe("receipts");
   });
 

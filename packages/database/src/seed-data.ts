@@ -246,6 +246,10 @@ export const atlasSeedUsers: AtlasSeedUserDefinition[] = [
     name: "Operator"
   },
   {
+    email: "operator-admin@atlas.local",
+    name: "Operator Admin"
+  },
+  {
     email: "reviewer@atlas.local",
     name: "Buyer Reviewer"
   },
@@ -289,6 +293,11 @@ export const atlasSeedMemberships: AtlasSeedMembershipDefinition[] = [
     userEmail: "operator@atlas.local",
     organizationSlug: "atlas-demo-operator",
     role: "OPERATOR"
+  },
+  {
+    userEmail: "operator-admin@atlas.local",
+    organizationSlug: "atlas-demo-operator",
+    role: "ADMIN"
   },
   {
     userEmail: "northstar-owner@atlas.local",

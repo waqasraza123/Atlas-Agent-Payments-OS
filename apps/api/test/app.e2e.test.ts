@@ -1007,7 +1007,11 @@ vi.mock("@atlas/database", async () => {
   };
 });
 
-function createActor(workspace: AtlasActorContext["workspace"], role: AtlasActorContext["membership"]["role"]): AtlasActorContext {
+function createActor(
+  workspace: AtlasActorContext["workspace"],
+  role: AtlasActorContext["membership"]["role"],
+  overrides: Partial<AtlasActorContext> = {}
+): AtlasActorContext {
   return {
     user: {
       id: `user-${workspace.toLowerCase()}`,
@@ -1026,7 +1030,8 @@ function createActor(workspace: AtlasActorContext["workspace"], role: AtlasActor
     },
     workspace,
     agentId: null,
-    source: "local-development"
+    source: "local-development",
+    ...overrides
   };
 }
 
@@ -1036,7 +1041,7 @@ describe("atlas api e2e", () => {
     readSessionHeader: vi.fn((headers: Record<string, string | string[] | undefined>) => headers["x-atlas-local-session"]),
     resolveFromHeader: vi.fn(async () => ({
       status: "missing" as const,
-      message: "Missing local actor session header"
+      message: "Missing signed actor session header"
     }))
   };
 
@@ -1057,7 +1062,7 @@ describe("atlas api e2e", () => {
     actorResolutionServiceMock.resolveFromHeader.mockReset();
     actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
       status: "missing",
-      message: "Missing local actor session header"
+      message: "Missing signed actor session header"
     });
     for (const mockFn of Object.values(databaseMock)) {
       mockFn.mockClear();
@@ -1172,7 +1177,7 @@ describe("atlas api e2e", () => {
     const response = await request(app.getHttpServer()).get("/identity/session");
 
     expect(response.status).toBe(401);
-    expect(response.body.message).toBe("Missing local actor session header");
+    expect(response.body.message).toBe("Missing signed actor session header");
   });
 
   it("returns service unavailable when actor resolution is not available", async () => {
@@ -1234,6 +1239,52 @@ describe("atlas api e2e", () => {
       key: "payments",
       workspace: "SELLER"
     });
+  });
+
+  it("blocks support-access sessions from write routes", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-operator",
+        workspace: "OPERATOR",
+        userEmail: "operator@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "OPERATOR",
+        agentId: null
+      },
+      actor: createActor("BUYER", "OPERATOR", {
+        source: "internal-support",
+        principalOrganization: {
+          id: "org-operator",
+          slug: "atlas-demo-operator",
+          name: "Atlas Demo Operator",
+          kind: "OPERATOR"
+        },
+        supportAccess: {
+          mode: "read-only",
+          reason: "Inspect a delayed payment and receipt mismatch.",
+          grantedByUserEmail: "operator@atlas.local",
+          targetOrganizationSlug: "atlas-demo-buyer",
+          targetWorkspace: "BUYER"
+        }
+      })
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/requests")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        agentId: "agent-1",
+        title: "Blocked support write",
+        purpose: "A support session should not be able to submit buyer writes.",
+        sellerOrganizationId: "seller-1",
+        serviceCategory: "api-access",
+        amountMinor: 1200,
+        currency: "USD"
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toBe("Support-access sessions are limited to read-only routes");
   });
 
   it("serves buyer analytics and exports through guarded analytics routes", async () => {

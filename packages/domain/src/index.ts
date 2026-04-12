@@ -187,7 +187,8 @@ export type AtlasWorkspaceSurfaceKey =
   | "transactions"
   | "exceptions"
   | "audit"
-  | "alerts";
+  | "alerts"
+  | "support-access";
 
 export type AtlasWorkspaceSurfaceDefinition = {
   key: AtlasWorkspaceSurfaceKey;
@@ -490,6 +491,15 @@ const operatorWorkspaceDefinition: AtlasWorkspaceDefinition = {
       description: "Review runtime health, alert posture, and incident-readiness signals from one operator-facing surface.",
       detail: "This route becomes the runtime alert and incident entry point for platform operators.",
       href: "/operator/alerts",
+      status: "available"
+    },
+    {
+      key: "support-access",
+      label: "Support access",
+      title: "Scoped support sessions",
+      description: "Issue constrained tenant-scoped support sessions with explicit reason capture instead of relying on silent cross-tenant access.",
+      detail: "This route anchors the future support-access control model for broader rollout.",
+      href: "/operator/support-access",
       status: "available"
     },
     {

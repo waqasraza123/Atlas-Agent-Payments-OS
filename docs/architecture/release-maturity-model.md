@@ -54,6 +54,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Security readiness
 
 - actor attribution and tenant-aware thinking exist
+- signed session handling exists for app and support paths
 
 ### Docs readiness
 
@@ -85,6 +86,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Security readiness
 
 - role and tenant guardrails are materially real
+- support access is constrained, read-only where required, and reviewable at runtime
 
 ### Docs readiness
 
@@ -104,6 +106,7 @@ This document defines the release stages Atlas should move through and the go or
 
 - environment discipline is stronger
 - migrations and releases are controlled
+- promotion manifests and environment progression are enforced
 
 ### Ops readiness
 
@@ -112,6 +115,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Security readiness
 
 - internal access controls and seller/payment trust boundaries are stronger
+- support-access issuance is bounded and auditable
 
 ### Docs readiness
 
@@ -158,6 +162,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Platform readiness
 
 - production-grade deployment and data handling baseline exist
+- promotion, rollback, and restore procedures are runnable and current
 
 ### Ops readiness
 
@@ -166,6 +171,7 @@ This document defines the release stages Atlas should move through and the go or
 ### Security readiness
 
 - auth, authorization, tenancy, audit, and secret handling meet the target customer bar
+- internal support access does not bypass tenant controls
 
 ### Docs readiness
 

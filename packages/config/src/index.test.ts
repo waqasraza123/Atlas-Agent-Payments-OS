@@ -11,6 +11,8 @@ describe("atlas config", () => {
     const {
       apiRuntime,
       appRuntime,
+      authRuntime,
+      canAtlasPromoteEnvironment,
       deploymentRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
@@ -26,6 +28,7 @@ describe("atlas config", () => {
     expect(apiRuntime.baseUrl).toBe("http://localhost:4000");
     expect(appRuntime.appEnv).toBe("local");
     expect(appRuntime.logLevel).toBe("info");
+    expect(authRuntime.sessionSigningSecret).toBe("atlas-local-session-secret");
     expect(deploymentRuntime.revision).toBe("local-development");
     expect(webRuntime.baseUrl).toBe("http://localhost:3000");
     expect(workerRuntime.redisUrl).toBe("redis://localhost:6379");
@@ -56,6 +59,8 @@ describe("atlas config", () => {
         releaseVerification: "pnpm verify:release"
       }
     });
+    expect(canAtlasPromoteEnvironment("development", "staging")).toBe(true);
+    expect(canAtlasPromoteEnvironment("development", "production")).toBe(false);
   });
 
   it("reads runtime values from the environment", async () => {
@@ -63,6 +68,10 @@ describe("atlas config", () => {
     vi.stubEnv("LOG_LEVEL", "debug");
     vi.stubEnv("RELEASE_STAGE", "private-beta");
     vi.stubEnv("HEALTHCHECK_TIMEOUT_MS", "3500");
+    vi.stubEnv("AUTH_SESSION_SIGNING_SECRET", "atlas-secret");
+    vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://atlas.local");
     vi.stubEnv("API_BASE_URL", "https://api.atlas.local");
     vi.stubEnv("APP_REVISION", "rev-123");
@@ -89,6 +98,7 @@ describe("atlas config", () => {
     const {
       apiRuntime,
       appRuntime,
+      authRuntime,
       deploymentRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
@@ -107,6 +117,10 @@ describe("atlas config", () => {
     expect(appRuntime.logLevel).toBe("debug");
     expect(appRuntime.releaseStage).toBe("private-beta");
     expect(appRuntime.healthcheckTimeoutMs).toBe(3500);
+    expect(authRuntime.sessionSigningSecret).toBe("atlas-secret");
+    expect(authRuntime.localSessionTtlMinutes).toBe(120);
+    expect(authRuntime.supportAccessTtlMinutes).toBe(30);
+    expect(authRuntime.supportAccessAllowedEmails).toEqual(["operator@atlas.local", "operator-admin@atlas.local"]);
     expect(deploymentRuntime.revision).toBe("rev-123");
     expect(deploymentRuntime.deploymentSlot).toBe("blue");
     expect(workerRuntime.redisUrl).toBe("redis://127.0.0.1:6380");
@@ -147,6 +161,7 @@ describe("atlas config", () => {
     });
 
     expect(result.ok).toBe(false);
+    expect(result.issues.map((issue) => issue.variable)).toContain("AUTH_SESSION_SIGNING_SECRET");
     expect(result.issues.map((issue) => issue.variable)).toContain("DATABASE_URL");
     expect(() =>
       assertAtlasRuntimeConfiguration("api", {
@@ -154,6 +169,6 @@ describe("atlas config", () => {
         LOG_LEVEL: "info",
         RELEASE_STAGE: "ga"
       })
-    ).toThrow(/DATABASE_URL/);
+    ).toThrow(/AUTH_SESSION_SIGNING_SECRET/);
   });
 });

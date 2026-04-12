@@ -57,6 +57,9 @@
     "verify:release": "sh ./scripts/verify-release.sh",
     "verify:ops": "sh ./scripts/verify-ops.sh",
     "release:manifest": "pnpm exec tsx ./scripts/create-release-manifest.ts --service api",
+    "release:manifest:all": "pnpm exec tsx ./scripts/create-release-manifest.ts --service api && pnpm exec tsx ./scripts/create-release-manifest.ts --service web && pnpm exec tsx ./scripts/create-release-manifest.ts --service worker",
+    "promote:staging": "pnpm exec tsx ./scripts/promote-release.ts --from development --to staging --services all",
+    "promote:production": "pnpm exec tsx ./scripts/promote-release.ts --from staging --to production --services all",
     "verify:push": "sh ./scripts/verify-push.sh",
     "safe-push": "sh ./scripts/safe-push.sh"
   },

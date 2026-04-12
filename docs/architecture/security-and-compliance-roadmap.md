@@ -19,12 +19,15 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - secure internal operator access model
 - request correlation and runtime header discipline
 - deployment-environment validation for sensitive runtime paths
+- signed session tokens with bounded TTL and tamper detection
+- constrained tenant-targeted support-access sessions
 
 ### Later maturity
 
 - enterprise SSO
 - SCIM or directory provisioning if justified later
 - stronger admin and support access review workflows
+- persisted support-session issuance and approval history
 
 ## Authorization Maturity Path
 
@@ -40,12 +43,14 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - environment-aware administration
 - support-safe constrained actions
 - reviewable internal override permissions
+- read-only and write-scope distinctions enforced by session type
 
 ## Organization Isolation And Tenancy Guardrails
 
 - every business record must be tenant-scoped
 - buyer, seller, and platform contexts must remain explicit
 - support tooling must not silently bypass tenant rules
+- support tooling must carry explicit principal and target-tenant context
 - analytics, exports, and search must remain tenancy-aware
 
 ## Auditability Requirements
@@ -83,6 +88,7 @@ These are placeholders for tracked future work, not current claims:
 - security questionnaires and enterprise buyer trust materials
 - access review workflows
 - key management discipline
+- support-access issuance review and periodic recertification
 - privacy and data retention policy maturity
 - incident response maturity
 - payment-related control reviews
@@ -95,6 +101,7 @@ These are placeholders for tracked future work, not current claims:
 - formal access review systems
 - broad public rollout security posture
 - hardened production auth beyond the current local-first and guarded internal baseline
+- production identity-provider exchange and support-session persistence
 
 ## Must Be Done Before Broad Real-World Rollout
 
@@ -104,5 +111,6 @@ These are placeholders for tracked future work, not current claims:
 - incident handling and audit export readiness
 - secrets management and rotation process
 - stronger operator access constraints
+- support-session reviewability and revoke flows
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

@@ -267,6 +267,18 @@ describe("marketing e2e", () => {
     ).toBe(true);
   });
 
+  it("serves the operator support-access route without crashing", async () => {
+    const response = await fetch(`${activeWebUrl}/operator/support-access`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      html.includes("Scoped tenant support sessions") ||
+        html.includes("Choose an operator session to continue") ||
+        html.includes("Operator context could not be resolved")
+    ).toBe(true);
+  });
+
   it("serves the seller services route without crashing", async () => {
     const response = await fetch(`${activeWebUrl}/seller/services`);
     const html = await response.text();

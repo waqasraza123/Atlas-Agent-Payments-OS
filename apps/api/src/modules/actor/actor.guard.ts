@@ -1,5 +1,7 @@
 import {
+  canAtlasSupportAccessMethod,
   canAtlasActorAccessWorkspace,
+  isAtlasSupportAccessActor,
   type AtlasActorContext
 } from "@atlas/auth";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
@@ -36,6 +38,10 @@ export class ActorGuard implements CanActivate {
 
     const actor: AtlasActorContext = resolution.actor;
     request[actorRequestProperty] = actor;
+
+    if (isAtlasSupportAccessActor(actor) && !canAtlasSupportAccessMethod((request as { method?: string }).method ?? "GET")) {
+      throw new ForbiddenException("Support-access sessions are limited to read-only routes");
+    }
 
     const requiredWorkspaces = this.readMetadata<OrganizationKind[]>(requiredWorkspacesMetadataKey, context);
     if (

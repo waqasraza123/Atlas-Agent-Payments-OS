@@ -6,13 +6,15 @@ import {
   formatAtlasRoleLabel,
   formatAtlasWorkspaceLabel,
   getDefaultAtlasLocalSessionProfileForWorkspace,
-  parseAtlasLocalSessionSelection,
   type AtlasActorContext,
   type AtlasLocalSessionProfile,
-  type AtlasLocalSessionSelection
+  type AtlasLocalSessionSelection,
+  type AtlasSupportAccessRecord
 } from "@atlas/auth";
+import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
+import { appRuntime, authRuntime } from "@atlas/config";
 import { prisma } from "@atlas/database";
-import type { OrganizationKind } from "@atlas/types";
+import type { MembershipRole, OrganizationKind } from "@atlas/types";
 import { cookies } from "next/headers";
 
 export type WorkspaceActorResolution =
@@ -40,11 +42,21 @@ export type WorkspaceActorResolution =
       message: string;
     };
 
-async function readLocalSessionSelection(workspace: OrganizationKind) {
+type MembershipWithRelations = Awaited<ReturnType<typeof loadMembership>>;
+
+async function readSignedSessionSelection(workspace: OrganizationKind) {
   const cookieStore = await cookies();
-  const parsed = parseAtlasLocalSessionSelection(cookieStore.get(atlasLocalSessionCookieName)?.value);
-  if (parsed) {
-    return parsed;
+  const verification = verifyAtlasSignedSessionToken(
+    authRuntime.sessionSigningSecret,
+    cookieStore.get(atlasLocalSessionCookieName)?.value
+  );
+
+  if (verification.status === "ready") {
+    return verification.payload;
+  }
+
+  if (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development") {
+    return null;
   }
 
   const defaultProfile = getDefaultAtlasLocalSessionProfileForWorkspace(workspace);
@@ -52,19 +64,30 @@ async function readLocalSessionSelection(workspace: OrganizationKind) {
     return null;
   }
 
-  return createAtlasLocalSessionSelection(defaultProfile.key);
+  return {
+    source: "local-development" as const,
+    selection: createAtlasLocalSessionSelection(defaultProfile.key),
+    supportAccess: null,
+    issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
+  };
 }
 
-async function loadActorContext(selection: AtlasLocalSessionSelection) {
-  const membership = await prisma.membership.findFirst({
+async function loadMembership(input: {
+  role: MembershipRole;
+  userEmail: string;
+  organizationSlug: string;
+  workspace: OrganizationKind;
+}) {
+  return prisma.membership.findFirst({
     where: {
-      role: selection.role,
+      role: input.role,
       user: {
-        email: selection.userEmail
+        email: input.userEmail
       },
       organization: {
-        slug: selection.organizationSlug,
-        kind: selection.workspace
+        slug: input.organizationSlug,
+        kind: input.workspace
       }
     },
     include: {
@@ -72,11 +95,18 @@ async function loadActorContext(selection: AtlasLocalSessionSelection) {
       organization: true
     }
   });
+}
 
-  if (!membership) {
-    return null;
+function createBaseActorContext(
+  membership: NonNullable<MembershipWithRelations>,
+  input: {
+    workspace: OrganizationKind;
+    agentId: string | null;
+    source: AtlasActorContext["source"];
+    sessionIssuedAt: string;
+    sessionExpiresAt: string;
   }
-
+) {
   return {
     user: {
       id: membership.user.id,
@@ -93,17 +123,95 @@ async function loadActorContext(selection: AtlasLocalSessionSelection) {
       id: membership.id,
       role: membership.role
     },
+    workspace: input.workspace,
+    agentId: input.agentId,
+    source: input.source,
+    sessionIssuedAt: input.sessionIssuedAt,
+    sessionExpiresAt: input.sessionExpiresAt,
+    principalOrganization: null,
+    supportAccess: null
+  } satisfies AtlasActorContext;
+}
+
+async function loadTargetOrganization(supportAccess: AtlasSupportAccessRecord) {
+  return prisma.organization.findFirst({
+    where: {
+      slug: supportAccess.targetOrganizationSlug,
+      kind: supportAccess.targetWorkspace
+    }
+  });
+}
+
+function isSupportAccessAllowedEmail(userEmail: string) {
+  return (
+    authRuntime.supportAccessAllowedEmails.length === 0 ||
+    authRuntime.supportAccessAllowedEmails.includes(userEmail.trim().toLowerCase())
+  );
+}
+
+async function loadActorContext(input: {
+  selection: AtlasLocalSessionSelection;
+  source: AtlasActorContext["source"];
+  supportAccess: AtlasSupportAccessRecord | null;
+  issuedAt: string;
+  expiresAt: string;
+}) {
+  const membership = await loadMembership({
+    role: input.selection.role,
+    userEmail: input.selection.userEmail,
+    organizationSlug: input.selection.organizationSlug,
+    workspace: input.selection.workspace
+  });
+
+  if (!membership) {
+    return null;
+  }
+
+  const actor = createBaseActorContext(membership, {
     workspace: membership.organization.kind,
-    agentId: selection.agentId,
-    source: "local-development"
+    agentId: input.selection.agentId,
+    source: input.source,
+    sessionIssuedAt: input.issuedAt,
+    sessionExpiresAt: input.expiresAt
+  });
+
+  if (!input.supportAccess) {
+    return actor;
+  }
+
+  if (
+    input.supportAccess.grantedByUserEmail !== input.selection.userEmail.toLowerCase() ||
+    !isSupportAccessAllowedEmail(input.selection.userEmail)
+  ) {
+    return null;
+  }
+
+  const targetOrganization = await loadTargetOrganization(input.supportAccess);
+  if (!targetOrganization) {
+    return null;
+  }
+
+  return {
+    ...actor,
+    organization: {
+      id: targetOrganization.id,
+      slug: targetOrganization.slug,
+      name: targetOrganization.name,
+      kind: targetOrganization.kind
+    },
+    workspace: targetOrganization.kind,
+    agentId: null,
+    source: "internal-support",
+    principalOrganization: actor.organization,
+    supportAccess: input.supportAccess
   } satisfies AtlasActorContext;
 }
 
 export async function resolveWorkspaceActor(workspace: OrganizationKind): Promise<WorkspaceActorResolution> {
-  const profiles = atlasLocalSessionProfileList;
-  const selection = await readLocalSessionSelection(workspace);
+  const profiles = atlasLocalSessionProfileList.filter((profile) => profile.workspace === workspace);
+  const session = await readSignedSessionSelection(workspace);
 
-  if (!selection) {
+  if (!session) {
     return {
       status: "missing",
       profiles,
@@ -112,7 +220,13 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
   }
 
   try {
-    const actor = await loadActorContext(selection);
+    const actor = await loadActorContext({
+      selection: session.selection,
+      source: session.source,
+      supportAccess: session.supportAccess,
+      issuedAt: session.issuedAt,
+      expiresAt: session.expiresAt
+    });
 
     if (!actor) {
       return {
@@ -134,7 +248,7 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
     return {
       status: "ready",
       actor,
-      selection,
+      selection: session.selection,
       profiles
     };
   } catch (error) {
@@ -148,10 +262,16 @@ export async function resolveWorkspaceActor(workspace: OrganizationKind): Promis
 }
 
 export function formatActorContextLine(actor: AtlasActorContext) {
-  return [
+  const fragments = [
     actor.user.name ?? actor.user.email,
     actor.organization.name,
     formatAtlasWorkspaceLabel(actor.workspace),
     formatAtlasRoleLabel(actor.membership.role)
-  ].join(" / ");
+  ];
+
+  if (actor.source === "internal-support" && actor.supportAccess) {
+    fragments.push(`Support: ${actor.supportAccess.reason}`);
+  }
+
+  return fragments.join(" / ");
 }

@@ -1,5 +1,6 @@
-import { serializeAtlasLocalSessionSelection, type AtlasLocalSessionSelection } from "@atlas/auth";
-import { apiRuntime } from "@atlas/config";
+import type { AtlasLocalSessionSelection } from "@atlas/auth";
+import { createAtlasLocalSessionToken } from "@atlas/auth/server";
+import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
   AtlasApiRuntimeMetricsSnapshot,
   AtlasIncidentReadinessRecord,
@@ -20,7 +21,9 @@ async function fetchOperatorObservabilityResource<T>(
     method: "GET",
     cache: "no-store",
     headers: {
-      "x-atlas-local-session": serializeAtlasLocalSessionSelection(selection)
+      "x-atlas-local-session": createAtlasLocalSessionToken(authRuntime.sessionSigningSecret, selection, {
+        expiresAt: new Date(Date.now() + authRuntime.localSessionTtlMinutes * 60 * 1000).toISOString()
+      })
     }
   });
 
