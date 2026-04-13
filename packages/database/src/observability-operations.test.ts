@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,6 +104,7 @@ function adapterScriptPath(fileName: string) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.resetModules();
 });
@@ -417,5 +418,67 @@ describe("observability operations", () => {
     expect(result.resolvedCount).toBe(1);
     expect(client.notification.upsert).toHaveBeenCalledTimes(2);
     expect(client.auditEvent.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("prunes expired observability records and artifacts across retention classes", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-observability-retention-"));
+    const snapshotDir = join(sandbox, "snapshots");
+    const dispatchDir = join(sandbox, "dispatches");
+    const incidentDir = join(sandbox, "incidents");
+    const automationDir = join(sandbox, "automation");
+    vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", snapshotDir);
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", dispatchDir);
+    vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", incidentDir);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationDir);
+    vi.stubEnv("OBSERVABILITY_SNAPSHOT_RETENTION_DAYS", "1");
+    vi.stubEnv("OBSERVABILITY_DISPATCH_RETENTION_DAYS", "2");
+    vi.stubEnv("OBSERVABILITY_INCIDENT_RETENTION_DAYS", "3");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_RETENTION_DAYS", "4");
+
+    for (const directory of [snapshotDir, dispatchDir, incidentDir, automationDir]) {
+      mkdirSync(directory, {
+        recursive: true
+      });
+    }
+
+    const oldSnapshot = join(snapshotDir, "old.json");
+    const oldDispatch = join(dispatchDir, "old.json");
+    const oldIncident = join(incidentDir, "old.json");
+    const oldAutomation = join(automationDir, "old.json");
+    for (const filePath of [oldSnapshot, oldDispatch, oldIncident, oldAutomation]) {
+      writeFileSync(filePath, "{}\n", "utf8");
+      utimesSync(filePath, new Date("2026-04-01T00:00:00.000Z"), new Date("2026-04-01T00:00:00.000Z"));
+    }
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T00:00:00.000Z"));
+
+    const client = {
+      observabilitySnapshot: {
+        deleteMany: vi.fn(async () => ({ count: 2 }))
+      },
+      observabilityAlertDispatch: {
+        deleteMany: vi.fn(async () => ({ count: 3 }))
+      },
+      observabilityIncidentTrigger: {
+        deleteMany: vi.fn(async () => ({ count: 1 }))
+      }
+    } as const;
+    const { applyObservabilityRetentionPolicy } = await import("./observability-operations");
+    const result = await applyObservabilityRetentionPolicy(client as never);
+
+    expect(result).toEqual({
+      deletedSnapshotRecords: 2,
+      deletedDispatchRecords: 3,
+      deletedResolvedIncidentTriggerRecords: 1,
+      deletedSnapshotArtifacts: 1,
+      deletedDispatchArtifacts: 1,
+      deletedIncidentArtifacts: 1,
+      deletedAutomationArtifacts: 1
+    });
+    expect(client.observabilitySnapshot.deleteMany).toHaveBeenCalled();
+    expect(client.observabilityAlertDispatch.deleteMany).toHaveBeenCalled();
+    expect(client.observabilityIncidentTrigger.deleteMany).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

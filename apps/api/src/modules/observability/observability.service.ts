@@ -1,8 +1,10 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { buildAtlasObservabilityAlerts } from "@atlas/domain";
 import {
+  getObservabilityAutomationStatus,
   getOperatorOverview,
   listObservabilityAlertDispatches,
+  listObservabilityAutomationRuns,
   listObservabilityIncidentTriggers,
   listObservabilitySnapshots,
   readPublishedWorkerTelemetry
@@ -69,6 +71,26 @@ export class ObservabilityService {
       items: await listObservabilityIncidentTriggers(actor, {
         limit: 12
       })
+    };
+  }
+
+  async getAutomationStatus(actor: AtlasActorContext) {
+    return {
+      item: await Promise.resolve(
+        getObservabilityAutomationStatus(actor, {
+          limit: 12
+        })
+      )
+    };
+  }
+
+  async listAutomationRuns(actor: AtlasActorContext) {
+    return {
+      items: await Promise.resolve(
+        listObservabilityAutomationRuns(actor, {
+          limit: 12
+        })
+      )
     };
   }
 

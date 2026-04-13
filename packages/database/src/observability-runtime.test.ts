@@ -38,6 +38,15 @@ const observabilityOperationsMock = vi.hoisted(() => ({
     resolvedCount: 0,
     activeCount: 1
   })),
+  applyObservabilityRetentionPolicy: vi.fn(async () => ({
+    deletedSnapshotRecords: 0,
+    deletedDispatchRecords: 0,
+    deletedResolvedIncidentTriggerRecords: 0,
+    deletedSnapshotArtifacts: 0,
+    deletedDispatchArtifacts: 0,
+    deletedIncidentArtifacts: 0,
+    deletedAutomationArtifacts: 0
+  })),
   dispatchObservabilityAlerts: vi.fn(async () => ({
     id: "dispatch-automation-1",
     provider: "generic-webhook",
@@ -185,10 +194,92 @@ describe("observability runtime", () => {
     expect(observabilityOperationsMock.persistObservabilitySnapshot).toHaveBeenCalled();
     expect(observabilityOperationsMock.syncObservabilityIncidentTriggers).toHaveBeenCalled();
     expect(observabilityOperationsMock.dispatchObservabilityAlerts).toHaveBeenCalled();
+    expect(observabilityOperationsMock.applyObservabilityRetentionPolicy).toHaveBeenCalled();
     expect(result.snapshot.id).toBe("snapshot-automation-1");
     expect(result.incidentTriggers?.activeCount).toBe(1);
     expect(result.dispatch?.id).toBe("dispatch-automation-1");
     expect(existsSync(result.reportPath)).toBe(true);
     expect(readFileSync(result.reportPath, "utf8")).toContain("snapshot-automation-1");
+  });
+
+  it("lists automation history and current scheduler posture from stored reports", async () => {
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-history-"));
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "SUCCEEDED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Run scheduled observability automation for the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          alertCount: 2,
+          workerTelemetry: {
+            status: "healthy"
+          },
+          snapshot: {
+            id: "snapshot-1"
+          },
+          incidentTriggers: {
+            activeCount: 1
+          },
+          dispatch: null
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const { getObservabilityAutomationStatus, listObservabilityAutomationRuns } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const runs = listObservabilityAutomationRuns(actor, {
+      limit: 5
+    });
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5
+    });
+
+    expect(runs[0]).toMatchObject({
+      status: "SUCCEEDED",
+      trigger: "scheduled",
+      snapshotId: "snapshot-1"
+    });
+    expect(status).toMatchObject({
+      scheduleMode: "interval",
+      intervalMinutes: 20,
+      actorUserEmail: "operator-admin@atlas.local",
+      lastRunStatus: "SUCCEEDED"
+    });
   });
 });

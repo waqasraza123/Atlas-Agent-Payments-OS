@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { AtlasActorContext } from "@atlas/auth";
 import { appRuntime, observabilityRuntime } from "@atlas/config";
@@ -8,6 +8,8 @@ import {
   buildAtlasWorkerTelemetryRecord,
   type AtlasApiRuntimeTelemetryRecord,
   type AtlasObservabilityAlertSeverity,
+  type AtlasObservabilityAutomationRunRecord,
+  type AtlasObservabilityAutomationStatusRecord,
   type AtlasWorkerRuntimeMetricsSnapshot,
   type AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
@@ -16,6 +18,7 @@ import { prisma } from "./client";
 import { getOperatorOverview } from "./operator-workflow";
 import {
   AtlasObservabilityOperationsError,
+  applyObservabilityRetentionPolicy,
   dispatchObservabilityAlerts,
   listObservabilityIncidentTriggers,
   persistObservabilitySnapshot,
@@ -23,6 +26,37 @@ import {
 } from "./observability-operations";
 
 type DatabaseClient = PrismaClient;
+
+type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
+
+type AtlasObservabilityAutomationReportPayload = {
+  version: 1;
+  status?: "SUCCEEDED" | "FAILED";
+  trigger?: AtlasObservabilityAutomationTrigger;
+  generatedAt?: string;
+  appEnv?: string;
+  releaseStage?: string;
+  actorUserEmail?: string | null;
+  reason?: string | null;
+  minimumSeverity?: AtlasObservabilityAlertSeverity;
+  dispatchAlerts?: boolean;
+  triggerIncidents?: boolean;
+  alertCount?: number | null;
+  workerTelemetry?: {
+    status?: AtlasWorkerTelemetryRecord["status"];
+  } | null;
+  snapshot?: {
+    id?: string | null;
+  } | null;
+  incidentTriggers?: {
+    activeCount?: number | null;
+  } | null;
+  dispatch?: {
+    id?: string | null;
+  } | null;
+  reportPath?: string;
+  errorMessage?: string | null;
+};
 
 function resolveRuntimeSnapshotPath(fileName: string) {
   return resolve(import.meta.dirname, "../../..", observabilityRuntime.runtimeSnapshotDirectory, fileName);
@@ -38,6 +72,15 @@ function resolveAutomationReportPath() {
   );
 }
 
+function assertObservabilityViewer(actor: AtlasActorContext) {
+  if (actor.workspace !== "OPERATOR" || actor.organization.kind !== "OPERATOR") {
+    throw new AtlasObservabilityOperationsError(
+      "Observability automation status can only be viewed from the operator workspace.",
+      "forbidden"
+    );
+  }
+}
+
 function readJsonFile<T>(filePath: string): T | null {
   if (!existsSync(filePath)) {
     return null;
@@ -48,6 +91,82 @@ function readJsonFile<T>(filePath: string): T | null {
   } catch {
     return null;
   }
+}
+
+function collectJsonArtifactFiles(directoryPath: string): string[] {
+  try {
+    const entries = readdirSync(directoryPath, {
+      withFileTypes: true
+    });
+    const filePaths: string[] = [];
+
+    for (const entry of entries) {
+      const childPath = resolve(directoryPath, entry.name);
+
+      if (entry.isDirectory()) {
+        filePaths.push(...collectJsonArtifactFiles(childPath));
+        continue;
+      }
+
+      if (entry.isFile() && childPath.endsWith(".json")) {
+        filePaths.push(childPath);
+      }
+    }
+
+    return filePaths;
+  } catch {
+    return [];
+  }
+}
+
+function normalizeAutomationReportMinimumSeverity(
+  value: AtlasObservabilityAlertSeverity | string | null | undefined
+): AtlasObservabilityAlertSeverity {
+  return value === "critical" || value === "warning" ? value : "info";
+}
+
+function mapAutomationRunRecord(
+  payload: AtlasObservabilityAutomationReportPayload,
+  reportPath: string,
+  generatedAtFallback: string
+): AtlasObservabilityAutomationRunRecord {
+  return {
+    id: reportPath,
+    status: payload.status === "FAILED" ? "FAILED" : "SUCCEEDED",
+    trigger: payload.trigger === "scheduled" ? "scheduled" : "manual",
+    generatedAt: payload.generatedAt ?? generatedAtFallback,
+    actorUserEmail: typeof payload.actorUserEmail === "string" ? payload.actorUserEmail : null,
+    reason: typeof payload.reason === "string" ? payload.reason : null,
+    minimumSeverity: normalizeAutomationReportMinimumSeverity(payload.minimumSeverity),
+    dispatchAlerts: Boolean(payload.dispatchAlerts),
+    triggerIncidents: payload.triggerIncidents !== false,
+    alertCount: typeof payload.alertCount === "number" ? payload.alertCount : null,
+    activeIncidentCount:
+      typeof payload.incidentTriggers?.activeCount === "number" ? payload.incidentTriggers.activeCount : null,
+    snapshotId: typeof payload.snapshot?.id === "string" ? payload.snapshot.id : null,
+    dispatchId: typeof payload.dispatch?.id === "string" ? payload.dispatch.id : null,
+    workerTelemetryStatus:
+      payload.workerTelemetry?.status === "healthy" ||
+      payload.workerTelemetry?.status === "warning" ||
+      payload.workerTelemetry?.status === "critical" ||
+      payload.workerTelemetry?.status === "stale" ||
+      payload.workerTelemetry?.status === "missing"
+        ? payload.workerTelemetry.status
+        : null,
+    reportPath,
+    errorMessage: typeof payload.errorMessage === "string" ? payload.errorMessage : null
+  };
+}
+
+function writeObservabilityAutomationReport(payload: AtlasObservabilityAutomationReportPayload) {
+  const reportPath = resolveAutomationReportPath();
+
+  mkdirSync(dirname(reportPath), {
+    recursive: true
+  });
+  writeFileSync(reportPath, `${JSON.stringify({ ...payload, reportPath }, null, 2)}\n`, "utf8");
+
+  return reportPath;
 }
 
 function normalizeReason(value: string) {
@@ -140,6 +259,113 @@ export function readPublishedWorkerTelemetry(now?: string) {
   });
 }
 
+export function listObservabilityAutomationRuns(
+  actor: AtlasActorContext,
+  options: {
+    limit?: number;
+  } = {}
+) {
+  assertObservabilityViewer(actor);
+
+  return collectJsonArtifactFiles(resolve(import.meta.dirname, "../../..", observabilityRuntime.automationReportDirectory))
+    .map((filePath) => {
+      const payload = readJsonFile<AtlasObservabilityAutomationReportPayload>(filePath);
+
+      if (!payload) {
+        return null;
+      }
+
+      try {
+        return mapAutomationRunRecord(payload, filePath, statSync(filePath).mtime.toISOString());
+      } catch {
+        return null;
+      }
+    })
+    .filter((item): item is AtlasObservabilityAutomationRunRecord => item !== null)
+    .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
+    .slice(0, options.limit ?? 12);
+}
+
+export function getObservabilityAutomationStatus(
+  actor: AtlasActorContext,
+  options: {
+    limit?: number;
+  } = {}
+) {
+  assertObservabilityViewer(actor);
+  const recentRuns = listObservabilityAutomationRuns(actor, options);
+  const latestRun = recentRuns[0] ?? null;
+
+  return {
+    scheduleMode: observabilityRuntime.automationScheduleMode,
+    intervalMinutes: observabilityRuntime.automationScheduleIntervalMinutes,
+    startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
+    actorUserEmail: observabilityRuntime.automationActorUserEmail,
+    minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
+    dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+    triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+    retention: {
+      snapshotRetentionDays: observabilityRuntime.snapshotRetentionDays,
+      dispatchRetentionDays: observabilityRuntime.dispatchRetentionDays,
+      incidentRetentionDays: observabilityRuntime.incidentRetentionDays,
+      automationRetentionDays: observabilityRuntime.automationRetentionDays
+    },
+    lastRunAt: latestRun?.generatedAt ?? null,
+    lastRunStatus: latestRun?.status ?? null,
+    lastReportPath: latestRun?.reportPath ?? null,
+    recentRuns
+  } satisfies AtlasObservabilityAutomationStatusRecord;
+}
+
+export function writeObservabilityAutomationFailureReport(input: {
+  trigger: AtlasObservabilityAutomationTrigger;
+  actorUserEmail: string | null;
+  reason: string | null;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  generatedAt?: string;
+  errorMessage: string;
+}) {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const reportPath = writeObservabilityAutomationReport({
+    version: 1,
+    status: "FAILED",
+    trigger: input.trigger,
+    generatedAt,
+    appEnv: appRuntime.appEnv,
+    releaseStage: appRuntime.releaseStage,
+    actorUserEmail: input.actorUserEmail,
+    reason: input.reason,
+    minimumSeverity: input.minimumSeverity,
+    dispatchAlerts: input.dispatchAlerts,
+    triggerIncidents: input.triggerIncidents,
+    alertCount: null,
+    workerTelemetry: null,
+    snapshot: null,
+    incidentTriggers: null,
+    dispatch: null,
+    errorMessage: input.errorMessage
+  });
+
+  return mapAutomationRunRecord(
+    {
+      version: 1,
+      status: "FAILED",
+      trigger: input.trigger,
+      generatedAt,
+      actorUserEmail: input.actorUserEmail,
+      reason: input.reason,
+      minimumSeverity: input.minimumSeverity,
+      dispatchAlerts: input.dispatchAlerts,
+      triggerIncidents: input.triggerIncidents,
+      errorMessage: input.errorMessage
+    },
+    reportPath,
+    generatedAt
+  );
+}
+
 export async function buildObservabilityAutomationPosture(
   input: {
     actorUserEmail: string;
@@ -212,6 +438,7 @@ export async function executeObservabilityAutomation(
     minimumSeverity?: AtlasObservabilityAlertSeverity;
     dispatchAlerts?: boolean;
     triggerIncidents?: boolean;
+    trigger?: AtlasObservabilityAutomationTrigger;
     now?: string;
   },
   client: DatabaseClient = prisma
@@ -266,9 +493,11 @@ export async function executeObservabilityAutomation(
         client
       )
     : null;
-  const reportPath = resolveAutomationReportPath();
+  await applyObservabilityRetentionPolicy(client);
   const report = {
-    version: 1,
+    version: 1 as const,
+    status: "SUCCEEDED" as const,
+    trigger: input.trigger ?? "manual",
     generatedAt: input.now ?? new Date().toISOString(),
     appEnv: appRuntime.appEnv,
     releaseStage: appRuntime.releaseStage,
@@ -276,19 +505,17 @@ export async function executeObservabilityAutomation(
     reason,
     minimumSeverity,
     dispatchAlerts: Boolean(input.dispatchAlerts),
+    triggerIncidents: input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents,
     metrics: posture.metrics,
     workerTelemetry: posture.workerTelemetry,
     alertCount: posture.alerts.length,
     incidentReadiness: posture.incidentReadiness,
     snapshot,
     incidentTriggers,
-    dispatch
+    dispatch,
+    errorMessage: null
   };
-
-  mkdirSync(dirname(reportPath), {
-    recursive: true
-  });
-  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  const reportPath = writeObservabilityAutomationReport(report);
 
   return {
     report,

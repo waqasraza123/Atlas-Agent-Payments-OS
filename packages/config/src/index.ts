@@ -36,6 +36,7 @@ const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
 const atlasCommandAdapterModes = ["dry-run", "command"] as const;
+const atlasAutomationScheduleModes = ["disabled", "interval"] as const;
 const atlasOperationalProofStorageModes = ["disabled", "s3-compatible"] as const;
 const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
 const atlasAlertDispatchProviders = ["generic-webhook", "slack-webhook"] as const;
@@ -88,6 +89,12 @@ function readCommandAdapterMode(value: string | undefined, fallback: AtlasComman
     : fallback;
 }
 
+function readAutomationScheduleMode(value: string | undefined) {
+  return atlasAutomationScheduleModes.includes(value as AtlasAutomationScheduleMode)
+    ? (value as AtlasAutomationScheduleMode)
+    : "disabled";
+}
+
 function readOperationalProofStorageMode(value: string | undefined, fallback: AtlasOperationalProofStorageMode) {
   return atlasOperationalProofStorageModes.includes(value as AtlasOperationalProofStorageMode)
     ? (value as AtlasOperationalProofStorageMode)
@@ -133,6 +140,7 @@ export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
 export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
+export type AtlasAutomationScheduleMode = (typeof atlasAutomationScheduleModes)[number];
 export type AtlasOperationalProofStorageMode = (typeof atlasOperationalProofStorageModes)[number];
 export type AtlasUpstreamIdentityProvider = (typeof atlasUpstreamIdentityProviders)[number];
 export type AtlasAlertDispatchProvider = (typeof atlasAlertDispatchProviders)[number];
@@ -314,6 +322,22 @@ export const deploymentAutomationRuntime = {
 
 export const observabilityRuntime = {
   telemetryRetentionDays: readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30),
+  snapshotRetentionDays: readNumber(
+    process.env.OBSERVABILITY_SNAPSHOT_RETENTION_DAYS,
+    readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
+  ),
+  dispatchRetentionDays: readNumber(
+    process.env.OBSERVABILITY_DISPATCH_RETENTION_DAYS,
+    readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
+  ),
+  incidentRetentionDays: readNumber(
+    process.env.OBSERVABILITY_INCIDENT_RETENTION_DAYS,
+    readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
+  ),
+  automationRetentionDays: readNumber(
+    process.env.OBSERVABILITY_AUTOMATION_RETENTION_DAYS,
+    readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
+  ),
   snapshotDirectory: readText(process.env.OBSERVABILITY_SNAPSHOT_DIR, "operations-artifacts/observability/snapshots"),
   runtimeSnapshotDirectory: readText(
     process.env.OBSERVABILITY_RUNTIME_SNAPSHOT_DIR,
@@ -341,6 +365,12 @@ export const observabilityRuntime = {
 
     return severity === "critical" || severity === "info" ? severity : "warning";
   })(),
+  automationScheduleMode: readAutomationScheduleMode(process.env.OBSERVABILITY_AUTOMATION_SCHEDULE_MODE),
+  automationScheduleIntervalMinutes: readNumber(process.env.OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES, 15),
+  automationScheduleStartupDelaySeconds: readNumber(process.env.OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS, 30),
+  automationActorUserEmail: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL),
+  automationReason: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_REASON),
+  automationDispatchAlerts: readBoolean(process.env.OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS, false),
   incidentMinimumSeverity: (() => {
     const severity = readText(process.env.OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY, "critical");
 
@@ -622,6 +652,29 @@ function requireRuntimeVariable(
   }
 }
 
+function requirePositiveRuntimeVariable(
+  issues: AtlasRuntimeValidationIssue[],
+  env: Record<string, string | undefined>,
+  variable: string,
+  message: string,
+  allowZero = false
+) {
+  const value = env[variable];
+
+  if (!value || value.trim().length === 0) {
+    return;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || (allowZero ? parsed < 0 : parsed <= 0)) {
+    issues.push({
+      variable,
+      message
+    });
+  }
+}
+
 export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
   return [...atlasServiceRuntimeVariables(service)];
 }
@@ -652,6 +705,7 @@ export function validateAtlasRuntimeConfiguration(
   const appEnv = readAppEnvironment(env.APP_ENV);
   const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
   const releaseStage = readReleaseStage(env.RELEASE_STAGE);
+  const automationScheduleMode = readAutomationScheduleMode(env.OBSERVABILITY_AUTOMATION_SCHEDULE_MODE);
   const requiredVariables = [
     ...listAtlasRuntimeVariables(service),
     ...(appEnv !== "local"
@@ -667,6 +721,13 @@ export function validateAtlasRuntimeConfiguration(
           "AUTH_EXTERNAL_OIDC_PROVIDER",
           "AUTH_EXTERNAL_OIDC_JWKS_JSON",
           "AUTH_IDENTITY_SESSION_TTL_MINUTES"
+        ]
+      : []),
+    ...(service === "worker" && automationScheduleMode === "interval"
+      ? [
+          "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
+          "OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL",
+          "OBSERVABILITY_AUTOMATION_REASON"
         ]
       : [])
   ];
@@ -885,6 +946,65 @@ export function validateAtlasRuntimeConfiguration(
         "OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=slack-webhook."
       );
     }
+  }
+
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_TELEMETRY_RETENTION_DAYS",
+    "OBSERVABILITY_TELEMETRY_RETENTION_DAYS must be a positive number of days."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_SNAPSHOT_RETENTION_DAYS",
+    "OBSERVABILITY_SNAPSHOT_RETENTION_DAYS must be a positive number of days."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_DISPATCH_RETENTION_DAYS",
+    "OBSERVABILITY_DISPATCH_RETENTION_DAYS must be a positive number of days."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_INCIDENT_RETENTION_DAYS",
+    "OBSERVABILITY_INCIDENT_RETENTION_DAYS must be a positive number of days."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_AUTOMATION_RETENTION_DAYS",
+    "OBSERVABILITY_AUTOMATION_RETENTION_DAYS must be a positive number of days."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_TRACE_HISTORY_LIMIT",
+    "OBSERVABILITY_TRACE_HISTORY_LIMIT must be a positive number."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_WORKER_STALE_AFTER_MINUTES",
+    "OBSERVABILITY_WORKER_STALE_AFTER_MINUTES must be a positive number of minutes."
+  );
+
+  if (service === "worker" && automationScheduleMode === "interval") {
+    requirePositiveRuntimeVariable(
+      issues,
+      env,
+      "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
+      "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES must be a positive number of minutes."
+    );
+    requirePositiveRuntimeVariable(
+      issues,
+      env,
+      "OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS",
+      "OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS must be zero or a positive number of seconds.",
+      true
+    );
   }
 
   if (readOperationalProofStorageMode(

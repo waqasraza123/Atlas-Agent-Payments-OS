@@ -18,6 +18,8 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
   - `GET /observability/alerts`
   - `GET /observability/incidents`
   - `GET /observability/incident-triggers`
+  - `GET /observability/automation`
+  - `GET /observability/automation-runs`
   - `GET /observability/worker`
   - `GET /observability/snapshots`
   - `GET /observability/dispatches`
@@ -50,23 +52,26 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
 2. Check `GET /health/ready` for degraded dependencies.
 3. Check `GET /health/metrics` for error rate, route concentration, and latency posture.
 4. Check `/operator/alerts` for operator-visible alert aggregation, recent traces, and trace coverage posture.
-5. Check `/observability/incident-triggers` for active durable incident triggers and linked report artifacts.
-6. Follow the linked runbook path on each alert before taking manual action.
+5. Check `/observability/automation` for the active scheduler posture, retention windows, and last automation result.
+6. Check `/observability/incident-triggers` for active durable incident triggers and linked report artifacts.
+7. Follow the linked runbook path on each alert before taking manual action.
 
 ## Current Limitations
 
 - API metrics are still process-local even though the latest API and worker runtime posture is published into shared JSON snapshots
-- retained telemetry is operator-captured and stored as bounded repo-owned snapshots rather than continuous time-series history
+- retained telemetry now has explicit repo-owned retention windows, but it is still stored as bounded retained artifacts rather than continuous time-series history
 - external alert dispatch is operator-triggered and currently limited to the owned generic-webhook and Slack webhook adapters
-- repo-owned observability automation now exists for snapshot capture, optional dispatch, and durable incident-trigger sync, but it is still operator-invoked rather than timer-driven
+- repo-owned observability automation now exists for snapshot capture, optional dispatch, durable incident-trigger sync, worker-driven scheduling, and retained automation history, but there is still no external paging target
 - dashboards are operator-facing product surfaces, not a replacement for future APM tooling
 
 ## Verification
 
 - `pnpm verify:ops`
 - `pnpm observability:automation --actor-user-email operator-admin@atlas.local --reason "Validate shared observability automation posture."`
+- `pnpm --filter @atlas/worker test -- --run src/lib/observability-automation.test.ts`
 - `curl -s http://localhost:4000/health/metrics`
 - `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/alerts`
+- `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/automation`
 - `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/incident-triggers`
 - `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/worker`
 - `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/snapshots`

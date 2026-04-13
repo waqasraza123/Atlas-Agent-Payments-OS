@@ -7,6 +7,8 @@ import type {
   AtlasIncidentReadinessRecord,
   AtlasObservabilityAlertDispatchRecord,
   AtlasObservabilityAlertRecord,
+  AtlasObservabilityAutomationRunRecord,
+  AtlasObservabilityAutomationStatusRecord,
   AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
   AtlasRuntimeTraceRecord,
@@ -77,6 +79,7 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     workerResponse,
     snapshotsResponse,
     dispatchesResponse,
+    automationResponse,
     incidentTriggersResponse
   ] = await Promise.all([
     fetchOperatorObservabilityResource<AtlasApiRuntimeTelemetryRecord>("/observability/metrics", actor, selection),
@@ -85,6 +88,7 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     fetchOperatorObservabilityResource<AtlasWorkerTelemetryRecord>("/observability/worker", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection),
+    fetchOperatorObservabilityResource<AtlasObservabilityAutomationStatusRecord>("/observability/automation", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityIncidentTriggerRecord>(
       "/observability/incident-triggers",
       actor,
@@ -99,6 +103,7 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     workerTelemetry: workerResponse.item,
     snapshots: snapshotsResponse.items ?? [],
     dispatches: dispatchesResponse.items ?? [],
+    automation: automationResponse.item,
     incidentTriggers: incidentTriggersResponse.items ?? []
   };
 }
@@ -161,6 +166,21 @@ export function createOperatorIncidentTriggerItems(
   }));
 }
 
+export function createOperatorAutomationRunItems(
+  items: AtlasObservabilityAutomationRunRecord[]
+): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: `${item.trigger === "scheduled" ? "Scheduled" : "Manual"} automation · ${item.status}`,
+    description:
+      item.reason ??
+      (item.errorMessage ? item.errorMessage : `${item.alertCount ?? 0} alerts reviewed at ${item.minimumSeverity}.`),
+    detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
+    statusLabel: formatDateTime(item.generatedAt),
+    statusTone: item.status === "FAILED" ? "critical" : "success"
+  }));
+}
+
 export function createOperatorWorkerQueueItems(workerTelemetry: AtlasWorkerTelemetryRecord | null): RecordListPanelItem[] {
   return (workerTelemetry?.snapshot?.queues ?? []).map((item) => ({
     id: item.key,
@@ -215,6 +235,53 @@ export function createOperatorMetricsFacts(
     {
       label: "Recent traces",
       value: String(metrics.recentTraces.length)
+    }
+  ];
+}
+
+export function createOperatorAutomationFacts(
+  automation: AtlasObservabilityAutomationStatusRecord
+): DetailGridItem[] {
+  return [
+    {
+      label: "Schedule mode",
+      value: automation.scheduleMode === "interval" ? "Interval" : "Disabled"
+    },
+    {
+      label: "Interval",
+      value: `${automation.intervalMinutes} minutes`
+    },
+    {
+      label: "Startup delay",
+      value: `${automation.startupDelaySeconds} seconds`
+    },
+    {
+      label: "Automation actor",
+      value: automation.actorUserEmail ?? "Not configured"
+    },
+    {
+      label: "Default severity",
+      value: automation.minimumSeverity
+    },
+    {
+      label: "Dispatch externally",
+      value: automation.dispatchAlerts ? "Enabled" : "Disabled"
+    },
+    {
+      label: "Sync incidents",
+      value: automation.triggerIncidents ? "Enabled" : "Disabled"
+    },
+    {
+      label: "Last run",
+      value: automation.lastRunAt ? formatDateTime(automation.lastRunAt) : "Not recorded"
+    },
+    {
+      label: "Snapshot retention",
+      value: `${automation.retention.snapshotRetentionDays} days`
+    },
+    {
+      label: "Automation retention",
+      value: `${automation.retention.automationRetentionDays} days`
     }
   ];
 }

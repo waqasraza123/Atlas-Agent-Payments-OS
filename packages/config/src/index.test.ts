@@ -75,8 +75,18 @@ describe("atlas config", () => {
       "MINIO_SECRET_KEY"
     ]);
     expect(observabilityRuntime.traceHistoryLimit).toBe(20);
+    expect(observabilityRuntime.snapshotRetentionDays).toBe(30);
+    expect(observabilityRuntime.dispatchRetentionDays).toBe(30);
+    expect(observabilityRuntime.incidentRetentionDays).toBe(30);
+    expect(observabilityRuntime.automationRetentionDays).toBe(30);
     expect(observabilityRuntime.incidentReportDirectory).toBe("operations-artifacts/observability/incidents");
     expect(observabilityRuntime.incidentMinimumSeverity).toBe("critical");
+    expect(observabilityRuntime.automationScheduleMode).toBe("disabled");
+    expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(15);
+    expect(observabilityRuntime.automationScheduleStartupDelaySeconds).toBe(30);
+    expect(observabilityRuntime.automationActorUserEmail).toBeNull();
+    expect(observabilityRuntime.automationReason).toBeNull();
+    expect(observabilityRuntime.automationDispatchAlerts).toBe(false);
     expect(observabilityRuntime.automationTriggerIncidents).toBe(true);
     expect(
       createAtlasStructuredLogPayload("api", "info", "booted", {
@@ -406,6 +416,10 @@ describe("atlas config", () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REF", "main");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_API_URL", "https://api.github.com");
     vi.stubEnv("OBSERVABILITY_TELEMETRY_RETENTION_DAYS", "45");
+    vi.stubEnv("OBSERVABILITY_SNAPSHOT_RETENTION_DAYS", "60");
+    vi.stubEnv("OBSERVABILITY_DISPATCH_RETENTION_DAYS", "20");
+    vi.stubEnv("OBSERVABILITY_INCIDENT_RETENTION_DAYS", "90");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_RETENTION_DAYS", "14");
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", "operations-artifacts/observability/snapshots");
     vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", "operations-artifacts/observability/runtime");
     vi.stubEnv("OBSERVABILITY_TRACE_HISTORY_LIMIT", "30");
@@ -416,6 +430,15 @@ describe("atlas config", () => {
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", "operations-artifacts/observability/dispatches");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", "operations-artifacts/observability/automation");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "critical");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
+    vi.stubEnv(
+      "OBSERVABILITY_AUTOMATION_REASON",
+      "Run scheduled observability automation for the current release slot."
+    );
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS", "true");
     vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", "operations-artifacts/observability/incidents");
     vi.stubEnv("OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY", "warning");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS", "false");
@@ -495,6 +518,10 @@ describe("atlas config", () => {
     expect(deploymentAutomationRuntime.mode).toBe("command");
     expect(deploymentAutomationRuntime.provider).toBe("github-actions");
     expect(observabilityRuntime.telemetryRetentionDays).toBe(45);
+    expect(observabilityRuntime.snapshotRetentionDays).toBe(60);
+    expect(observabilityRuntime.dispatchRetentionDays).toBe(20);
+    expect(observabilityRuntime.incidentRetentionDays).toBe(90);
+    expect(observabilityRuntime.automationRetentionDays).toBe(14);
     expect(observabilityRuntime.runtimeSnapshotDirectory).toBe("operations-artifacts/observability/runtime");
     expect(observabilityRuntime.traceHistoryLimit).toBe(30);
     expect(observabilityRuntime.workerTelemetryStaleAfterMinutes).toBe(15);
@@ -502,6 +529,14 @@ describe("atlas config", () => {
     expect(observabilityRuntime.alertDispatchProvider).toBe("generic-webhook");
     expect(observabilityRuntime.automationReportDirectory).toBe("operations-artifacts/observability/automation");
     expect(observabilityRuntime.automationDefaultMinimumSeverity).toBe("critical");
+    expect(observabilityRuntime.automationScheduleMode).toBe("interval");
+    expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(20);
+    expect(observabilityRuntime.automationScheduleStartupDelaySeconds).toBe(45);
+    expect(observabilityRuntime.automationActorUserEmail).toBe("operator-admin@atlas.local");
+    expect(observabilityRuntime.automationReason).toBe(
+      "Run scheduled observability automation for the current release slot."
+    );
+    expect(observabilityRuntime.automationDispatchAlerts).toBe(true);
     expect(observabilityRuntime.incidentReportDirectory).toBe("operations-artifacts/observability/incidents");
     expect(observabilityRuntime.incidentMinimumSeverity).toBe("warning");
     expect(observabilityRuntime.automationTriggerIncidents).toBe(false);
@@ -722,6 +757,35 @@ describe("atlas config", () => {
         "SECRET_ROTATION_COMMAND",
         "DEPLOYMENT_AUTOMATION_COMMAND",
         "OBSERVABILITY_ALERT_DISPATCH_COMMAND"
+      ])
+    );
+  });
+
+  it("requires explicit worker automation scheduler ownership when interval mode is enabled", async () => {
+    const { validateAtlasRuntimeConfiguration } = await import("./index");
+
+    const result = validateAtlasRuntimeConfiguration("worker", {
+      APP_ENV: "staging",
+      LOG_LEVEL: "info",
+      RELEASE_STAGE: "private-beta",
+      DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      APP_REVISION: "rev-1",
+      DEPLOYMENT_SLOT: "green",
+      RELEASE_ARTIFACT_ID: "atlas-staging-build",
+      RELEASE_ARTIFACT_SHA256: "a".repeat(64),
+      OBSERVABILITY_AUTOMATION_SCHEDULE_MODE: "interval",
+      OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES: "0",
+      OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS: "-1"
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.map((issue) => issue.variable)).toEqual(
+      expect.arrayContaining([
+        "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
+        "OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL",
+        "OBSERVABILITY_AUTOMATION_REASON",
+        "OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS"
       ])
     );
   });

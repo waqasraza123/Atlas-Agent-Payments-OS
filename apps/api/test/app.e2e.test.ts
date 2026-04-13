@@ -1195,6 +1195,64 @@ const databaseMock = vi.hoisted(() => ({
       operationalIntegrationId: "integration-1"
     }
   ]),
+  getObservabilityAutomationStatus: vi.fn(async () => ({
+    scheduleMode: "interval",
+    intervalMinutes: 20,
+    startupDelaySeconds: 45,
+    actorUserEmail: "operator-admin@atlas.local",
+    minimumSeverity: "warning",
+    dispatchAlerts: false,
+    triggerIncidents: true,
+    retention: {
+      snapshotRetentionDays: 30,
+      dispatchRetentionDays: 30,
+      incidentRetentionDays: 30,
+      automationRetentionDays: 30
+    },
+    lastRunAt: new Date().toISOString(),
+    lastRunStatus: "SUCCEEDED",
+    lastReportPath: "/tmp/observability-automation.json",
+    recentRuns: [
+      {
+        id: "/tmp/observability-automation.json",
+        status: "SUCCEEDED",
+        trigger: "scheduled",
+        generatedAt: new Date().toISOString(),
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Run scheduled observability automation for the current release slot.",
+        minimumSeverity: "warning",
+        dispatchAlerts: false,
+        triggerIncidents: true,
+        alertCount: 2,
+        activeIncidentCount: 1,
+        snapshotId: "snapshot-1",
+        dispatchId: null,
+        workerTelemetryStatus: "warning",
+        reportPath: "/tmp/observability-automation.json",
+        errorMessage: null
+      }
+    ]
+  })),
+  listObservabilityAutomationRuns: vi.fn(async () => [
+    {
+      id: "/tmp/observability-automation.json",
+      status: "SUCCEEDED",
+      trigger: "scheduled",
+      generatedAt: new Date().toISOString(),
+      actorUserEmail: "operator-admin@atlas.local",
+      reason: "Run scheduled observability automation for the current release slot.",
+      minimumSeverity: "warning",
+      dispatchAlerts: false,
+      triggerIncidents: true,
+      alertCount: 2,
+      activeIncidentCount: 1,
+      snapshotId: "snapshot-1",
+      dispatchId: null,
+      workerTelemetryStatus: "warning",
+      reportPath: "/tmp/observability-automation.json",
+      errorMessage: null
+    }
+  ]),
   listObservabilityIncidentTriggers: vi.fn(async () => [
     {
       id: "incident-trigger-1",
@@ -1289,6 +1347,8 @@ vi.mock("@atlas/database", async () => {
     listOperationalIntegrations: databaseMock.listOperationalIntegrations,
     listObservabilitySnapshots: databaseMock.listObservabilitySnapshots,
     listObservabilityAlertDispatches: databaseMock.listObservabilityAlertDispatches,
+    getObservabilityAutomationStatus: databaseMock.getObservabilityAutomationStatus,
+    listObservabilityAutomationRuns: databaseMock.listObservabilityAutomationRuns,
     listObservabilityIncidentTriggers: databaseMock.listObservabilityIncidentTriggers,
     readPublishedWorkerTelemetry: databaseMock.readPublishedWorkerTelemetry,
     listAtlasRolloutAutomationSummary: databaseMock.listAtlasRolloutAutomationSummary,
@@ -2485,6 +2545,12 @@ describe("atlas api e2e", () => {
     const dispatchesResponse = await request(app.getHttpServer())
       .get("/observability/dispatches")
       .set("x-atlas-local-session", "local-token");
+    const automationResponse = await request(app.getHttpServer())
+      .get("/observability/automation")
+      .set("x-atlas-local-session", "local-token");
+    const automationRunsResponse = await request(app.getHttpServer())
+      .get("/observability/automation-runs")
+      .set("x-atlas-local-session", "local-token");
     const incidentTriggersResponse = await request(app.getHttpServer())
       .get("/observability/incident-triggers")
       .set("x-atlas-local-session", "local-token");
@@ -2523,6 +2589,19 @@ describe("atlas api e2e", () => {
       expect.objectContaining({
         id: "dispatch-1",
         provider: "generic-webhook"
+      })
+    ]);
+    expect(automationResponse.status).toBe(200);
+    expect(automationResponse.body.item).toMatchObject({
+      scheduleMode: "interval",
+      intervalMinutes: 20,
+      lastRunStatus: "SUCCEEDED"
+    });
+    expect(automationRunsResponse.status).toBe(200);
+    expect(automationRunsResponse.body.items).toEqual([
+      expect.objectContaining({
+        trigger: "scheduled",
+        snapshotId: "snapshot-1"
       })
     ]);
     expect(incidentTriggersResponse.status).toBe(200);

@@ -2,6 +2,7 @@ import { Queue, Worker, type ConnectionOptions } from "bullmq";
 import { listAtlasQueueDefinitions } from "@atlas/domain";
 import { workerEnv } from "./env";
 import { log } from "./lib/logger";
+import { startWorkerObservabilityAutomationScheduler } from "./lib/observability-automation";
 import { createRedisConnection } from "./lib/redis";
 import { createWorkerJobTraceContext } from "./lib/trace-context";
 import {
@@ -138,12 +139,14 @@ async function main() {
   await connection.ping();
   const bindings = createQueueBindings(connection);
   await Promise.all(bindings.flatMap((binding) => [binding.queue.waitUntilReady(), binding.worker.waitUntilReady()]));
+  const observabilityAutomation = startWorkerObservabilityAutomationScheduler();
 
   async function shutdown(signal: string) {
     log("worker.shutdown.started", {
       signal,
       queueCount: bindings.length
     });
+    observabilityAutomation?.stop();
     await Promise.all(bindings.map(async (binding) => binding.worker.close()));
     await Promise.all(bindings.map(async (binding) => binding.queue.close()));
     await connection.quit();
@@ -164,6 +167,8 @@ async function main() {
   log("worker.bootstrap.completed", {
     redisUrl: connection.options.host ? `${connection.options.host}:${connection.options.port}` : "configured",
     queues: bindings.map((binding) => binding.name),
+    observabilityAutomationSchedule:
+      observabilityAutomation === null ? "disabled" : `${workerEnv.automationIntervalMinutes} minutes`,
     deploymentSlot: workerEnv.deploymentSlot,
     revision: workerEnv.revision,
     requiredVariables: workerEnv.requiredVariables.length,

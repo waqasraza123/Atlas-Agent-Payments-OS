@@ -28,6 +28,16 @@ type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 type MetricsWithConfiguration = AtlasApiRuntimeTelemetryRecord;
 
+export type AtlasObservabilityRetentionSweepResult = {
+  deletedSnapshotRecords: number;
+  deletedDispatchRecords: number;
+  deletedResolvedIncidentTriggerRecords: number;
+  deletedSnapshotArtifacts: number;
+  deletedDispatchArtifacts: number;
+  deletedIncidentArtifacts: number;
+  deletedAutomationArtifacts: number;
+};
+
 export class AtlasObservabilityOperationsError extends Error {
   constructor(
     message: string,
@@ -324,10 +334,14 @@ function collectJsonArtifactFiles(directoryPath: string): string[] {
   }
 }
 
-function pruneExpiredSnapshotArtifacts() {
-  const cutoffTimestamp = Date.now() - observabilityRuntime.telemetryRetentionDays * 24 * 60 * 60 * 1000;
+function createRetentionCutoffDate(retentionDays: number) {
+  return new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+}
 
-  for (const filePath of collectJsonArtifactFiles(resolveRepoPath(observabilityRuntime.snapshotDirectory))) {
+function pruneArtifactDirectory(directoryPath: string, cutoffTimestamp: number) {
+  let deletedCount = 0;
+
+  for (const filePath of collectJsonArtifactFiles(directoryPath)) {
     try {
       const stats = statSync(filePath);
 
@@ -335,9 +349,95 @@ function pruneExpiredSnapshotArtifacts() {
         rmSync(filePath, {
           force: true
         });
+        deletedCount += 1;
       }
     } catch {}
   }
+
+  return deletedCount;
+}
+
+export async function applyObservabilityRetentionPolicy(client: DatabaseClient = prisma) {
+  const snapshotRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.snapshotRetentionDays);
+  const dispatchRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.dispatchRetentionDays);
+  const incidentRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.incidentRetentionDays);
+  const automationRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.automationRetentionDays);
+  const snapshotDeleted =
+    "observabilitySnapshot" in client && client.observabilitySnapshot && typeof client.observabilitySnapshot.deleteMany === "function"
+      ? await client.observabilitySnapshot.deleteMany({
+          where: {
+            OR: [
+              {
+                expiresAt: {
+                  lt: new Date()
+                }
+              },
+              {
+                createdAt: {
+                  lt: snapshotRetentionCutoff
+                }
+              }
+            ]
+          }
+        })
+      : { count: 0 };
+  const dispatchDeleted =
+    "observabilityAlertDispatch" in client &&
+    client.observabilityAlertDispatch &&
+    typeof client.observabilityAlertDispatch.deleteMany === "function"
+      ? await client.observabilityAlertDispatch.deleteMany({
+          where: {
+            completedAt: {
+              lt: dispatchRetentionCutoff
+            }
+          }
+        })
+      : { count: 0 };
+  const incidentDeleted =
+    "observabilityIncidentTrigger" in client &&
+    client.observabilityIncidentTrigger &&
+    typeof client.observabilityIncidentTrigger.deleteMany === "function"
+      ? await client.observabilityIncidentTrigger.deleteMany({
+          where: {
+            status: "RESOLVED",
+            OR: [
+              {
+                resolvedAt: {
+                  lt: incidentRetentionCutoff
+                }
+              },
+              {
+                resolvedAt: null,
+                updatedAt: {
+                  lt: incidentRetentionCutoff
+                }
+              }
+            ]
+          }
+        })
+      : { count: 0 };
+
+  return {
+    deletedSnapshotRecords: snapshotDeleted.count,
+    deletedDispatchRecords: dispatchDeleted.count,
+    deletedResolvedIncidentTriggerRecords: incidentDeleted.count,
+    deletedSnapshotArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.snapshotDirectory),
+      snapshotRetentionCutoff.getTime()
+    ),
+    deletedDispatchArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.alertDispatchReportDirectory),
+      dispatchRetentionCutoff.getTime()
+    ),
+    deletedIncidentArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.incidentReportDirectory),
+      incidentRetentionCutoff.getTime()
+    ),
+    deletedAutomationArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.automationReportDirectory),
+      automationRetentionCutoff.getTime()
+    )
+  } satisfies AtlasObservabilityRetentionSweepResult;
 }
 
 export async function listObservabilitySnapshots(
@@ -396,14 +496,6 @@ export async function persistObservabilitySnapshot(
   };
 
   writeJsonArtifact(reportPath, payload);
-  await client.observabilitySnapshot.deleteMany({
-    where: {
-      expiresAt: {
-        lt: new Date()
-      }
-    }
-  });
-  pruneExpiredSnapshotArtifacts();
 
   const record = await client.observabilitySnapshot.create({
     data: {
@@ -421,6 +513,8 @@ export async function persistObservabilitySnapshot(
       expiresAt
     }
   });
+
+  await applyObservabilityRetentionPolicy(client);
 
   return mapSnapshotRecord(record);
 }
@@ -610,6 +704,8 @@ export async function dispatchObservabilityAlerts(
       completedAt: new Date(completedAt)
     }
   });
+
+  await applyObservabilityRetentionPolicy(client);
 
   if (resolvedIntegration && status === "SUCCEEDED") {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
@@ -854,6 +950,8 @@ export async function syncObservabilityIncidentTriggers(
       }
     ]
   });
+
+  await applyObservabilityRetentionPolicy(client);
 
   return {
     items: activeRecords.map((record) => mapIncidentTriggerRecord(record)),

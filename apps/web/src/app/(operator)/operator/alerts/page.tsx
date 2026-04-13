@@ -4,6 +4,8 @@ import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import {
   createOperatorAlertItems,
+  createOperatorAutomationFacts,
+  createOperatorAutomationRunItems,
   createOperatorDispatchItems,
   createOperatorIncidentItems,
   createOperatorIncidentTriggerItems,
@@ -35,9 +37,10 @@ export default async function OperatorAlertsPage() {
     const workerTelemetry = observability.workerTelemetry;
     const snapshots = observability.snapshots;
     const dispatches = observability.dispatches;
+    const automation = observability.automation;
     const incidentTriggers = observability.incidentTriggers;
 
-    if (!metrics || !incidentReadiness) {
+    if (!metrics || !incidentReadiness || !automation) {
       return (
         <StatePanel
           eyebrow="Observability"
@@ -66,6 +69,15 @@ export default async function OperatorAlertsPage() {
           <MetricCard label="Retained snapshots" value={String(snapshots.length)} detail="Persisted observability snapshots kept for later incident review." />
           <MetricCard label="Alert dispatches" value={String(dispatches.length)} detail="Recent external alert dispatch attempts recorded by Atlas." />
           <MetricCard label="Trace coverage" value={`${Math.round(metrics.traceCoverageRate * 100)}%`} detail="API request coverage currently backed by stored runtime traces." />
+          <MetricCard
+            label="Automation schedule"
+            value={automation.scheduleMode === "interval" ? `${automation.intervalMinutes}m` : "disabled"}
+            detail={
+              automation.scheduleMode === "interval"
+                ? `Worker-driven automation is configured for ${automation.actorUserEmail ?? "an operator"} with ${automation.retention.automationRetentionDays} days of retained run history.`
+                : "Timer-driven automation is disabled for the current runtime."
+            }
+          />
           <MetricCard label="Incident triggers" value={String(incidentTriggers.length)} detail="Active automated incident triggers currently persisted for operators." />
         </section>
         <section className="grid gap-6 xl:grid-cols-3">
@@ -224,6 +236,22 @@ export default async function OperatorAlertsPage() {
             items={createOperatorIncidentTriggerItems(incidentTriggers)}
             emptyTitle="No active incident triggers"
             emptyDescription="Run observability automation with incident syncing enabled to open durable internal incidents."
+          />
+        </section>
+        <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <RecordListPanel
+            eyebrow="Automation history"
+            title="Recent automation runs"
+            description="Manual and scheduled runs both leave durable reports so operators can verify cadence, ownership, and failures."
+            items={createOperatorAutomationRunItems(automation.recentRuns)}
+            emptyTitle="No automation runs"
+            emptyDescription="Run observability automation or enable the worker schedule to start building automation history."
+          />
+          <DetailGrid
+            eyebrow="Automation posture"
+            title="Scheduler and retention policy"
+            description="Retention windows and scheduler defaults remain explicit so observability ownership can be audited instead of implied."
+            items={createOperatorAutomationFacts(automation)}
           />
         </section>
         <section className="grid gap-6 xl:grid-cols-2">

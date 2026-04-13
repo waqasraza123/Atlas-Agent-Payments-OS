@@ -172,6 +172,47 @@ export type AtlasObservabilityIncidentTriggerRecord = {
   updatedAt: string;
 };
 
+export type AtlasObservabilityAutomationRunRecord = {
+  id: string;
+  status: "SUCCEEDED" | "FAILED";
+  trigger: "manual" | "scheduled";
+  generatedAt: string;
+  actorUserEmail: string | null;
+  reason: string | null;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  alertCount: number | null;
+  activeIncidentCount: number | null;
+  snapshotId: string | null;
+  dispatchId: string | null;
+  workerTelemetryStatus: AtlasWorkerTelemetryRecord["status"] | null;
+  reportPath: string;
+  errorMessage: string | null;
+};
+
+export type AtlasObservabilityRetentionPolicyRecord = {
+  snapshotRetentionDays: number;
+  dispatchRetentionDays: number;
+  incidentRetentionDays: number;
+  automationRetentionDays: number;
+};
+
+export type AtlasObservabilityAutomationStatusRecord = {
+  scheduleMode: "disabled" | "interval";
+  intervalMinutes: number;
+  startupDelaySeconds: number;
+  actorUserEmail: string | null;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  retention: AtlasObservabilityRetentionPolicyRecord;
+  lastRunAt: string | null;
+  lastRunStatus: AtlasObservabilityAutomationRunRecord["status"] | null;
+  lastReportPath: string | null;
+  recentRuns: AtlasObservabilityAutomationRunRecord[];
+};
+
 export type AtlasIncidentReadinessItem = {
   key: string;
   label: string;
