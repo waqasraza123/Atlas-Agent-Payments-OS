@@ -22,6 +22,51 @@ export function readOptionalText(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+export function readTraceContext(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const trace = payload.trace;
+
+  if (!trace || typeof trace !== "object" || Array.isArray(trace)) {
+    return null;
+  }
+
+  const traceId = readOptionalText(trace.traceId);
+  const spanId = readOptionalText(trace.spanId);
+  const traceparent = readOptionalText(trace.traceparent);
+  const sourceService = readOptionalText(trace.sourceService);
+
+  if (!traceId || !spanId || !traceparent) {
+    return null;
+  }
+
+  return {
+    traceId,
+    spanId,
+    traceparent,
+    sourceService
+  };
+}
+
+export function withTraceHeaders(init = {}, trace) {
+  if (!trace) {
+    return init;
+  }
+
+  return {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      "x-atlas-trace-id": trace.traceId,
+      "x-atlas-span-id": trace.spanId,
+      traceparent: trace.traceparent,
+      ...(trace.sourceService ? { "x-atlas-origin-service": trace.sourceService } : {})
+    }
+  };
+}
+
 export function shouldSimulateExternalExecution() {
   return process.env.ATLAS_SIMULATE_EXTERNAL_EXECUTION === "true" || process.env.NODE_ENV === "test";
 }

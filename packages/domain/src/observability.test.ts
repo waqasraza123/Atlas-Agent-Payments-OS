@@ -141,6 +141,8 @@ describe("atlas observability contracts", () => {
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      hasExternalPaging: true,
+      pagingProvider: "pagerduty-events",
       hasAutomatedIncidentTriggers: true,
       workerTelemetryStatus: "healthy",
       activeAlertCount: 2,

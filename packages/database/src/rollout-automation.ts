@@ -40,6 +40,7 @@ import {
   writeAtlasFileIntegrityManifest,
   computeAtlasFileSha256
 } from "./file-integrity";
+import { createOwnedExecutionTraceContext } from "./operation-trace";
 import {
   resolveOperationalIntegrationForExecution,
   touchOperationalIntegrationUsage,
@@ -443,6 +444,7 @@ export async function executeAtlasRestoreDrill(input: {
         targetEnvironment,
         targetLabel,
         targetHost: targetHost || null,
+        trace: createOwnedExecutionTraceContext("web"),
         provider: restoreDrillRuntime.provider,
         operationalIntegrationId: resolvedIntegration?.id ?? null,
         ownerEmail: resolvedIntegration?.ownerEmail ?? null,
@@ -646,6 +648,7 @@ export async function executeAtlasSecretRotation(input: {
       : null;
   const command = executeConfiguredCommand(secretRotationRuntime.mode, secretRotationRuntime.command, {
     environment,
+    trace: createOwnedExecutionTraceContext("web"),
     provider: secretRotationRuntime.provider,
     rotatedBy,
     reason,
@@ -895,6 +898,7 @@ export async function executeAtlasPromotionAutomation(input: {
     services: input.services,
     bundlePath,
     bundleSha256,
+    trace: createOwnedExecutionTraceContext("web"),
     provider: deploymentAutomationRuntime.provider,
     operationalIntegrationId: resolvedIntegration?.id ?? null,
     ownerEmail: resolvedIntegration?.ownerEmail ?? null,
@@ -1022,6 +1026,7 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
     provider: upstreamIdentityRuntime.provider,
     action: input.action,
     actorUserEmail: input.actor.user.email,
+    trace: createOwnedExecutionTraceContext("web"),
     assignmentId: input.assignment.id,
     assignmentProvider: input.assignment.provider,
     externalEmail: input.assignment.externalEmail,

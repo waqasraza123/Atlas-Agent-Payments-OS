@@ -12,6 +12,7 @@ import {
 import {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
+  isAtlasPagingProvider,
   type AtlasIncidentReadinessRecord
 } from "@atlas/domain";
 import { getApiRuntimeTelemetryRecord, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
@@ -264,6 +265,12 @@ export class HealthService {
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      hasExternalPaging:
+        observabilityRuntime.alertDispatchMode === "command" &&
+        isAtlasPagingProvider(observabilityRuntime.alertDispatchProvider),
+      pagingProvider: isAtlasPagingProvider(observabilityRuntime.alertDispatchProvider)
+        ? observabilityRuntime.alertDispatchProvider
+        : null,
       hasAutomatedIncidentTriggers: observabilityRuntime.automationTriggerIncidents,
       workerTelemetryStatus: workerTelemetry.status,
       activeAlertCount: alerts.length,

@@ -1,8 +1,10 @@
 import {
   createOperationId,
   readAtlasOperationPayload,
+  readTraceContext,
   requireText,
   shouldSimulateExternalExecution,
+  withTraceHeaders,
   writeAdapterResult
 } from "./shared.mjs";
 
@@ -12,6 +14,7 @@ const fromEnv = requireText(payload.fromEnv, "fromEnv");
 const toEnv = requireText(payload.toEnv, "toEnv");
 const bundlePath = requireText(payload.bundlePath, "bundlePath");
 const bundleSha256 = requireText(payload.bundleSha256, "bundleSha256");
+const trace = readTraceContext(payload);
 
 if (provider === "github-actions") {
   requireText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY, "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY");
@@ -42,25 +45,28 @@ if (provider === "github-actions" && !simulated) {
   const workflowRef = process.env.DEPLOYMENT_AUTOMATION_GITHUB_REF ?? "main";
   const response = await fetch(
     `${apiUrl}/repos/${process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY}/actions/workflows/${encodeURIComponent(process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW)}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-        "user-agent": "atlas-rollout-automation"
+    withTraceHeaders(
+      {
+        method: "POST",
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          "user-agent": "atlas-rollout-automation"
+        },
+        body: JSON.stringify({
+          ref: workflowRef,
+          inputs: {
+            from_environment: fromEnv,
+            to_environment: toEnv,
+            services: services.join(","),
+            bundle_path: bundlePath,
+            bundle_sha256: bundleSha256
+          }
+        })
       },
-      body: JSON.stringify({
-        ref: workflowRef,
-        inputs: {
-          from_environment: fromEnv,
-          to_environment: toEnv,
-          services: services.join(","),
-          bundle_path: bundlePath,
-          bundle_sha256: bundleSha256
-        }
-      })
-    }
+      trace
+    )
   );
 
   if (response.status !== 204) {
@@ -84,6 +90,9 @@ writeAdapterResult({
     bundlePath,
     bundleSha256,
     services: services.join(","),
+    traceId: trace?.traceId ?? null,
+    traceparent: trace?.traceparent ?? null,
+    sourceService: trace?.sourceService ?? null,
     executionMode: simulated ? "simulated" : "live"
   }
 });

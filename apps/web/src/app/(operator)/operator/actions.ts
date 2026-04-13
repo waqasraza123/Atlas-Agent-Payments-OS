@@ -47,6 +47,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { loadOperatorObservabilityData } from "@/lib/server/operator-observability";
+import { createAtlasStandaloneTraceContext } from "@/lib/server/request-trace";
 import { buildWorkflowFeedbackHref, type WorkflowFeedbackTone } from "@/lib/workflow-feedback";
 
 function toTextValue(value: FormDataEntryValue | null) {
@@ -218,7 +219,8 @@ export async function dispatchObservabilityAlertsAction(formData: FormData) {
       reason: toTextValue(formData.get("reason")),
       alerts: observability.alerts,
       metrics: observability.metrics,
-      incidentReadiness: observability.incidentReadiness
+      incidentReadiness: observability.incidentReadiness,
+      trace: createAtlasStandaloneTraceContext("web")
     });
     revalidatePath("/operator/alerts");
     revalidatePath("/operator/rollout");
@@ -243,7 +245,8 @@ export async function runObservabilityAutomationAction(formData: FormData) {
       minimumSeverity:
         minimumSeverity === "critical" || minimumSeverity === "warning" ? minimumSeverity : "info",
       dispatchAlerts: toBooleanValue(formData.get("dispatchAlerts")),
-      triggerIncidents: toBooleanValue(formData.get("triggerIncidents"))
+      triggerIncidents: toBooleanValue(formData.get("triggerIncidents")),
+      trace: createAtlasStandaloneTraceContext("web")
     });
     revalidatePath("/operator/alerts");
     revalidatePath("/operator/rollout");

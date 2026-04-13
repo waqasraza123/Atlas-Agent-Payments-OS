@@ -1179,12 +1179,14 @@ const databaseMock = vi.hoisted(() => ({
     {
       id: "dispatch-1",
       provider: "generic-webhook",
+      deliveryKind: "alert-dispatch",
       mode: "command",
       status: "SUCCEEDED",
       minimumSeverity: "warning",
       actorUserEmail: "operator-admin@atlas.local",
       summary: "2 alerts met the warning threshold for staging.",
       targetReference: "https://alerts.atlas.local/webhook",
+      traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       reportPath: "/tmp/observability-dispatch.json",
       dispatchedAlertCount: 2,
       criticalAlertCount: 1,
@@ -1202,6 +1204,9 @@ const databaseMock = vi.hoisted(() => ({
     actorUserEmail: "operator-admin@atlas.local",
     minimumSeverity: "warning",
     dispatchAlerts: false,
+    dispatchMode: "command",
+    dispatchProvider: "generic-webhook",
+    dispatchDeliveryKind: "alert-dispatch",
     triggerIncidents: true,
     retention: {
       snapshotRetentionDays: 30,
@@ -2588,13 +2593,17 @@ describe("atlas api e2e", () => {
     expect(dispatchesResponse.body.items).toEqual([
       expect.objectContaining({
         id: "dispatch-1",
-        provider: "generic-webhook"
+        provider: "generic-webhook",
+        deliveryKind: "alert-dispatch",
+        traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       })
     ]);
     expect(automationResponse.status).toBe(200);
     expect(automationResponse.body.item).toMatchObject({
       scheduleMode: "interval",
       intervalMinutes: 20,
+      dispatchProvider: "generic-webhook",
+      dispatchDeliveryKind: "alert-dispatch",
       lastRunStatus: "SUCCEEDED"
     });
     expect(automationRunsResponse.status).toBe(200);

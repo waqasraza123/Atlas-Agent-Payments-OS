@@ -104,6 +104,7 @@ export type AtlasWorkerTelemetryRecord = {
 };
 
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
+export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
 export type AtlasObservabilityAlertRecord = {
   id: string;
@@ -137,12 +138,14 @@ export type AtlasObservabilitySnapshotRecord = {
 export type AtlasObservabilityAlertDispatchRecord = {
   id: string;
   provider: string;
+  deliveryKind: AtlasObservabilityDeliveryKind;
   mode: "dry-run" | "command";
   status: "SUCCEEDED" | "FAILED";
   minimumSeverity: AtlasObservabilityAlertSeverity;
   actorUserEmail: string;
   summary: string;
   targetReference: string | null;
+  traceId: string | null;
   reportPath: string;
   dispatchedAlertCount: number;
   criticalAlertCount: number;
@@ -205,6 +208,9 @@ export type AtlasObservabilityAutomationStatusRecord = {
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
+  dispatchMode: "dry-run" | "command";
+  dispatchProvider: string;
+  dispatchDeliveryKind: AtlasObservabilityDeliveryKind;
   triggerIncidents: boolean;
   retention: AtlasObservabilityRetentionPolicyRecord;
   lastRunAt: string | null;
@@ -226,6 +232,14 @@ export type AtlasIncidentReadinessRecord = {
   releaseStage: AtlasObservabilityReleaseStage;
   items: AtlasIncidentReadinessItem[];
 };
+
+export function isAtlasPagingProvider(provider: string) {
+  return provider === "pagerduty-events" || provider === "opsgenie-alerts";
+}
+
+export function getAtlasObservabilityDeliveryKind(provider: string): AtlasObservabilityDeliveryKind {
+  return isAtlasPagingProvider(provider) ? "paging" : "alert-dispatch";
+}
 
 type AtlasObservabilityAlertInput = {
   metrics: AtlasApiRuntimeTelemetryRecord;
@@ -579,6 +593,8 @@ export function buildAtlasIncidentReadinessRecord(input: {
   hasHealthEndpoints: boolean;
   hasRollbackVerification: boolean;
   hasBackupRestoreRunbook: boolean;
+  hasExternalPaging: boolean;
+  pagingProvider: string | null;
   hasAutomatedIncidentTriggers: boolean;
   workerTelemetryStatus: AtlasWorkerTelemetryRecord["status"];
   activeAlertCount: number;
@@ -639,6 +655,15 @@ export function buildAtlasIncidentReadinessRecord(input: {
         ? "Repo-owned backup and restore commands plus runbooks exist for operator use."
         : "Backup and restore procedures are not yet codified in the repo.",
       runbookPath: "docs/runbooks/database-backup-and-restore.md"
+    },
+    {
+      key: "external-paging",
+      label: "External paging",
+      status: input.hasExternalPaging ? "ready" : "warning",
+      detail: input.hasExternalPaging
+        ? `Repo-owned external paging is configured through ${input.pagingProvider ?? "the active paging provider"}.`
+        : "External paging ownership is not yet configured on the active observability dispatch provider.",
+      runbookPath: "docs/runbooks/observability-and-alerting-baseline.md"
     },
     {
       key: "worker-telemetry",

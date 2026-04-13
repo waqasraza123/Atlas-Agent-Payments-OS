@@ -686,6 +686,87 @@ describe("atlas config", () => {
     );
   });
 
+  it("requires paging-provider variables for command dispatch integrations", async () => {
+    const { validateAtlasRuntimeConfiguration } = await import("./index");
+
+    const pagerDutyResult = validateAtlasRuntimeConfiguration("api", {
+      APP_ENV: "staging",
+      LOG_LEVEL: "info",
+      RELEASE_STAGE: "private-beta",
+      AUTH_PROVIDER_MODE: "external-oidc",
+      AUTH_SESSION_SIGNING_SECRET: "atlas-secret",
+      AUTH_EXTERNAL_OIDC_ISSUER: "https://id.atlas.example",
+      AUTH_EXTERNAL_OIDC_AUDIENCE: "atlas-agent-payments-os",
+      AUTH_EXTERNAL_OIDC_PROVIDER: "external-oidc",
+      AUTH_EXTERNAL_OIDC_JWKS_JSON: '{"keys":[]}',
+      AUTH_IDENTITY_SESSION_TTL_MINUTES: "480",
+      AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS: "24",
+      API_PORT: "4000",
+      API_BASE_URL: "https://api.atlas.example",
+      NEXT_PUBLIC_APP_URL: "https://atlas.example",
+      DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      MINIO_ENDPOINT: "minio.atlas.example",
+      MINIO_PORT: "9000",
+      MINIO_REGION: "us-east-1",
+      MINIO_ACCESS_KEY: "atlasminio",
+      MINIO_SECRET_KEY: "atlasminio",
+      MINIO_BUCKET_RECEIPTS: "atlas-receipts",
+      MINIO_BUCKET_OPERATIONS: "atlas-operations",
+      APP_REVISION: "rev-1",
+      DEPLOYMENT_SLOT: "blue",
+      RELEASE_ARTIFACT_ID: "artifact-1",
+      RELEASE_ARTIFACT_SHA256: "a".repeat(64),
+      OBSERVABILITY_ALERT_DISPATCH_MODE: "command",
+      OBSERVABILITY_ALERT_DISPATCH_PROVIDER: "pagerduty-events",
+      OBSERVABILITY_ALERT_DISPATCH_COMMAND: "alert-command"
+    });
+
+    expect(pagerDutyResult.issues.map((issue) => issue.variable)).toContain(
+      "OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY"
+    );
+
+    const opsgenieResult = validateAtlasRuntimeConfiguration("api", {
+      APP_ENV: "staging",
+      LOG_LEVEL: "info",
+      RELEASE_STAGE: "private-beta",
+      AUTH_PROVIDER_MODE: "external-oidc",
+      AUTH_SESSION_SIGNING_SECRET: "atlas-secret",
+      AUTH_EXTERNAL_OIDC_ISSUER: "https://id.atlas.example",
+      AUTH_EXTERNAL_OIDC_AUDIENCE: "atlas-agent-payments-os",
+      AUTH_EXTERNAL_OIDC_PROVIDER: "external-oidc",
+      AUTH_EXTERNAL_OIDC_JWKS_JSON: '{"keys":[]}',
+      AUTH_IDENTITY_SESSION_TTL_MINUTES: "480",
+      AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS: "24",
+      API_PORT: "4000",
+      API_BASE_URL: "https://api.atlas.example",
+      NEXT_PUBLIC_APP_URL: "https://atlas.example",
+      DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      MINIO_ENDPOINT: "minio.atlas.example",
+      MINIO_PORT: "9000",
+      MINIO_REGION: "us-east-1",
+      MINIO_ACCESS_KEY: "atlasminio",
+      MINIO_SECRET_KEY: "atlasminio",
+      MINIO_BUCKET_RECEIPTS: "atlas-receipts",
+      MINIO_BUCKET_OPERATIONS: "atlas-operations",
+      APP_REVISION: "rev-1",
+      DEPLOYMENT_SLOT: "blue",
+      RELEASE_ARTIFACT_ID: "artifact-1",
+      RELEASE_ARTIFACT_SHA256: "a".repeat(64),
+      OBSERVABILITY_ALERT_DISPATCH_MODE: "command",
+      OBSERVABILITY_ALERT_DISPATCH_PROVIDER: "opsgenie-alerts",
+      OBSERVABILITY_ALERT_DISPATCH_COMMAND: "alert-command"
+    });
+
+    expect(opsgenieResult.issues.map((issue) => issue.variable)).toEqual(
+      expect.arrayContaining([
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_KEY",
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_TEAM"
+      ])
+    );
+  });
+
   it("reports missing runtime variables clearly", async () => {
     vi.stubEnv("APP_ENV", "production");
     vi.stubEnv("LOG_LEVEL", "info");

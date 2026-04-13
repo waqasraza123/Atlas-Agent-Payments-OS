@@ -2,8 +2,10 @@ import {
   createOperationId,
   readAtlasOperationPayload,
   readOptionalText,
+  readTraceContext,
   requireText,
   shouldSimulateExternalExecution,
+  withTraceHeaders,
   writeAdapterResult
 } from "./shared.mjs";
 
@@ -20,6 +22,7 @@ const providerSubject = readOptionalText(payload.providerSubject);
 const upstreamUserId = readOptionalText(payload.upstreamUserId);
 const upstreamAssignmentId = readOptionalText(payload.upstreamAssignmentId);
 const upstreamTargetRef = readOptionalText(payload.upstreamTargetRef);
+const trace = readTraceContext(payload);
 
 if (provider === "okta-scim") {
   requireText(process.env.AUTH_OKTA_ORG_URL, "AUTH_OKTA_ORG_URL");
@@ -73,7 +76,7 @@ function buildAuth0Headers() {
 }
 
 async function executeRequest(url, init = {}) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, withTraceHeaders(init, trace));
   const bodyText = await response.text();
   const parsed =
     bodyText.length > 0 && response.headers.get("content-type")?.includes("application/json")
@@ -550,6 +553,9 @@ writeAdapterResult({
   targetRef: result.targetRef,
   metadata: {
     ...result.metadata,
-    providerDomain: readOptionalText(process.env.AUTH_OKTA_ORG_URL) ?? readOptionalText(process.env.AUTH_AUTH0_DOMAIN)
+    providerDomain: readOptionalText(process.env.AUTH_OKTA_ORG_URL) ?? readOptionalText(process.env.AUTH_AUTH0_DOMAIN),
+    traceId: trace?.traceId ?? null,
+    traceparent: trace?.traceparent ?? null,
+    sourceService: trace?.sourceService ?? null
   }
 });

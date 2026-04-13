@@ -205,6 +205,11 @@ describe("observability operations", () => {
             actorUserEmail: "operator-admin@atlas.local",
             summary: "2 alerts met the warning threshold for staging.",
             targetReference: "https://alerts.atlas.local/webhook",
+            payload: {
+              trace: {
+                traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
             reportPath: join(sandbox, "dispatch.json"),
             dispatchedAlertCount: 2,
             criticalAlertCount: 1,
@@ -273,14 +278,98 @@ describe("observability operations", () => {
     );
 
     expect(dispatch.dispatchedAlertCount).toBe(2);
+    expect(dispatch.deliveryKind).toBe("alert-dispatch");
+    expect(dispatch.traceId).toMatch(/^[0-9a-f]{32}$/);
     expect(client.operationalIntegration.update).toHaveBeenCalled();
 
     const listed = await listObservabilityAlertDispatches(createActor(), { limit: 5 }, client as never);
     expect(listed[0]).toMatchObject({
       id: "dispatch-1",
       provider: "generic-webhook",
-      minimumSeverity: "warning"
+      deliveryKind: "alert-dispatch",
+      minimumSeverity: "warning",
+      traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     });
+  });
+
+  it("maps paging providers into delivery-kind dispatch records", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-observability-paging-"));
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_MODE", "command");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_PROVIDER", "pagerduty-events");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_COMMAND", `${process.execPath} ${adapterScriptPath("alert-dispatch.mjs")}`);
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", sandbox);
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY", "routing-key-production");
+    vi.stubEnv("ATLAS_SIMULATE_EXTERNAL_EXECUTION", "true");
+
+    const client = {
+      observabilityAlertDispatch: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "dispatch-paging-1",
+          ...data,
+          createdAt: new Date("2026-04-13T00:20:00.000Z")
+        }))
+      },
+      observabilityIncidentTrigger: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        update: vi.fn()
+      },
+      notification: {
+        upsert: vi.fn()
+      },
+      auditEvent: {
+        create: vi.fn()
+      },
+      operationalIntegration: {
+        findMany: vi.fn(async () => [
+          {
+            id: "integration-paging-1",
+            kind: "ALERT_DISPATCH",
+            targetEnvironment: "PRODUCTION",
+            provider: "pagerduty-events",
+            label: "production pagerduty paging",
+            ownerEmail: "platform-ops@atlas.local",
+            endpointReference: "https://events.pagerduty.com/v2/enqueue",
+            secretReference: "aws-secrets://atlas/production/pagerduty",
+            configReference: null,
+            status: "ACTIVE",
+            verificationStatus: "VERIFIED",
+            verificationReason: null,
+            statusReason: null,
+            metadata: null,
+            lastVerifiedAt: new Date("2026-04-13T00:10:00.000Z"),
+            lastUsedAt: null,
+            createdAt: new Date("2026-04-13T00:10:00.000Z"),
+            updatedAt: new Date("2026-04-13T00:10:00.000Z"),
+            createdByUser: {
+              email: "platform-ops@atlas.local"
+            },
+            updatedByUser: null
+          }
+        ]),
+        update: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const { dispatchObservabilityAlerts } = await import("./observability-operations");
+
+    const dispatch = await dispatchObservabilityAlerts(
+      {
+        actor: createActor(),
+        minimumSeverity: "critical",
+        reason: "Escalate the critical alert set through the owned paging target.",
+        alerts: createAlerts(),
+        metrics: createMetrics(),
+        incidentReadiness: createIncidentReadiness()
+      },
+      client as never
+    );
+
+    expect(dispatch.deliveryKind).toBe("paging");
+    expect(dispatch.provider).toBe("pagerduty-events");
+    expect(dispatch.targetReference).toBe("https://events.pagerduty.com/v2/enqueue");
+    expect(dispatch.traceId).toMatch(/^[0-9a-f]{32}$/);
   });
 
   it("syncs durable observability incident triggers from active alerts", async () => {

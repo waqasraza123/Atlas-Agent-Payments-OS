@@ -60,8 +60,8 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
 
 - API metrics are still process-local even though the latest API and worker runtime posture is published into shared JSON snapshots
 - retained telemetry now has explicit repo-owned retention windows, but it is still stored as bounded retained artifacts rather than continuous time-series history
-- external alert dispatch is operator-triggered and currently limited to the owned generic-webhook and Slack webhook adapters
-- repo-owned observability automation now exists for snapshot capture, optional dispatch, durable incident-trigger sync, worker-driven scheduling, and retained automation history, but there is still no external paging target
+- external alert dispatch is operator-triggered and now supports owned generic-webhook, Slack webhook, PagerDuty Events, and Opsgenie adapters
+- repo-owned observability automation now exists for snapshot capture, optional dispatch, durable incident-trigger sync, worker-driven scheduling, retained automation history, and owned external paging delivery metadata
 - dashboards are operator-facing product surfaces, not a replacement for future APM tooling
 
 ## Verification

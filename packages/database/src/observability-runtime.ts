@@ -5,6 +5,8 @@ import { appRuntime, observabilityRuntime } from "@atlas/config";
 import {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
+  getAtlasObservabilityDeliveryKind,
+  isAtlasPagingProvider,
   buildAtlasWorkerTelemetryRecord,
   type AtlasApiRuntimeTelemetryRecord,
   type AtlasObservabilityAlertSeverity,
@@ -15,6 +17,7 @@ import {
 } from "@atlas/domain";
 import { type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createOwnedExecutionTraceContext } from "./operation-trace";
 import { getOperatorOverview } from "./operator-workflow";
 import {
   AtlasObservabilityOperationsError,
@@ -303,6 +306,9 @@ export function getObservabilityAutomationStatus(
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+    dispatchMode: observabilityRuntime.alertDispatchMode,
+    dispatchProvider: observabilityRuntime.alertDispatchProvider,
+    dispatchDeliveryKind: getAtlasObservabilityDeliveryKind(observabilityRuntime.alertDispatchProvider),
     triggerIncidents: observabilityRuntime.automationTriggerIncidents,
     retention: {
       snapshotRetentionDays: observabilityRuntime.snapshotRetentionDays,
@@ -414,6 +420,12 @@ export async function buildObservabilityAutomationPosture(
     hasHealthEndpoints: true,
     hasRollbackVerification: true,
     hasBackupRestoreRunbook: true,
+    hasExternalPaging:
+      observabilityRuntime.alertDispatchMode === "command" &&
+      isAtlasPagingProvider(observabilityRuntime.alertDispatchProvider),
+    pagingProvider: isAtlasPagingProvider(observabilityRuntime.alertDispatchProvider)
+      ? observabilityRuntime.alertDispatchProvider
+      : null,
     hasAutomatedIncidentTriggers: observabilityRuntime.automationTriggerIncidents,
     workerTelemetryStatus: workerTelemetry.status,
     activeAlertCount: alerts.length,
@@ -440,6 +452,7 @@ export async function executeObservabilityAutomation(
     triggerIncidents?: boolean;
     trigger?: AtlasObservabilityAutomationTrigger;
     now?: string;
+    trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
   },
   client: DatabaseClient = prisma
 ) {
@@ -455,6 +468,7 @@ export async function executeObservabilityAutomation(
     input.minimumSeverity === "critical" || input.minimumSeverity === "warning" || input.minimumSeverity === "info"
       ? input.minimumSeverity
       : observabilityRuntime.automationDefaultMinimumSeverity;
+  const trace = input.trace ?? createOwnedExecutionTraceContext("worker");
   const snapshot = await persistObservabilitySnapshot(
     {
       actor: posture.actor,
@@ -488,7 +502,8 @@ export async function executeObservabilityAutomation(
           reason,
           alerts: posture.alerts,
           metrics: posture.metrics,
-          incidentReadiness: posture.incidentReadiness
+          incidentReadiness: posture.incidentReadiness,
+          trace
         },
         client
       )

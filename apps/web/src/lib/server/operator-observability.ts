@@ -1,5 +1,4 @@
 import type { AtlasActorContext, AtlasLocalSessionSelection } from "@atlas/auth";
-import { randomBytes } from "node:crypto";
 import { createAtlasIdentityProviderSessionToken, createAtlasLocalSessionToken } from "@atlas/auth/server";
 import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
@@ -15,22 +14,19 @@ import type {
   AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
+import { createAtlasChildTraceContext, createAtlasServerTraceSession } from "./request-trace";
 type AtlasApiEnvelope<T> = {
   item?: T;
   items?: T[];
 };
 
-function createHexId(byteLength: number) {
-  return randomBytes(byteLength).toString("hex");
-}
-
 async function fetchOperatorObservabilityResource<T>(
   path: string,
   actor: AtlasActorContext,
-  selection: AtlasLocalSessionSelection
+  selection: AtlasLocalSessionSelection,
+  traceSession: ReturnType<typeof createAtlasServerTraceSession>
 ): Promise<AtlasApiEnvelope<T>> {
-  const traceId = createHexId(16);
-  const spanId = createHexId(8);
+  const { headers: traceHeaders } = createAtlasChildTraceContext(traceSession);
   const sessionHeader =
     actor.source === "identity-provider" && actor.sessionId
       ? createAtlasIdentityProviderSessionToken(authRuntime.sessionSigningSecret, selection, {
@@ -46,8 +42,7 @@ async function fetchOperatorObservabilityResource<T>(
     cache: "no-store",
     headers: {
       "x-atlas-local-session": sessionHeader,
-      "x-atlas-trace-id": traceId,
-      "traceparent": `00-${traceId}-${spanId}-01`
+      ...traceHeaders
     }
   });
 
@@ -72,6 +67,7 @@ function formatDateTime(value: string | null) {
 }
 
 export async function loadOperatorObservabilityData(actor: AtlasActorContext, selection: AtlasLocalSessionSelection) {
+  const traceSession = createAtlasServerTraceSession("web");
   const [
     metricsResponse,
     alertsResponse,
@@ -82,17 +78,18 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     automationResponse,
     incidentTriggersResponse
   ] = await Promise.all([
-    fetchOperatorObservabilityResource<AtlasApiRuntimeTelemetryRecord>("/observability/metrics", actor, selection),
-    fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection),
-    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection),
-    fetchOperatorObservabilityResource<AtlasWorkerTelemetryRecord>("/observability/worker", actor, selection),
-    fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection),
-    fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection),
-    fetchOperatorObservabilityResource<AtlasObservabilityAutomationStatusRecord>("/observability/automation", actor, selection),
+    fetchOperatorObservabilityResource<AtlasApiRuntimeTelemetryRecord>("/observability/metrics", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasWorkerTelemetryRecord>("/observability/worker", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection, traceSession),
+    fetchOperatorObservabilityResource<AtlasObservabilityAutomationStatusRecord>("/observability/automation", actor, selection, traceSession),
     fetchOperatorObservabilityResource<AtlasObservabilityIncidentTriggerRecord>(
       "/observability/incident-triggers",
       actor,
-      selection
+      selection,
+      traceSession
     )
   ]);
 
@@ -147,7 +144,7 @@ export function createOperatorDispatchItems(items: AtlasObservabilityAlertDispat
     id: item.id,
     title: `${item.provider} · ${item.dispatchedAlertCount} alerts`,
     description: item.summary,
-    detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
+    detail: `${item.deliveryKind} · ${item.minimumSeverity} threshold${item.traceId ? ` · trace ${item.traceId}` : ""} · ${item.reportPath}`,
     statusLabel: item.status,
     statusTone: item.status === "SUCCEEDED" ? "success" : "critical"
   }));
@@ -264,8 +261,20 @@ export function createOperatorAutomationFacts(
       value: automation.minimumSeverity
     },
     {
+      label: "Dispatch provider",
+      value: automation.dispatchProvider
+    },
+    {
+      label: "Delivery kind",
+      value: automation.dispatchDeliveryKind
+    },
+    {
       label: "Dispatch externally",
       value: automation.dispatchAlerts ? "Enabled" : "Disabled"
+    },
+    {
+      label: "Dispatch mode",
+      value: automation.dispatchMode === "command" ? "Command" : "Dry run"
     },
     {
       label: "Sync incidents",

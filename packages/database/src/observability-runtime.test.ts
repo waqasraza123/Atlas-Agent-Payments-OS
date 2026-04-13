@@ -279,6 +279,8 @@ describe("observability runtime", () => {
       scheduleMode: "interval",
       intervalMinutes: 20,
       actorUserEmail: "operator-admin@atlas.local",
+      dispatchProvider: "generic-webhook",
+      dispatchDeliveryKind: "alert-dispatch",
       lastRunStatus: "SUCCEEDED"
     });
   });

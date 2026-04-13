@@ -175,7 +175,7 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - API metrics, operator observability routes, and incident runbooks now exist
 - signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and recertifiable support-access grants, campaign-driven review automation, provider-session revocation, and promotion-manifest automation now exist
 - actor-scoped reporting and export enforcement, tenant-read audit events, restore-drill verification, proof-bearing restore reports, backup integrity manifests, secret-rotation manifest enforcement, and artifact-bound promotion bundles now exist
-- provider-aware rollout adapters, a persisted operational integration ownership registry, a durable rollout execution ledger with integrity-tracked proof artifacts, owned S3-compatible remote proof storage, AWS Secrets Manager rotation dispatch, GitHub Actions deployment dispatch, vendor-native upstream identity-provider ownership, retained observability snapshots, governed external alert dispatch, shared worker telemetry, repo-owned observability automation, distributed tracing, and durable automated incident triggers now exist
+- provider-aware rollout adapters, a persisted operational integration ownership registry, a durable rollout execution ledger with integrity-tracked proof artifacts, owned S3-compatible remote proof storage, AWS Secrets Manager rotation dispatch, GitHub Actions deployment dispatch, vendor-native upstream identity-provider ownership, retained observability snapshots, governed external alert dispatch, shared worker telemetry, repo-owned observability automation, distributed tracing, broader web and external-integration trace propagation, repo-owned external paging, and durable automated incident triggers now exist
 - worker-scheduled observability automation, explicit observability retention windows, durable automation-run history, and automated retention sweeps now exist
 
 ### Required before a production-grade focused v1 rollout
@@ -194,7 +194,7 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 ### Deferred toward fuller platform maturity
 
 - advanced tracing across all subsystems
-- broader web and external-integration trace propagation, external paging ownership, and continuous telemetry ownership beyond retained repo artifacts
+- advanced tracing across all subsystems and continuous telemetry ownership beyond retained repo artifacts
 - multi-region or tenant-specific environment strategies
 - highly automated disaster recovery
 - deeper capacity and cost governance

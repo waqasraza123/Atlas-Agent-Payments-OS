@@ -8,6 +8,7 @@ export * from "./env-file";
 export * from "./operator-workflow";
 export * from "./observability-operations";
 export * from "./observability-runtime";
+export * from "./operation-trace";
 export * from "./operational-integrations";
 export * from "./operator-session-governance";
 export * from "./operational-proof-storage";

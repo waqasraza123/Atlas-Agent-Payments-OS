@@ -11,6 +11,7 @@ import {
 import {
   countAtlasObservabilityAlertsBySeverity,
   filterAtlasObservabilityAlertsBySeverity,
+  getAtlasObservabilityDeliveryKind,
   type AtlasApiRuntimeTelemetryRecord,
   type AtlasIncidentReadinessRecord,
   type AtlasObservabilityAlertDispatchRecord,
@@ -22,6 +23,7 @@ import {
 } from "@atlas/domain";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createOwnedExecutionTraceContext, type AtlasOwnedExecutionTraceContext } from "./operation-trace";
 import { resolveOperationalIntegrationForExecution, touchOperationalIntegrationUsage } from "./operational-integrations";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
@@ -237,10 +239,21 @@ function mapDispatchRecord(record: {
   completedAt: Date;
   createdAt: Date;
   operationalIntegrationId: string | null;
+  payload: Prisma.JsonValue | null;
 }) {
+  const payload =
+    record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
+      ? (record.payload as Prisma.JsonObject)
+      : null;
+  const trace =
+    payload?.trace && typeof payload.trace === "object" && !Array.isArray(payload.trace)
+      ? (payload.trace as Prisma.JsonObject)
+      : null;
+
   return {
     id: record.id,
     provider: record.provider,
+    deliveryKind: getAtlasObservabilityDeliveryKind(record.provider),
     mode: record.mode === "COMMAND" ? "command" : "dry-run",
     status: record.status,
     minimumSeverity: normalizeMinimumSeverity(
@@ -249,6 +262,7 @@ function mapDispatchRecord(record: {
     actorUserEmail: record.actorUserEmail,
     summary: record.summary,
     targetReference: record.targetReference,
+    traceId: typeof trace?.traceId === "string" ? trace.traceId : null,
     reportPath: record.reportPath,
     dispatchedAlertCount: record.dispatchedAlertCount,
     criticalAlertCount: record.criticalAlertCount,
@@ -576,12 +590,14 @@ export async function dispatchObservabilityAlerts(
     alerts: AtlasObservabilityAlertRecord[];
     metrics: MetricsWithConfiguration;
     incidentReadiness: AtlasIncidentReadinessRecord;
+    trace?: AtlasOwnedExecutionTraceContext;
   },
   client: DatabaseClient = prisma
 ) {
   assertObservabilityActor(input.actor);
   const minimumSeverity = normalizeMinimumSeverity(input.minimumSeverity);
   const reason = normalizeReason(input.reason, "Alert dispatch reason");
+  const trace = input.trace ?? createOwnedExecutionTraceContext("api");
   const selectedAlerts = filterAtlasObservabilityAlertsBySeverity(input.alerts, minimumSeverity);
   const alertCounts = countAtlasObservabilityAlertsBySeverity(selectedAlerts);
   const runtimeTargetEnvironment = toExecutionTargetEnvironment();
@@ -623,6 +639,7 @@ export async function dispatchObservabilityAlerts(
           releaseStage: appRuntime.releaseStage,
           targetReference: resolvedIntegration?.endpointReference ?? null,
           operationalIntegrationId: resolvedIntegration?.id ?? null,
+          trace,
           alerts: selectedAlerts.map((alert) => ({
             id: alert.id,
             title: alert.title,
@@ -674,6 +691,7 @@ export async function dispatchObservabilityAlerts(
     minimumSeverity,
     reason,
     summary,
+    trace,
     targetReference: command?.adapterResult?.targetRef ?? resolvedIntegration?.endpointReference ?? null,
     dispatchedAlertCount: selectedAlerts.length,
     severityCounts: alertCounts,

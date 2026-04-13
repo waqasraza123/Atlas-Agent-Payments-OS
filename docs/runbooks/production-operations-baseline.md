@@ -23,7 +23,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - repo-owned backup and restore scripts through `pnpm db:backup` and `pnpm db:restore`
 - S3-compatible rollout proof replication through the operations artifact bucket when proof storage is enabled
 - GitHub Actions promotion dispatch and AWS Secrets Manager rotation dispatch through the rollout adapters
-- governed external alert dispatch through owned generic-webhook and Slack webhook adapters plus `ALERT_DISPATCH` operational integrations
+- governed external alert dispatch through owned generic-webhook, Slack webhook, PagerDuty Events, and Opsgenie adapters plus `ALERT_DISPATCH` operational integrations
 - repo-owned observability automation through `pnpm observability:automation`
 - worker-scheduled observability automation through `OBSERVABILITY_AUTOMATION_SCHEDULE_MODE=interval`
 - durable incident-trigger sync plus incident report artifact generation through observability automation
@@ -60,6 +60,9 @@ With the API running:
 - `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
 - `OBSERVABILITY_INCIDENT_REPORT_DIR`
 - `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
+- `OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=pagerduty-events`
+- `OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_KEY` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=opsgenie-alerts`
+- `OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_TEAM` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=opsgenie-alerts`
 
 ## Known Gaps
 
@@ -67,5 +70,5 @@ With the API running:
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
 - observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, worker-driven automation cadence, and explicit retention windows, but not continuous time-series ownership or third-party APM tooling
-- observability automation can now run on a worker timer and sync durable incident triggers, but there is still no external paging path
+- observability automation can now run on a worker timer and sync durable incident triggers, but continuous time-series ownership and third-party paging lifecycle state are still outside the repo baseline
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

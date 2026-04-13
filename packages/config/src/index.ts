@@ -39,7 +39,12 @@ const atlasCommandAdapterModes = ["dry-run", "command"] as const;
 const atlasAutomationScheduleModes = ["disabled", "interval"] as const;
 const atlasOperationalProofStorageModes = ["disabled", "s3-compatible"] as const;
 const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
-const atlasAlertDispatchProviders = ["generic-webhook", "slack-webhook"] as const;
+const atlasAlertDispatchProviders = [
+  "generic-webhook",
+  "slack-webhook",
+  "pagerduty-events",
+  "opsgenie-alerts"
+] as const;
 const atlasRestoreDrillProviders = ["local-psql", "ssh-postgres", "kubernetes-job"] as const;
 const atlasSecretRotationProviders = ["generic-secret-manager", "aws-secrets-manager", "hashicorp-vault"] as const;
 const atlasDeploymentAutomationProviders = ["generic-deployer", "github-actions", "argo-rollouts"] as const;
@@ -378,7 +383,18 @@ export const observabilityRuntime = {
   })(),
   automationTriggerIncidents: readBoolean(process.env.OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS, true),
   alertDispatchWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL),
-  alertDispatchSlackWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL)
+  alertDispatchSlackWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL),
+  alertDispatchPagerDutyRoutingKey: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY),
+  alertDispatchPagerDutyEventsUrl: readText(
+    process.env.OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_EVENTS_URL,
+    "https://events.pagerduty.com/v2/enqueue"
+  ),
+  alertDispatchOpsgenieApiUrl: readText(
+    process.env.OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_URL,
+    "https://api.opsgenie.com"
+  ),
+  alertDispatchOpsgenieApiKey: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_KEY),
+  alertDispatchOpsgenieTeam: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_TEAM)
 } as const;
 
 export type AtlasOperationalStoredArtifact = {
@@ -944,6 +960,30 @@ export function validateAtlasRuntimeConfiguration(
         env,
         "OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL",
         "OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=slack-webhook."
+      );
+    }
+
+    if (provider === "pagerduty-events") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY",
+        "OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=pagerduty-events."
+      );
+    }
+
+    if (provider === "opsgenie-alerts") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_KEY",
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_API_KEY is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=opsgenie-alerts."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_TEAM",
+        "OBSERVABILITY_ALERT_DISPATCH_OPSGENIE_TEAM is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=opsgenie-alerts."
       );
     }
   }

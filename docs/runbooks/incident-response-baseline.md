@@ -49,7 +49,7 @@ Define the current minimum operator incident-response posture for Atlas.
 
 ## Current Constraints
 
-- external dispatch, durable incident triggers, worker-scheduled automation, and retained automation history now exist, but there is still no automated paging integration
+- external dispatch, durable incident triggers, worker-scheduled automation, retained automation history, and owned paging integrations now exist
 - there is no external incident timeline store yet
 - support-access hardening and tenant-isolation hardening are still a next-track item
 - backup restore remains operator-invoked and repo-driven rather than automated
