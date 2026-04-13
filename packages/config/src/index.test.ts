@@ -50,7 +50,9 @@ describe("atlas config", () => {
     expect(paymentRuntime.stripeEnabled).toBe(false);
     expect(programmableSettlementRuntime.enabled).toBe(false);
     expect(programmableSettlementRuntime.chainId).toBe(84532);
+    expect(storageRuntime.region).toBe("us-east-1");
     expect(storageRuntime.bucketReceipts).toBe("atlas-receipts");
+    expect(storageRuntime.bucketOperations).toBe("atlas-operations");
     expect(upstreamIdentityRuntime.mode).toBe("dry-run");
     expect(upstreamIdentityRuntime.provider).toBe("generic-oidc-admin");
     expect(restoreDrillRuntime.provider).toBe("local-psql");
@@ -59,7 +61,9 @@ describe("atlas config", () => {
     expect(secretRotationRuntime.provider).toBe("generic-secret-manager");
     expect(deploymentAutomationRuntime.mode).toBe("dry-run");
     expect(deploymentAutomationRuntime.provider).toBe("generic-deployer");
+    expect(operationsRuntime.proofStorageMode).toBe("disabled");
     expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
+    expect(operationsRuntime.proofStoragePrefix).toBe("rollout-proof");
     expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
     expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
       "AUTH_SESSION_SIGNING_SECRET",
@@ -363,9 +367,13 @@ describe("atlas config", () => {
     vi.stubEnv("MINIO_ENDPOINT", "minio.atlas.local");
     vi.stubEnv("MINIO_PORT", "9100");
     vi.stubEnv("MINIO_USE_SSL", "true");
+    vi.stubEnv("MINIO_REGION", "us-east-1");
     vi.stubEnv("MINIO_ACCESS_KEY", "atlasminio");
     vi.stubEnv("MINIO_SECRET_KEY", "atlassecret");
     vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
+    vi.stubEnv("MINIO_BUCKET_OPERATIONS", "atlas-operations");
+    vi.stubEnv("OPERATIONAL_PROOF_STORAGE_MODE", "s3-compatible");
+    vi.stubEnv("OPERATIONAL_PROOF_STORAGE_PREFIX", "rollout-proof/staging");
     vi.stubEnv("RESTORE_DRILL_MAX_AGE_HOURS", "168");
     vi.stubEnv("RESTORE_DRILL_MODE", "command");
     vi.stubEnv("RESTORE_DRILL_PROVIDER", "kubernetes-job");
@@ -389,6 +397,8 @@ describe("atlas config", () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_COMMAND", "atlas-deploy --payload \"$ATLAS_OPERATION_PAYLOAD\"");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY", "atlas/payments-os");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW", "deploy-staging");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REF", "main");
+    vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_API_URL", "https://api.github.com");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_ENABLED", "true");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_KEY", "BASE_MAINNET");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_ID", "8453");
@@ -453,12 +463,16 @@ describe("atlas config", () => {
     expect(programmableSettlementRuntime.requiredConfirmations).toBe(6);
     expect(storageRuntime.port).toBe(9100);
     expect(storageRuntime.useSsl).toBe(true);
+    expect(storageRuntime.region).toBe("us-east-1");
+    expect(storageRuntime.bucketOperations).toBe("atlas-operations");
     expect(restoreDrillRuntime.mode).toBe("command");
     expect(restoreDrillRuntime.provider).toBe("kubernetes-job");
     expect(secretRotationRuntime.mode).toBe("command");
     expect(secretRotationRuntime.provider).toBe("aws-secrets-manager");
     expect(deploymentAutomationRuntime.mode).toBe("command");
     expect(deploymentAutomationRuntime.provider).toBe("github-actions");
+    expect(operationsRuntime.proofStorageMode).toBe("s3-compatible");
+    expect(operationsRuntime.proofStoragePrefix).toBe("rollout-proof/staging");
     expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
     expect(operationsRuntime.secretRotationMaxAgeHours).toBe(720);
     expect(operationsRuntime.secretRotationRequiredKeys).toEqual([
@@ -520,9 +534,11 @@ describe("atlas config", () => {
     vi.stubEnv("REDIS_URL", "redis://127.0.0.1:6379");
     vi.stubEnv("MINIO_ENDPOINT", "minio.atlas.example");
     vi.stubEnv("MINIO_PORT", "9000");
+    vi.stubEnv("MINIO_REGION", "us-east-1");
     vi.stubEnv("MINIO_ACCESS_KEY", "atlasminio");
     vi.stubEnv("MINIO_SECRET_KEY", "atlasminio");
     vi.stubEnv("MINIO_BUCKET_RECEIPTS", "atlas-receipts");
+    vi.stubEnv("MINIO_BUCKET_OPERATIONS", "atlas-operations-production");
 
     const { authRuntime, validateAtlasRuntimeConfiguration, validateAtlasPromotionReadiness } = await import("./index");
 
@@ -588,7 +604,9 @@ describe("atlas config", () => {
         "SECRET_ROTATION_AWS_REGION",
         "SECRET_ROTATION_AWS_PREFIX",
         "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY",
-        "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW"
+        "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW",
+        "MINIO_REGION",
+        "MINIO_BUCKET_OPERATIONS"
       ])
     );
   });
@@ -641,9 +659,11 @@ describe("atlas config", () => {
       REDIS_URL: "redis://127.0.0.1:6379",
       MINIO_ENDPOINT: "minio.atlas.example",
       MINIO_PORT: "9000",
+      MINIO_REGION: "us-east-1",
       MINIO_ACCESS_KEY: "atlasminio",
       MINIO_SECRET_KEY: "atlassecret",
       MINIO_BUCKET_RECEIPTS: "atlas-receipts",
+      MINIO_BUCKET_OPERATIONS: "atlas-operations",
       APP_REVISION: "rev-1",
       DEPLOYMENT_SLOT: "blue",
       RELEASE_ARTIFACT_ID: "atlas-staging-build",

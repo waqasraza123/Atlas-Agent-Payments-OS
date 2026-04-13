@@ -22,6 +22,10 @@ export function readOptionalText(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+export function shouldSimulateExternalExecution() {
+  return process.env.ATLAS_SIMULATE_EXTERNAL_EXECUTION === "true" || process.env.NODE_ENV === "test";
+}
+
 export function createOperationId(provider, payload) {
   const hash = createHash("sha256")
     .update(JSON.stringify(payload))
@@ -34,4 +38,3 @@ export function createOperationId(provider, payload) {
 export function writeAdapterResult(result) {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
-

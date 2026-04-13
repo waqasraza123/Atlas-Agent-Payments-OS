@@ -1123,6 +1123,10 @@ const databaseMock = vi.hoisted(() => ({
           filePath: "/tmp/promotion.json",
           sha256: "a".repeat(64),
           sizeBytes: 128,
+          storageProvider: null,
+          storageBucket: null,
+          storageKey: null,
+          storageUrl: null,
           metadata: null,
           createdAt: new Date().toISOString()
         }

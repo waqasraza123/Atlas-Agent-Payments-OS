@@ -17,6 +17,8 @@ This runbook defines the repo-level operational baseline that now exists after t
 - release manifest generation through `pnpm release:manifest`
 - rollback-readiness verification through `pnpm verify:rollback`
 - repo-owned backup and restore scripts through `pnpm db:backup` and `pnpm db:restore`
+- S3-compatible rollout proof replication through the operations artifact bucket when proof storage is enabled
+- GitHub Actions promotion dispatch and AWS Secrets Manager rotation dispatch through the rollout adapters
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
 

@@ -19,10 +19,26 @@ on:
         options:
           - staging
           - production
+      services:
+        description: Service set
+        required: false
+        default: all
+        type: string
+      bundle_path:
+        description: Promotion bundle path from the dispatching Atlas control plane
+        required: false
+        default: ""
+        type: string
+      bundle_sha256:
+        description: Promotion bundle digest from the dispatching Atlas control plane
+        required: false
+        default: ""
+        type: string
 
 jobs:
   promote:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.to_environment }}
 
     steps:
       - name: Checkout
@@ -49,7 +65,12 @@ jobs:
         run: pnpm verify:release
 
       - name: Generate promotion manifests
-        run: pnpm exec tsx ./scripts/promote-release.ts --from ${{ inputs.from_environment }} --to ${{ inputs.to_environment }} --services all
+        run: pnpm exec tsx ./scripts/promote-release.ts --from ${{ inputs.from_environment }} --to ${{ inputs.to_environment }} --services ${{ inputs.services }}
+
+      - name: Record dispatched bundle metadata
+        run: |
+          printf 'bundle_path=%s\n' '${{ inputs.bundle_path }}'
+          printf 'bundle_sha256=%s\n' '${{ inputs.bundle_sha256 }}'
 
       - name: Upload promotion manifests
         uses: actions/upload-artifact@v4

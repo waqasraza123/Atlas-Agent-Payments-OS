@@ -198,6 +198,7 @@ enum OperationalIntegrationKind {
   RESTORE_DRILL
   SECRET_ROTATION
   DEPLOYMENT_AUTOMATION
+  PROOF_STORAGE
 }
 
 enum OperationalIntegrationStatus {
@@ -453,11 +454,16 @@ model OperationalProofArtifact {
   filePath    String
   sha256      String
   sizeBytes   Int
+  storageProvider String?
+  storageBucket String?
+  storageKey  String?
+  storageUrl  String?
   metadata    Json?
   execution   OperationalExecution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
   createdAt   DateTime                  @default(now())
 
   @@index([executionId, kind])
+  @@index([storageBucket, storageKey])
 }
 
 model Agent {

@@ -113,6 +113,6 @@ These are placeholders for tracked future work, not current claims:
 - secrets management and rotation process
 - stronger operator access constraints
 - support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
-- stored non-local restore proof ownership and secret-manager-native rotation execution ownership
+- stored non-local restore proof ownership and live upstream identity-provider ownership
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

@@ -1,4 +1,10 @@
-import { createOperationId, readAtlasOperationPayload, requireText, writeAdapterResult } from "./shared.mjs";
+import {
+  createOperationId,
+  readAtlasOperationPayload,
+  requireText,
+  shouldSimulateExternalExecution,
+  writeAdapterResult
+} from "./shared.mjs";
 
 const payload = readAtlasOperationPayload();
 const provider = requireText(payload.provider, "provider");
@@ -18,13 +24,52 @@ if (provider === "argo-rollouts") {
 }
 
 const services = Array.isArray(payload.services) ? payload.services.map((entry) => String(entry)) : [];
-const operationId = createOperationId(provider, payload);
+const simulated = shouldSimulateExternalExecution();
+let operationId = createOperationId(provider, payload);
 const targetRef =
   provider === "github-actions"
-    ? `${process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY}/${process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW}`
+    ? `${process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY}/${process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW}@${process.env.DEPLOYMENT_AUTOMATION_GITHUB_REF ?? "main"}`
     : provider === "argo-rollouts"
       ? `${process.env.DEPLOYMENT_AUTOMATION_ARGO_SERVER}/${process.env.DEPLOYMENT_AUTOMATION_ARGO_APPLICATION}`
       : `${fromEnv}->${toEnv}`;
+
+if (provider === "github-actions" && !simulated) {
+  const apiUrl = (process.env.DEPLOYMENT_AUTOMATION_GITHUB_API_URL ?? "https://api.github.com").replace(/\/+$/, "");
+  const token = requireText(
+    process.env.DEPLOYMENT_AUTOMATION_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN,
+    "DEPLOYMENT_AUTOMATION_GITHUB_TOKEN"
+  );
+  const workflowRef = process.env.DEPLOYMENT_AUTOMATION_GITHUB_REF ?? "main";
+  const response = await fetch(
+    `${apiUrl}/repos/${process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY}/actions/workflows/${encodeURIComponent(process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW)}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        "user-agent": "atlas-rollout-automation"
+      },
+      body: JSON.stringify({
+        ref: workflowRef,
+        inputs: {
+          from_environment: fromEnv,
+          to_environment: toEnv,
+          services: services.join(","),
+          bundle_path: bundlePath,
+          bundle_sha256: bundleSha256
+        }
+      })
+    }
+  );
+
+  if (response.status !== 204) {
+    const errorText = await response.text();
+    throw new Error(`GitHub workflow dispatch failed with ${response.status}: ${errorText}`);
+  }
+
+  operationId = response.headers.get("x-github-request-id") ?? operationId;
+}
 
 writeAdapterResult({
   version: 1,
@@ -38,6 +83,7 @@ writeAdapterResult({
     toEnv,
     bundlePath,
     bundleSha256,
-    services: services.join(",")
+    services: services.join(","),
+    executionMode: simulated ? "simulated" : "live"
   }
 });

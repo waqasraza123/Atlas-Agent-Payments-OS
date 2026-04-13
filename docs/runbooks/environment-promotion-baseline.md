@@ -32,6 +32,7 @@ These files are templates only. Real secrets must come from a secret manager or 
 6. Promote the same revision forward from development to staging to production with `--restore-report` and `--rotation-manifest`, or the matching env vars.
 7. Store the generated promotion manifest with the release record for later rollback and incident review.
 8. Treat the generated promotion bundle as the release artifact manifest for the environment handoff.
+9. When `OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible`, confirm the rollout execution ledger shows remote proof copies for the generated restore, rotation, and promotion artifacts.
 
 ## Expected Metadata
 
@@ -48,4 +49,4 @@ These files are templates only. Real secrets must come from a secret manager or 
 
 ## Current Limitation
 
-The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation execution proof, provider-aware promotion adapter output, promotion-manifest generation, artifact-bound promotion bundles, promotion execution reports, owned verified rollout targets for command-mode execution, and a durable rollout execution ledger with integrity-tracked proof artifacts, but it still does not own a vendor-native deployment target, secret-manager-native execution ownership, or environment-specific deploy execution.
+The repo now validates environment shape, release metadata, restore-drill proof freshness, secret-rotation execution proof, provider-aware promotion adapter output, promotion-manifest generation, artifact-bound promotion bundles, promotion execution reports, owned verified rollout targets for command-mode execution, a durable rollout execution ledger with integrity-tracked proof artifacts, owned S3-compatible remote proof storage, AWS Secrets Manager rotation dispatch, and GitHub Actions environment dispatch, but it still does not own live upstream identity-provider execution or broader deployment targets beyond the current GitHub Actions baseline.

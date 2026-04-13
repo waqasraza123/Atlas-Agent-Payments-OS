@@ -1,5 +1,6 @@
 import {
   deploymentAutomationRuntime,
+  operationsRuntime,
   restoreDrillRuntime,
   secretRotationRuntime,
   upstreamIdentityRuntime
@@ -58,6 +59,40 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
   const activeVerifiedIntegrations = integrations.filter(
     (integration) => integration.status === "ACTIVE" && integration.verificationStatus === "VERIFIED"
   ).length;
+  const remoteStoredProofArtifacts = recentExecutions.flatMap((execution) =>
+    execution.proofArtifacts.flatMap((artifact) => {
+      const storedArtifactsValue =
+        artifact.metadata && "storedArtifacts" in artifact.metadata ? artifact.metadata.storedArtifacts : null;
+
+      if (!Array.isArray(storedArtifactsValue)) {
+        return [];
+      }
+
+      return storedArtifactsValue.flatMap((entry) => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          return [];
+        }
+
+        const record = entry as Record<string, unknown>;
+
+        return typeof record.storageUrl === "string" &&
+          typeof record.bucket === "string" &&
+          typeof record.objectKey === "string" &&
+          typeof record.provider === "string"
+          ? [
+              {
+                id: `${artifact.id}-${record.objectKey}`,
+                provider: record.provider,
+                bucket: record.bucket,
+                objectKey: record.objectKey,
+                storageUrl: record.storageUrl,
+                uploadedAt: typeof record.uploadedAt === "string" ? record.uploadedAt : artifact.createdAt
+              }
+            ]
+          : [];
+      });
+    })
+  );
 
   return (
     <div className="space-y-6">
@@ -69,7 +104,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
       {feedback ? (
         <WorkflowFeedbackPanel title={feedback.title} description={feedback.description} tone={feedback.tone} />
       ) : null}
-      <section className="grid gap-4 xl:grid-cols-4">
+      <section className="grid gap-4 xl:grid-cols-5">
         <MetricCard label="Restore mode" value={restoreDrillRuntime.mode.toUpperCase()} detail={restoreDrillRuntime.reportDirectory} />
         <MetricCard
           label="Rotation mode"
@@ -85,6 +120,11 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
           label="Identity mode"
           value={upstreamIdentityRuntime.mode.toUpperCase()}
           detail={`${upstreamIdentityRuntime.provider} · ${upstreamIdentityRuntime.reportDirectory}`}
+        />
+        <MetricCard
+          label="Proof storage"
+          value={operationsRuntime.proofStorageMode.toUpperCase()}
+          detail={`${remoteStoredProofArtifacts.length} remote copies`}
         />
       </section>
       <section className="grid gap-4 xl:grid-cols-4">
@@ -119,6 +159,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
               <option value="RESTORE_DRILL">Restore drill</option>
               <option value="SECRET_ROTATION">Secret rotation</option>
               <option value="DEPLOYMENT_AUTOMATION">Deployment automation</option>
+              <option value="PROOF_STORAGE">Proof storage</option>
             </select>
           </WorkflowFormField>
           <WorkflowFormField label="Target environment" hint="Atlas resolves command-mode ownership against the target environment.">
@@ -426,19 +467,34 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
         <RecordListPanel
           eyebrow="Proof registry"
           title="Latest stored proof artifacts"
-          description="Every persisted rollout execution now carries integrity-tracked proof artifacts."
+          description="Every persisted rollout execution now carries integrity-tracked proof artifacts, and Atlas can replicate them to non-local object storage."
           items={recentExecutions.flatMap((execution) =>
             execution.proofArtifacts.slice(0, 1).map((artifact) => ({
               id: artifact.id,
               title: `${artifact.kind.toLowerCase()} · ${execution.kind.replaceAll("_", " ").toLowerCase()}`,
               description: artifact.label,
-              detail: `${artifact.sizeBytes} bytes · ${artifact.sha256.slice(0, 12)}… · ${new Date(artifact.createdAt).toLocaleString()}`,
-              statusLabel: execution.targetEnvironment ?? "GLOBAL",
+              detail: `${artifact.sizeBytes} bytes · ${artifact.sha256.slice(0, 12)}… · ${artifact.storageKey ?? artifact.filePath} · ${new Date(artifact.createdAt).toLocaleString()}`,
+              statusLabel: artifact.storageProvider ? "REMOTE" : execution.targetEnvironment ?? "GLOBAL",
               statusTone: execution.status === "SUCCEEDED" ? "default" : "warning"
             }))
           )}
           emptyTitle="No proof artifacts"
           emptyDescription="Proof artifacts will appear once execution records are stored."
+        />
+        <RecordListPanel
+          eyebrow="Remote proof"
+          title="Latest non-local proof copies"
+          description="When proof storage is enabled, Atlas replicates rollout artifacts to an operations bucket so incident review no longer depends on local disk."
+          items={remoteStoredProofArtifacts.slice(0, 8).map((artifact) => ({
+            id: artifact.id,
+            title: `${artifact.provider} · ${artifact.bucket}`,
+            description: artifact.objectKey,
+            detail: `${artifact.storageUrl} · ${new Date(artifact.uploadedAt).toLocaleString()}`,
+            statusLabel: "REMOTE",
+            statusTone: "success"
+          }))}
+          emptyTitle="No remote proof copies"
+          emptyDescription="Remote proof copies will appear here once proof storage is enabled and rollout execution runs."
         />
         <RecordListPanel
           eyebrow="Restore drills"

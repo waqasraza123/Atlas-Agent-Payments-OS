@@ -7,6 +7,7 @@ import type {
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
 import { createAtlasFileIntegrityManifest } from "./file-integrity";
+import { storeAtlasOperationalProofArtifact } from "./operational-proof-storage";
 import type { AtlasOperationalIntegrationRecord } from "./operational-integrations";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
@@ -25,6 +26,10 @@ export type AtlasOperationalProofArtifactRecord = {
   filePath: string;
   sha256: string;
   sizeBytes: number;
+  storageProvider: string | null;
+  storageBucket: string | null;
+  storageKey: string | null;
+  storageUrl: string | null;
   metadata: Prisma.JsonObject | null;
   createdAt: string;
 };
@@ -197,6 +202,10 @@ function mapExecutionRecord(
       filePath: string;
       sha256: string;
       sizeBytes: number;
+      storageProvider: string | null;
+      storageBucket: string | null;
+      storageKey: string | null;
+      storageUrl: string | null;
       metadata: Prisma.JsonValue | null;
       createdAt: Date;
     }>;
@@ -228,6 +237,10 @@ function mapExecutionRecord(
       filePath: artifact.filePath,
       sha256: artifact.sha256,
       sizeBytes: artifact.sizeBytes,
+      storageProvider: artifact.storageProvider,
+      storageBucket: artifact.storageBucket,
+      storageKey: artifact.storageKey,
+      storageUrl: artifact.storageUrl,
       metadata:
         artifact.metadata && typeof artifact.metadata === "object" && !Array.isArray(artifact.metadata)
           ? (artifact.metadata as Prisma.JsonObject)
@@ -247,12 +260,45 @@ export async function createOperationalExecutionRecord(
     throw new AtlasRolloutExecutionWorkflowError("Rollout execution actor email is required.", "bad_request");
   }
 
+  const targetEnvironment = normalizeExecutionEnvironment(input.targetEnvironment);
+  const proofArtifacts = await Promise.all(
+    (input.proofArtifacts ?? []).map(async (artifact) => {
+      const manifest = createAtlasFileIntegrityManifest(artifact.filePath);
+      const storedArtifact =
+        targetEnvironment
+          ? await storeAtlasOperationalProofArtifact(
+              {
+                targetEnvironment,
+                executionKind: input.kind,
+                artifactKind: artifact.kind,
+                label: artifact.label,
+                filePath: manifest.filePath
+              },
+              client
+            )
+          : null;
+
+      return {
+        kind: artifact.kind,
+        label: artifact.label,
+        filePath: manifest.filePath,
+        sha256: manifest.sha256,
+        sizeBytes: manifest.sizeBytes,
+        storageProvider: storedArtifact?.provider ?? null,
+        storageBucket: storedArtifact?.bucket ?? null,
+        storageKey: storedArtifact?.objectKey ?? null,
+        storageUrl: storedArtifact?.storageUrl ?? null,
+        metadata: artifact.metadata ?? Prisma.JsonNull
+      };
+    })
+  );
+
   const created = await client.operationalExecution.create({
     data: {
       kind: input.kind,
       mode: input.mode === "command" ? "COMMAND" : "DRY_RUN",
       status: input.status,
-      targetEnvironment: normalizeExecutionEnvironment(input.targetEnvironment),
+      targetEnvironment,
       provider: input.provider,
       actorUserEmail,
       summary: input.summary,
@@ -263,18 +309,7 @@ export async function createOperationalExecutionRecord(
       completedAt: input.completedAt ? new Date(input.completedAt) : new Date(),
       operationalIntegrationId: input.operationalIntegration?.id ?? null,
       proofArtifacts: {
-        create: (input.proofArtifacts ?? []).map((artifact) => {
-          const manifest = createAtlasFileIntegrityManifest(artifact.filePath);
-
-          return {
-            kind: artifact.kind,
-            label: artifact.label,
-            filePath: manifest.filePath,
-            sha256: manifest.sha256,
-            sizeBytes: manifest.sizeBytes,
-            metadata: artifact.metadata ?? Prisma.JsonNull
-          };
-        })
+        create: proofArtifacts
       }
     },
     include: {
@@ -301,7 +336,21 @@ export async function createOperationalExecutionRecord(
           {
             label: "asc"
           }
-        ]
+        ],
+        select: {
+          id: true,
+          kind: true,
+          label: true,
+          filePath: true,
+          sha256: true,
+          sizeBytes: true,
+          storageProvider: true,
+          storageBucket: true,
+          storageKey: true,
+          storageUrl: true,
+          metadata: true,
+          createdAt: true
+        }
       }
     }
   });
@@ -347,7 +396,21 @@ export async function listOperationalExecutions(
           {
             label: "asc"
           }
-        ]
+        ],
+        select: {
+          id: true,
+          kind: true,
+          label: true,
+          filePath: true,
+          sha256: true,
+          sizeBytes: true,
+          storageProvider: true,
+          storageBucket: true,
+          storageKey: true,
+          storageUrl: true,
+          metadata: true,
+          createdAt: true
+        }
       }
     },
     orderBy: {

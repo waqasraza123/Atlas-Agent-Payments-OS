@@ -96,7 +96,8 @@ function normalizeIntegrationKind(value: unknown): OperationalIntegrationKind {
     value === "UPSTREAM_IDENTITY" ||
     value === "RESTORE_DRILL" ||
     value === "SECRET_ROTATION" ||
-    value === "DEPLOYMENT_AUTOMATION"
+    value === "DEPLOYMENT_AUTOMATION" ||
+    value === "PROOF_STORAGE"
   ) {
     return value;
   }

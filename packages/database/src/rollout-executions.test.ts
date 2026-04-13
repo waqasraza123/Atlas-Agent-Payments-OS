@@ -72,6 +72,10 @@ describe("rollout executions workflow", () => {
               filePath: reportPath,
               sha256: "a".repeat(64),
               sizeBytes: 12,
+              storageProvider: null,
+              storageBucket: null,
+              storageKey: null,
+              storageUrl: null,
               metadata: {
                 targetEnvironment: "STAGING"
               },

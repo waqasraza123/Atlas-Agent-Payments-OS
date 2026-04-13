@@ -96,5 +96,4 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 - add direct upstream identity provisioning and deprovisioning beyond the current Atlas-managed assignment ledger
 - add vendor-native upstream identity integration beyond the current provider-aware lifecycle adapter and owned rollout-target baseline
-- add secret-manager-native rotation execution ownership and formal access-review operations
-- add stored non-local restore proof workflows beyond the current owned rollout-target baseline
+- add formal access-review operations beyond the current campaign-driven support-governance baseline

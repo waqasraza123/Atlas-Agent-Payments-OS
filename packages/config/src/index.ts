@@ -36,6 +36,7 @@ const atlasLogLevels = ["debug", "info", "warn", "error"] as const;
 const atlasAppEnvironments = ["local", "development", "staging", "production"] as const;
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
 const atlasCommandAdapterModes = ["dry-run", "command"] as const;
+const atlasOperationalProofStorageModes = ["disabled", "s3-compatible"] as const;
 const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
 const atlasRestoreDrillProviders = ["local-psql", "ssh-postgres", "kubernetes-job"] as const;
 const atlasSecretRotationProviders = ["generic-secret-manager", "aws-secrets-manager", "hashicorp-vault"] as const;
@@ -86,6 +87,12 @@ function readCommandAdapterMode(value: string | undefined, fallback: AtlasComman
     : fallback;
 }
 
+function readOperationalProofStorageMode(value: string | undefined, fallback: AtlasOperationalProofStorageMode) {
+  return atlasOperationalProofStorageModes.includes(value as AtlasOperationalProofStorageMode)
+    ? (value as AtlasOperationalProofStorageMode)
+    : fallback;
+}
+
 function readUpstreamIdentityProvider(value: string | undefined) {
   return atlasUpstreamIdentityProviders.includes(value as AtlasUpstreamIdentityProvider)
     ? (value as AtlasUpstreamIdentityProvider)
@@ -119,6 +126,7 @@ export type AtlasLogLevel = (typeof atlasLogLevels)[number];
 export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
 export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
+export type AtlasOperationalProofStorageMode = (typeof atlasOperationalProofStorageModes)[number];
 export type AtlasUpstreamIdentityProvider = (typeof atlasUpstreamIdentityProviders)[number];
 export type AtlasRestoreDrillProvider = (typeof atlasRestoreDrillProviders)[number];
 export type AtlasSecretRotationProvider = (typeof atlasSecretRotationProviders)[number];
@@ -130,7 +138,8 @@ export type AtlasOperationalIntegrationKind =
   | "UPSTREAM_IDENTITY"
   | "RESTORE_DRILL"
   | "SECRET_ROTATION"
-  | "DEPLOYMENT_AUTOMATION";
+  | "DEPLOYMENT_AUTOMATION"
+  | "PROOF_STORAGE";
 export type AtlasOperationalIntegrationVerificationStatus = "PENDING" | "VERIFIED" | "STALE" | "FAILED";
 
 export type AtlasStructuredLogPayload = {
@@ -230,17 +239,26 @@ export const storageRuntime = {
   endpoint: process.env.MINIO_ENDPOINT ?? "localhost",
   port: readNumber(process.env.MINIO_PORT, 9000),
   useSsl: process.env.MINIO_USE_SSL === "true",
+  region: readText(process.env.MINIO_REGION, "us-east-1"),
   accessKey: process.env.MINIO_ACCESS_KEY ?? "atlasminio",
   secretKey: process.env.MINIO_SECRET_KEY ?? "atlasminio",
-  bucketReceipts: process.env.MINIO_BUCKET_RECEIPTS ?? "atlas-receipts"
+  bucketReceipts: process.env.MINIO_BUCKET_RECEIPTS ?? "atlas-receipts",
+  bucketOperations: process.env.MINIO_BUCKET_OPERATIONS ?? "atlas-operations"
 } as const;
 
 function readOperationsRuntime(env: Record<string, string | undefined>) {
   const configuredKeys = readTextList(env.SECRET_ROTATION_REQUIRED_KEYS);
+  const appEnv = readAppEnvironment(env.APP_ENV);
 
   return {
     restoreDrillMaxAgeHours: readNumber(env.RESTORE_DRILL_MAX_AGE_HOURS, 168),
     secretRotationMaxAgeHours: readNumber(env.SECRET_ROTATION_MAX_AGE_HOURS, 720),
+    proofStorageMode: readOperationalProofStorageMode(
+      env.OPERATIONAL_PROOF_STORAGE_MODE,
+      appEnv === "local" ? "disabled" : "s3-compatible"
+    ),
+    proofStoragePrefix: readText(env.OPERATIONAL_PROOF_STORAGE_PREFIX, "rollout-proof"),
+    proofStoragePublicBaseUrl: readOptionalText(env.OPERATIONAL_PROOF_STORAGE_PUBLIC_BASE_URL),
     secretRotationRequiredKeys:
       configuredKeys.length > 0 ? configuredKeys : [...atlasDefaultSecretRotationKeys]
   } as const;
@@ -277,9 +295,23 @@ export const deploymentAutomationRuntime = {
   reportDirectory: readText(process.env.DEPLOYMENT_AUTOMATION_REPORT_DIR, "promotion-executions"),
   githubRepository: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY),
   githubWorkflow: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW),
+  githubRef: readText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_REF, "main"),
+  githubApiUrl: readText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_API_URL, "https://api.github.com"),
   argoServer: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_SERVER),
   argoApplication: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_APPLICATION)
 } as const;
+
+export type AtlasOperationalStoredArtifact = {
+  provider: Exclude<AtlasOperationalProofStorageMode, "disabled">;
+  bucket: string;
+  objectKey: string;
+  storageUrl: string;
+  contentType: string;
+  sha256: string;
+  sizeBytes: number;
+  etag: string | null;
+  uploadedAt: string;
+};
 
 export function createAtlasStructuredLogPayload(
   service: string,
@@ -746,6 +778,52 @@ export function validateAtlasRuntimeConfiguration(
     }
   }
 
+  if (readOperationalProofStorageMode(
+    env.OPERATIONAL_PROOF_STORAGE_MODE,
+    readAppEnvironment(env.APP_ENV) === "local" ? "disabled" : "s3-compatible"
+  ) === "s3-compatible") {
+    const requiresStorageConfiguration = service === "api" || service === "web";
+
+    if (requiresStorageConfiguration) {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_REGION",
+        "MINIO_REGION is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_ENDPOINT",
+        "MINIO_ENDPOINT is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_PORT",
+        "MINIO_PORT is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_ACCESS_KEY",
+        "MINIO_ACCESS_KEY is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_SECRET_KEY",
+        "MINIO_SECRET_KEY is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "MINIO_BUCKET_OPERATIONS",
+        "MINIO_BUCKET_OPERATIONS is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
+      );
+    }
+  }
+
   return {
     service,
     appEnv,
@@ -1026,7 +1104,8 @@ export function validateAtlasOperationalIntegrationSnapshot(
     integration.kind !== "UPSTREAM_IDENTITY" &&
     integration.kind !== "RESTORE_DRILL" &&
     integration.kind !== "SECRET_ROTATION" &&
-    integration.kind !== "DEPLOYMENT_AUTOMATION"
+    integration.kind !== "DEPLOYMENT_AUTOMATION" &&
+    integration.kind !== "PROOF_STORAGE"
   ) {
     issues.push("Operational integration snapshot must include a valid kind.");
   }

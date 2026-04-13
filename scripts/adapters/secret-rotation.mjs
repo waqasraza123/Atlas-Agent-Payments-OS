@@ -1,4 +1,11 @@
-import { createOperationId, readAtlasOperationPayload, requireText, writeAdapterResult } from "./shared.mjs";
+import { SecretsManagerClient, RotateSecretCommand } from "@aws-sdk/client-secrets-manager";
+import {
+  createOperationId,
+  readAtlasOperationPayload,
+  requireText,
+  shouldSimulateExternalExecution,
+  writeAdapterResult
+} from "./shared.mjs";
 
 const payload = readAtlasOperationPayload();
 const provider = requireText(payload.provider, "provider");
@@ -24,6 +31,29 @@ const targetRef =
       ? `${process.env.SECRET_ROTATION_VAULT_ADDR}/${process.env.SECRET_ROTATION_VAULT_MOUNT}`
       : environment;
 
+const simulated = shouldSimulateExternalExecution();
+let providerOperationIds = [];
+
+if (provider === "aws-secrets-manager" && !simulated) {
+  const client = new SecretsManagerClient({
+    region: process.env.SECRET_ROTATION_AWS_REGION
+  });
+
+  providerOperationIds = await Promise.all(
+    secretKeys.map(async (secretKey) => {
+      const secretId = `${process.env.SECRET_ROTATION_AWS_PREFIX.replace(/\/+$/, "")}/${secretKey}`;
+      const response = await client.send(
+        new RotateSecretCommand({
+          SecretId: secretId,
+          RotateImmediately: true
+        })
+      );
+
+      return response.VersionId ?? secretId;
+    })
+  );
+}
+
 writeAdapterResult({
   version: 1,
   adapter: provider === "aws-secrets-manager" ? "aws-secrets-manager-rotation" : provider === "hashicorp-vault" ? "hashicorp-vault-rotation" : "generic-secret-manager",
@@ -35,7 +65,8 @@ writeAdapterResult({
     environment,
     rotatedBy,
     secretCount: secretKeys.length,
-    secretKeys: secretKeys.join(",")
+    secretKeys: secretKeys.join(","),
+    executionMode: simulated ? "simulated" : "live",
+    providerOperationIds: providerOperationIds.join(",")
   }
 });
-

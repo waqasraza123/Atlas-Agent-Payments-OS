@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AtlasActorContext } from "@atlas/auth";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function createOperatorActor(email = "operator-admin@atlas.local") {
   return {
@@ -94,6 +94,10 @@ function createOperationalIntegrationClient(record = createOperationalIntegratio
 }
 
 describe("rollout automation", { timeout: 15000 }, () => {
+  beforeEach(() => {
+    vi.stubEnv("OPERATIONAL_PROOF_STORAGE_MODE", "disabled");
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();

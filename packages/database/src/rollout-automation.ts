@@ -45,6 +45,7 @@ import {
   touchOperationalIntegrationUsage,
   type AtlasOperationalIntegrationRecord
 } from "./operational-integrations";
+import { storeAtlasOperationalProofArtifacts, type AtlasOperationalStoredArtifactRecord } from "./operational-proof-storage";
 import { createOperationalExecutionRecord } from "./rollout-executions";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
@@ -127,16 +128,25 @@ function createExecutionArtifacts(
     label: string;
     filePath: string | null | undefined;
     metadata?: Prisma.JsonObject | null;
-  }>
+  }>,
+  storedArtifacts: AtlasOperationalStoredArtifactRecord[] = []
 ) {
   return artifacts
     .filter((artifact) => typeof artifact.filePath === "string" && artifact.filePath.trim().length > 0)
-    .map((artifact) => ({
-      kind: artifact.kind,
-      label: artifact.label,
-      filePath: resolve(artifact.filePath as string),
-      metadata: artifact.metadata ?? null
-    }));
+    .map((artifact) => {
+      const resolvedFilePath = resolve(artifact.filePath as string);
+      const matchingStoredArtifacts = storedArtifacts.filter((entry) => entry.filePath === resolvedFilePath);
+
+      return {
+        kind: artifact.kind,
+        label: artifact.label,
+        filePath: resolvedFilePath,
+        metadata: createExecutionMetadata({
+          ...(artifact.metadata ?? {}),
+          storedArtifacts: matchingStoredArtifacts.length > 0 ? matchingStoredArtifacts : undefined
+        })
+      };
+    });
 }
 
 async function persistOperationalExecutionIfAvailable(
@@ -451,6 +461,44 @@ export async function executeAtlasRestoreDrill(input: {
   };
 
   writeJsonArtifact(reportPath, report);
+  const proofArtifacts = [
+    {
+      kind: "BACKUP" as const,
+      label: "restore backup",
+      filePath: backupPath,
+      metadata: createExecutionMetadata({
+        backupPath,
+        targetEnvironment: report.targetEnvironment
+      })
+    },
+    {
+      kind: "MANIFEST" as const,
+      label: "backup manifest",
+      filePath: manifestPath,
+      metadata: createExecutionMetadata({
+        backupPath,
+        targetEnvironment: report.targetEnvironment
+      })
+    },
+    {
+      kind: "REPORT" as const,
+      label: "restore report",
+      filePath: reportPath,
+      metadata: createExecutionMetadata({
+        targetEnvironment: report.targetEnvironment,
+        targetLabel: report.targetLabel
+      })
+    }
+  ];
+  const storedArtifacts = await storeAtlasOperationalProofArtifacts({
+    executionKind: "RESTORE_DRILL",
+    targetEnvironment: report.targetEnvironment,
+    artifacts: proofArtifacts.map((artifact) => ({
+      kind: artifact.kind,
+      label: artifact.label,
+      filePath: artifact.filePath
+    }))
+  });
   await persistOperationalExecutionIfAvailable(
     {
       kind: "RESTORE_DRILL",
@@ -470,39 +518,12 @@ export async function executeAtlasRestoreDrill(input: {
         targetLabel: report.targetLabel,
         targetHost: report.targetHost,
         adapterResult: report.adapterResult,
-        execution: report.execution
+        execution: report.execution,
+        storedArtifacts
       }),
       operationalIntegration: operationalIntegration,
       completedAt: report.completedAt,
-      proofArtifacts: createExecutionArtifacts([
-        {
-          kind: "BACKUP",
-          label: "restore backup",
-          filePath: backupPath,
-          metadata: createExecutionMetadata({
-            backupPath,
-            targetEnvironment: report.targetEnvironment
-          })
-        },
-        {
-          kind: "MANIFEST",
-          label: "backup manifest",
-          filePath: manifestPath,
-          metadata: createExecutionMetadata({
-            backupPath,
-            targetEnvironment: report.targetEnvironment
-          })
-        },
-        {
-          kind: "REPORT",
-          label: "restore report",
-          filePath: reportPath,
-          metadata: createExecutionMetadata({
-            targetEnvironment: report.targetEnvironment,
-            targetLabel: report.targetLabel
-          })
-        }
-      ])
+      proofArtifacts: createExecutionArtifacts(proofArtifacts, storedArtifacts)
     },
     client
   );
@@ -604,6 +625,35 @@ export async function executeAtlasSecretRotation(input: {
   };
 
   writeJsonArtifact(reportPath, report);
+  const proofArtifacts = [
+    {
+      kind: "MANIFEST" as const,
+      label: "rotation manifest",
+      filePath: manifestPath,
+      metadata: createExecutionMetadata({
+        environment,
+        secretCount: secretKeys.length
+      })
+    },
+    {
+      kind: "REPORT" as const,
+      label: "rotation report",
+      filePath: reportPath,
+      metadata: createExecutionMetadata({
+        environment,
+        provider: report.provider
+      })
+    }
+  ];
+  const storedArtifacts = await storeAtlasOperationalProofArtifacts({
+    executionKind: "SECRET_ROTATION",
+    targetEnvironment: environment,
+    artifacts: proofArtifacts.map((artifact) => ({
+      kind: artifact.kind,
+      label: artifact.label,
+      filePath: artifact.filePath
+    }))
+  });
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
@@ -623,30 +673,12 @@ export async function executeAtlasSecretRotation(input: {
         reason,
         secretKeys,
         adapterResult: report.adapterResult,
-        command: report.command
+        command: report.command,
+        storedArtifacts
       }),
       operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
       completedAt: generatedAt,
-      proofArtifacts: createExecutionArtifacts([
-        {
-          kind: "MANIFEST",
-          label: "rotation manifest",
-          filePath: manifestPath,
-          metadata: createExecutionMetadata({
-            environment,
-            secretCount: secretKeys.length
-          })
-        },
-        {
-          kind: "REPORT",
-          label: "rotation report",
-          filePath: reportPath,
-          metadata: createExecutionMetadata({
-            environment,
-            provider: report.provider
-          })
-        }
-      ])
+      proofArtifacts: createExecutionArtifacts(proofArtifacts, storedArtifacts)
     },
     client
   );
@@ -840,6 +872,35 @@ export async function executeAtlasPromotionAutomation(input: {
   };
 
   writeJsonArtifact(reportPath, report);
+  const proofArtifacts = [
+    {
+      kind: "BUNDLE" as const,
+      label: "promotion bundle",
+      filePath: bundlePath,
+      metadata: createExecutionMetadata({
+        fromEnv,
+        toEnv
+      })
+    },
+    {
+      kind: "REPORT" as const,
+      label: "promotion report",
+      filePath: reportPath,
+      metadata: createExecutionMetadata({
+        fromEnv,
+        toEnv
+      })
+    }
+  ];
+  const storedArtifacts = await storeAtlasOperationalProofArtifacts({
+    executionKind: "DEPLOYMENT_PROMOTION",
+    targetEnvironment: toEnv,
+    artifacts: proofArtifacts.map((artifact) => ({
+      kind: artifact.kind,
+      label: artifact.label,
+      filePath: artifact.filePath
+    }))
+  });
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
@@ -861,30 +922,12 @@ export async function executeAtlasPromotionAutomation(input: {
         services: input.services,
         adapterResult: report.adapterResult,
         command: report.command,
-        bundleSha256
+        bundleSha256,
+        storedArtifacts
       }),
       operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
       completedAt: report.generatedAt,
-      proofArtifacts: createExecutionArtifacts([
-        {
-          kind: "BUNDLE",
-          label: "promotion bundle",
-          filePath: bundlePath,
-          metadata: createExecutionMetadata({
-            fromEnv,
-            toEnv
-          })
-        },
-        {
-          kind: "REPORT",
-          label: "promotion report",
-          filePath: reportPath,
-          metadata: createExecutionMetadata({
-            fromEnv,
-            toEnv
-          })
-        }
-      ])
+      proofArtifacts: createExecutionArtifacts(proofArtifacts, storedArtifacts)
     },
     client
   );
@@ -961,6 +1004,26 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
   };
 
   writeJsonArtifact(reportPath, report);
+  const proofArtifacts = [
+    {
+      kind: "REPORT" as const,
+      label: "upstream identity report",
+      filePath: reportPath,
+      metadata: createExecutionMetadata({
+        action: input.action,
+        organizationSlug: input.assignment.organizationSlug
+      })
+    }
+  ];
+  const storedArtifacts = await storeAtlasOperationalProofArtifacts({
+    executionKind: "UPSTREAM_IDENTITY",
+    targetEnvironment: runtimeTargetEnvironment,
+    artifacts: proofArtifacts.map((artifact) => ({
+      kind: artifact.kind,
+      label: artifact.label,
+      filePath: artifact.filePath
+    }))
+  });
   if (resolvedIntegration) {
     await touchOperationalIntegrationUsage(resolvedIntegration.id, client);
   }
@@ -983,21 +1046,12 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
         organizationSlug: input.assignment.organizationSlug,
         role: input.assignment.role,
         adapterResult: report.adapterResult,
-        command: report.command
+        command: report.command,
+        storedArtifacts
       }),
       operationalIntegration: resolvedIntegration ? mapOperationalIntegrationSnapshot(resolvedIntegration) : null,
       completedAt: report.generatedAt,
-      proofArtifacts: createExecutionArtifacts([
-        {
-          kind: "REPORT",
-          label: "upstream identity report",
-          filePath: reportPath,
-          metadata: createExecutionMetadata({
-            action: input.action,
-            organizationSlug: input.assignment.organizationSlug
-          })
-        }
-      ])
+      proofArtifacts: createExecutionArtifacts(proofArtifacts, storedArtifacts)
     },
     client
   );
