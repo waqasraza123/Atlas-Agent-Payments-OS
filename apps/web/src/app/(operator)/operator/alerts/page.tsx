@@ -6,9 +6,11 @@ import {
   createOperatorAlertItems,
   createOperatorDispatchItems,
   createOperatorIncidentItems,
+  createOperatorIncidentTriggerItems,
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
   createOperatorSnapshotItems,
+  createOperatorTraceItems,
   createOperatorWorkerQueueItems,
   loadOperatorObservabilityData
 } from "@/lib/server/operator-observability";
@@ -33,6 +35,7 @@ export default async function OperatorAlertsPage() {
     const workerTelemetry = observability.workerTelemetry;
     const snapshots = observability.snapshots;
     const dispatches = observability.dispatches;
+    const incidentTriggers = observability.incidentTriggers;
 
     if (!metrics || !incidentReadiness) {
       return (
@@ -52,7 +55,7 @@ export default async function OperatorAlertsPage() {
           title="Alerts and incident readiness"
           description="Review runtime health, operator alert pressure, and incident response posture before issues turn into support escalations."
         />
-        <section className="grid gap-4 xl:grid-cols-7">
+        <section className="grid gap-4 xl:grid-cols-8">
           <MetricCard label="Total requests" value={String(metrics.totalRequests)} detail="Requests observed by the API runtime since the current process started." />
           <MetricCard label="Active alerts" value={String(alerts.length)} detail="Open or monitoring alerts derived from runtime and operator posture." />
           <MetricCard
@@ -62,8 +65,8 @@ export default async function OperatorAlertsPage() {
           />
           <MetricCard label="Retained snapshots" value={String(snapshots.length)} detail="Persisted observability snapshots kept for later incident review." />
           <MetricCard label="Alert dispatches" value={String(dispatches.length)} detail="Recent external alert dispatch attempts recorded by Atlas." />
-          <MetricCard label="Server errors" value={String(metrics.errorCount)} detail="5xx responses recorded by the API runtime metrics registry." />
-          <MetricCard label="Incident posture" value={incidentReadiness.overallStatus === "ready" ? "Ready" : "Warning"} detail="Current incident-readiness summary for the tracked release stage." />
+          <MetricCard label="Trace coverage" value={`${Math.round(metrics.traceCoverageRate * 100)}%`} detail="API request coverage currently backed by stored runtime traces." />
+          <MetricCard label="Incident triggers" value={String(incidentTriggers.length)} detail="Active automated incident triggers currently persisted for operators." />
         </section>
         <section className="grid gap-6 xl:grid-cols-3">
           <WorkflowFormPanel
@@ -113,10 +116,10 @@ export default async function OperatorAlertsPage() {
               />
             </WorkflowFormField>
           </WorkflowFormPanel>
-          <WorkflowFormPanel
+            <WorkflowFormPanel
             eyebrow="Owned automation"
             title="Run observability automation"
-            description="Resolve the published API and worker telemetry, store a retained snapshot, and optionally dispatch alerts through the owned automation flow."
+            description="Resolve the published API and worker telemetry, store a retained snapshot, sync automated incident triggers, and optionally dispatch alerts through the owned automation flow."
             action={runObservabilityAutomationAction}
             submitLabel="Run automation"
           >
@@ -135,6 +138,12 @@ export default async function OperatorAlertsPage() {
               <label className="flex items-center gap-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)]">
                 <input type="checkbox" name="dispatchAlerts" className="h-4 w-4 accent-[var(--atlas-accent)]" />
                 Dispatch alerts after capturing the retained snapshot
+              </label>
+            </WorkflowFormField>
+            <WorkflowFormField label="Sync incident triggers" hint="When enabled, Atlas will open or resolve durable internal incidents from the current alert posture.">
+              <label className="flex items-center gap-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)]">
+                <input type="checkbox" name="triggerIncidents" defaultChecked className="h-4 w-4 accent-[var(--atlas-accent)]" />
+                Sync automated incident triggers
               </label>
             </WorkflowFormField>
             <WorkflowFormField label="Reason" hint="This reason is stored on the automation report and downstream records.">
@@ -168,7 +177,7 @@ export default async function OperatorAlertsPage() {
             <StatePanel
               eyebrow="Response posture"
               title="Incident response is codified in the repo"
-              description="Runbooks now cover observability, backup and restore, rollback readiness, and environment promotion so operator response is not trapped in chat history."
+              description="Runbooks now cover observability, tracing, backup and restore, rollback readiness, and environment promotion so operator response is not trapped in chat history."
               tone={incidentReadiness.overallStatus === "ready" ? "default" : "warning"}
             />
           </div>
@@ -197,6 +206,24 @@ export default async function OperatorAlertsPage() {
             items={createOperatorDispatchItems(dispatches)}
             emptyTitle="No dispatch history"
             emptyDescription="External alert dispatches will appear here after the first operator-triggered run."
+          />
+        </section>
+        <section className="grid gap-6 xl:grid-cols-2">
+          <RecordListPanel
+            eyebrow="Distributed tracing"
+            title="Recent API and worker traces"
+            description="Recent traces keep request and job-level correlation visible from one operator surface."
+            items={createOperatorTraceItems(metrics, workerTelemetry ?? null)}
+            emptyTitle="No recent traces"
+            emptyDescription="Generate API traffic or worker jobs to populate recent distributed traces."
+          />
+          <RecordListPanel
+            eyebrow="Incident automation"
+            title="Automated incident triggers"
+            description="Repo-owned automation keeps durable internal incident records in sync with active observability alerts."
+            items={createOperatorIncidentTriggerItems(incidentTriggers)}
+            emptyTitle="No active incident triggers"
+            emptyDescription="Run observability automation with incident syncing enabled to open durable internal incidents."
           />
         </section>
         <section className="grid gap-6 xl:grid-cols-2">

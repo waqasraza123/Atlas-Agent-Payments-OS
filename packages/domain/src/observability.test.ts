@@ -3,6 +3,7 @@ import {
   buildAtlasWorkerTelemetryRecord,
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
+  calculateAtlasTraceCoverageRate,
   countAtlasObservabilityAlertsBySeverity,
   calculateAtlasApiErrorRate,
   filterAtlasObservabilityAlertsBySeverity,
@@ -17,12 +18,15 @@ function createMetricsSnapshot(overrides: Partial<AtlasApiRuntimeTelemetryRecord
     totalRequests: 100,
     successCount: 92,
     errorCount: 8,
+    tracedRequestCount: 100,
+    traceCoverageRate: 1,
     averageDurationMs: 42,
     maxDurationMs: 220,
     inFlightRequests: 1,
     lastReadinessStatus: "ready",
     lastReadinessAt: "2026-04-12T00:05:00.000Z",
     routeMetrics: [],
+    recentTraces: [],
     configurationStatus: "valid",
     verificationCommand: "pnpm verify:release",
     revision: "rev-123",
@@ -36,6 +40,8 @@ describe("atlas observability contracts", () => {
   it("calculates a stable API error rate", () => {
     expect(calculateAtlasApiErrorRate(createMetricsSnapshot())).toBe(0.08);
     expect(calculateAtlasApiErrorRate(createMetricsSnapshot({ totalRequests: 0, errorCount: 0 }))).toBe(0);
+    expect(calculateAtlasTraceCoverageRate(10, 10)).toBe(1);
+    expect(calculateAtlasTraceCoverageRate(10, 8)).toBe(0.8);
   });
 
   it("builds critical and warning alerts from runtime and operator posture", () => {
@@ -43,7 +49,9 @@ describe("atlas observability contracts", () => {
       metrics: createMetricsSnapshot({
         lastReadinessStatus: "degraded",
         totalRequests: 40,
-        errorCount: 8
+        errorCount: 8,
+        tracedRequestCount: 30,
+        traceCoverageRate: 0.75
       }),
       overview: {
         openCaseCount: 4,
@@ -72,7 +80,10 @@ describe("atlas observability contracts", () => {
           readyQueueCount: 1,
           processedCount: 10,
           failedCount: 6,
-          queues: []
+          traceCount: 7,
+          traceCoverageRate: 0.7,
+          queues: [],
+          recentTraces: []
         }
       }),
       generatedAt: "2026-04-12T00:10:00.000Z"
@@ -83,9 +94,11 @@ describe("atlas observability contracts", () => {
         "runtime-config-invalid",
         "api-readiness-degraded",
         "api-error-rate-elevated",
+        "api-trace-coverage-degraded",
         "operator-critical-cases",
         "worker-queue-failures",
-        "worker-queues-not-ready"
+        "worker-queues-not-ready",
+        "worker-trace-coverage-degraded"
       ])
     );
     expect(alerts[0]?.severity).toBe("critical");
@@ -96,20 +109,23 @@ describe("atlas observability contracts", () => {
       staleAfterMinutes: 10,
       now: "2026-04-12T00:30:00.000Z",
       snapshotPath: "/tmp/worker-runtime.json",
-      snapshot: {
-        service: "worker",
-        startedAt: "2026-04-12T00:00:00.000Z",
-        recordedAt: "2026-04-12T00:05:00.000Z",
-        uptimeSeconds: 300,
-        revision: "rev-123",
-        deploymentSlot: "blue",
-        queueCount: 2,
-        readyQueueCount: 2,
-        processedCount: 8,
-        failedCount: 0,
-        queues: []
-      }
-    });
+        snapshot: {
+          service: "worker",
+          startedAt: "2026-04-12T00:00:00.000Z",
+          recordedAt: "2026-04-12T00:05:00.000Z",
+          uptimeSeconds: 300,
+          revision: "rev-123",
+          deploymentSlot: "blue",
+          queueCount: 2,
+          readyQueueCount: 2,
+          processedCount: 8,
+          failedCount: 0,
+          traceCount: 8,
+          traceCoverageRate: 1,
+          queues: [],
+          recentTraces: []
+        }
+      });
 
     expect(workerTelemetry.status).toBe("stale");
     expect(workerTelemetry.summary).toContain("older than 10 minutes");
@@ -120,18 +136,22 @@ describe("atlas observability contracts", () => {
       releaseStage: "private-beta",
       configurationStatus: "valid",
       hasRequestCorrelation: true,
+      hasDistributedTracing: true,
       hasMetricsEndpoint: true,
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      hasAutomatedIncidentTriggers: true,
       workerTelemetryStatus: "healthy",
-      activeAlertCount: 2
+      activeAlertCount: 2,
+      activeIncidentTriggerCount: 1
     });
 
     expect(record.overallStatus).toBe("warning");
     expect(record.items.find((item) => item.key === "active-alert-load")?.status).toBe("warning");
     expect(record.items.find((item) => item.key === "rollback-verification")?.status).toBe("ready");
     expect(record.items.find((item) => item.key === "worker-telemetry")?.status).toBe("ready");
+    expect(record.items.find((item) => item.key === "distributed-tracing")?.status).toBe("ready");
   });
 
   it("filters and counts alerts by minimum severity", () => {
@@ -139,7 +159,9 @@ describe("atlas observability contracts", () => {
       metrics: createMetricsSnapshot({
         lastReadinessStatus: "degraded",
         totalRequests: 40,
-        errorCount: 8
+        errorCount: 8,
+        tracedRequestCount: 40,
+        traceCoverageRate: 1
       }),
       overview: {
         openCaseCount: 2,

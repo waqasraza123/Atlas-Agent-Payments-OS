@@ -31,6 +31,13 @@ const observabilityOperationsMock = vi.hoisted(() => ({
     id: "snapshot-automation-1",
     reason
   })),
+  listObservabilityIncidentTriggers: vi.fn(async () => []),
+  syncObservabilityIncidentTriggers: vi.fn(async () => ({
+    items: [],
+    createdCount: 1,
+    resolvedCount: 0,
+    activeCount: 1
+  })),
   dispatchObservabilityAlerts: vi.fn(async () => ({
     id: "dispatch-automation-1",
     provider: "generic-webhook",
@@ -65,7 +72,10 @@ describe("observability runtime", () => {
           readyQueueCount: 2,
           processedCount: 8,
           failedCount: 0,
-          queues: []
+          traceCount: 8,
+          traceCoverageRate: 1,
+          queues: [],
+          recentTraces: []
         },
         null,
         2
@@ -97,12 +107,15 @@ describe("observability runtime", () => {
           totalRequests: 42,
           successCount: 38,
           errorCount: 4,
+          tracedRequestCount: 42,
+          traceCoverageRate: 1,
           averageDurationMs: 24,
           maxDurationMs: 120,
           inFlightRequests: 1,
           lastReadinessStatus: "ready",
           lastReadinessAt: "2026-04-13T00:05:00.000Z",
           routeMetrics: [],
+          recentTraces: [],
           configurationStatus: "valid",
           verificationCommand: "pnpm verify:release",
           revision: "rev-123",
@@ -128,7 +141,10 @@ describe("observability runtime", () => {
           readyQueueCount: 2,
           processedCount: 8,
           failedCount: 0,
-          queues: []
+          traceCount: 8,
+          traceCoverageRate: 1,
+          queues: [],
+          recentTraces: []
         },
         null,
         2
@@ -167,8 +183,10 @@ describe("observability runtime", () => {
     );
 
     expect(observabilityOperationsMock.persistObservabilitySnapshot).toHaveBeenCalled();
+    expect(observabilityOperationsMock.syncObservabilityIncidentTriggers).toHaveBeenCalled();
     expect(observabilityOperationsMock.dispatchObservabilityAlerts).toHaveBeenCalled();
     expect(result.snapshot.id).toBe("snapshot-automation-1");
+    expect(result.incidentTriggers?.activeCount).toBe(1);
     expect(result.dispatch?.id).toBe("dispatch-automation-1");
     expect(existsSync(result.reportPath)).toBe(true);
     expect(readFileSync(result.reportPath, "utf8")).toContain("snapshot-automation-1");

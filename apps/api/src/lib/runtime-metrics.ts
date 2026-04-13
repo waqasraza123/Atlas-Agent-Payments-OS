@@ -4,8 +4,10 @@ import { deploymentRuntime, observabilityRuntime, validateAtlasRuntimeConfigurat
 import type {
   AtlasApiRuntimeMetricsSnapshot,
   AtlasApiRuntimeTelemetryRecord,
-  AtlasApiRouteMetricRecord
+  AtlasApiRouteMetricRecord,
+  AtlasRuntimeTraceRecord
 } from "@atlas/domain";
+import { calculateAtlasTraceCoverageRate } from "@atlas/domain";
 
 type RouteMetricState = {
   method: string;
@@ -28,11 +30,13 @@ const apiRuntimeMetricsState = {
   totalRequests: 0,
   successCount: 0,
   errorCount: 0,
+  tracedRequestCount: 0,
   totalDurationMs: 0,
   maxDurationMs: 0,
   inFlightRequests: 0,
   routeMetrics: new Map<string, RouteMetricState>(),
-  lastReadiness: null as ReadinessSnapshot | null
+  lastReadiness: null as ReadinessSnapshot | null,
+  recentTraces: [] as AtlasRuntimeTraceRecord[]
 };
 
 function roundMetric(value: number) {
@@ -75,6 +79,11 @@ function publishApiRuntimeTelemetryRecord() {
     recursive: true
   });
   writeFileSync(filePath, `${JSON.stringify(getApiRuntimeTelemetryRecord(), null, 2)}\n`, "utf8");
+}
+
+function pushRecentTrace(trace: AtlasRuntimeTraceRecord) {
+  apiRuntimeMetricsState.recentTraces.unshift(trace);
+  apiRuntimeMetricsState.recentTraces = apiRuntimeMetricsState.recentTraces.slice(0, observabilityRuntime.traceHistoryLimit);
 }
 
 export function beginApiRequestMetric() {
@@ -135,6 +144,12 @@ export function recordApiReadinessSnapshot(status: "ready" | "degraded") {
   publishApiRuntimeTelemetryRecord();
 }
 
+export function recordApiTrace(trace: AtlasRuntimeTraceRecord) {
+  apiRuntimeMetricsState.tracedRequestCount += 1;
+  pushRecentTrace(trace);
+  publishApiRuntimeTelemetryRecord();
+}
+
 export function getApiRuntimeMetricsSnapshot(): AtlasApiRuntimeMetricsSnapshot {
   const startedAt = new Date(apiRuntimeMetricsState.startedAt);
 
@@ -145,6 +160,11 @@ export function getApiRuntimeMetricsSnapshot(): AtlasApiRuntimeMetricsSnapshot {
     totalRequests: apiRuntimeMetricsState.totalRequests,
     successCount: apiRuntimeMetricsState.successCount,
     errorCount: apiRuntimeMetricsState.errorCount,
+    tracedRequestCount: apiRuntimeMetricsState.tracedRequestCount,
+    traceCoverageRate: calculateAtlasTraceCoverageRate(
+      apiRuntimeMetricsState.totalRequests,
+      apiRuntimeMetricsState.tracedRequestCount
+    ),
     averageDurationMs:
       apiRuntimeMetricsState.totalRequests === 0
         ? 0
@@ -155,7 +175,8 @@ export function getApiRuntimeMetricsSnapshot(): AtlasApiRuntimeMetricsSnapshot {
     lastReadinessAt: apiRuntimeMetricsState.lastReadiness?.recordedAt ?? null,
     routeMetrics: Array.from(apiRuntimeMetricsState.routeMetrics.entries())
       .map(([key, value]) => mapRouteMetricRecord(key, value))
-      .sort((left, right) => right.totalRequests - left.totalRequests)
+      .sort((left, right) => right.totalRequests - left.totalRequests),
+    recentTraces: [...apiRuntimeMetricsState.recentTraces]
   };
 }
 
@@ -177,11 +198,13 @@ export function resetApiRuntimeMetrics() {
   apiRuntimeMetricsState.totalRequests = 0;
   apiRuntimeMetricsState.successCount = 0;
   apiRuntimeMetricsState.errorCount = 0;
+  apiRuntimeMetricsState.tracedRequestCount = 0;
   apiRuntimeMetricsState.totalDurationMs = 0;
   apiRuntimeMetricsState.maxDurationMs = 0;
   apiRuntimeMetricsState.inFlightRequests = 0;
   apiRuntimeMetricsState.routeMetrics.clear();
   apiRuntimeMetricsState.lastReadiness = null;
+  apiRuntimeMetricsState.recentTraces = [];
   publishApiRuntimeTelemetryRecord();
 }
 

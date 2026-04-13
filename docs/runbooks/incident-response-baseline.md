@@ -23,29 +23,33 @@ Define the current minimum operator incident-response posture for Atlas.
 - receipt evidence drift
 - seller-confirmation delay
 - operator case backlog or unread alert accumulation
+- degraded trace coverage or missing trace continuity between API and worker
 
 ## First Response Workflow
 
 1. Confirm runtime posture through `/health/startup`, `/health/ready`, and `/health/metrics`.
-2. Review `/operator/alerts` for consolidated runtime and operator alert state.
-3. Open the linked operator case or transaction route.
-4. Review request, payment, receipt, and audit continuity before taking action.
-5. Capture an explicit reason for every operator action that changes system posture.
-6. If payment or receipt evidence is unclear, pause the affected lifecycle before retrying.
+2. Review `/operator/alerts` for consolidated runtime, trace, and operator alert state.
+3. Review `/observability/incident-triggers` for active trigger status, linked traces, and stored incident reports.
+4. Open the linked operator case or transaction route.
+5. Review request, payment, receipt, and audit continuity before taking action.
+6. Capture an explicit reason for every operator action that changes system posture.
+7. If payment or receipt evidence is unclear, pause the affected lifecycle before retrying.
 
 ## Required Evidence Before Action
 
 - request id
+- trace id
 - current request status
 - payment status and attempt history
 - receipt status
+- related worker job id when present
 - operator-case history
 - latest audit events
 - reason for intervention
 
 ## Current Constraints
 
-- external dispatch exists, but there is still no automated paging integration or timer-driven incident trigger
+- external dispatch and durable incident triggers exist, but there is still no automated paging integration or timer-driven scheduler
 - there is no external incident timeline store yet
 - support-access hardening and tenant-isolation hardening are still a next-track item
 - backup restore remains operator-invoked and repo-driven rather than automated

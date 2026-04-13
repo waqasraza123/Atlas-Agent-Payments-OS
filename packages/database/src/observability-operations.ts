@@ -15,8 +15,10 @@ import {
   type AtlasIncidentReadinessRecord,
   type AtlasObservabilityAlertDispatchRecord,
   type AtlasObservabilityAlertRecord,
+  type AtlasObservabilityIncidentTriggerRecord,
   type AtlasObservabilityAlertSeverity,
-  type AtlasObservabilitySnapshotRecord
+  type AtlasObservabilitySnapshotRecord,
+  type AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
@@ -248,6 +250,54 @@ function mapDispatchRecord(record: {
   } satisfies AtlasObservabilityAlertDispatchRecord;
 }
 
+function toStringArray(value: Prisma.JsonValue | null) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+function mapIncidentTriggerRecord(record: {
+  id: string;
+  dedupeKey: string;
+  appEnv: string;
+  releaseStage: string;
+  source: string;
+  severity: string;
+  status: string;
+  title: string;
+  summary: string;
+  alertIds: Prisma.JsonValue;
+  traceIds: Prisma.JsonValue;
+  actorUserEmail: string;
+  reportPath: string;
+  resolvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: record.id,
+    dedupeKey: record.dedupeKey,
+    appEnv: record.appEnv,
+    releaseStage: record.releaseStage,
+    source: record.source === "operator" || record.source === "release" ? record.source : "runtime",
+    severity: normalizeMinimumSeverity(
+      record.severity === "critical" || record.severity === "warning" ? record.severity : "info"
+    ),
+    status: record.status === "RESOLVED" ? "RESOLVED" : "ACTIVE",
+    title: record.title,
+    summary: record.summary,
+    alertIds: toStringArray(record.alertIds),
+    traceIds: toStringArray(record.traceIds),
+    actorUserEmail: record.actorUserEmail,
+    reportPath: record.reportPath,
+    resolvedAt: record.resolvedAt?.toISOString() ?? null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  } satisfies AtlasObservabilityIncidentTriggerRecord;
+}
+
 function collectJsonArtifactFiles(directoryPath: string): string[] {
   try {
     const entries = readdirSync(directoryPath, {
@@ -392,6 +442,36 @@ export async function listObservabilityAlertDispatches(
   });
 
   return records.map((record) => mapDispatchRecord(record));
+}
+
+export async function listObservabilityIncidentTriggers(
+  actor: AtlasActorContext,
+  options: {
+    limit?: number;
+    status?: AtlasObservabilityIncidentTriggerRecord["status"];
+  } = {},
+  client: DatabaseClient = prisma
+) {
+  assertObservabilityActor(actor);
+
+  const records = await client.observabilityIncidentTrigger.findMany({
+    where: options.status
+      ? {
+          status: options.status
+        }
+      : undefined,
+    orderBy: [
+      {
+        updatedAt: "desc"
+      },
+      {
+        createdAt: "desc"
+      }
+    ],
+    take: options.limit ?? 12
+  });
+
+  return records.map((record) => mapIncidentTriggerRecord(record));
 }
 
 export async function dispatchObservabilityAlerts(
@@ -542,4 +622,243 @@ export async function dispatchObservabilityAlerts(
   }
 
   return mappedRecord;
+}
+
+function collectIncidentTraceIds(
+  metrics: MetricsWithConfiguration,
+  workerTelemetry: AtlasWorkerTelemetryRecord | null | undefined
+) {
+  return Array.from(
+    new Set([
+      ...metrics.recentTraces.map((trace) => trace.traceId),
+      ...(workerTelemetry?.snapshot?.recentTraces ?? []).map((trace) => trace.traceId)
+    ])
+  ).slice(0, 12);
+}
+
+async function createObservabilityAuditEvent(
+  transaction: DatabaseClient,
+  actor: AtlasActorContext,
+  input: {
+    targetId: string;
+    eventType: string;
+    payload: Prisma.InputJsonValue;
+  }
+) {
+  await transaction.auditEvent.create({
+    data: {
+      organizationId: actor.organization.id,
+      userId: actor.user.id,
+      actorType: "HUMAN",
+      eventType: input.eventType,
+      targetType: "ObservabilityIncidentTrigger",
+      targetId: input.targetId,
+      requestId: null,
+      payload: input.payload
+    }
+  });
+}
+
+async function upsertObservabilityNotification(
+  transaction: DatabaseClient,
+  input: {
+    dedupeKey: string;
+    organizationId: string;
+    title: string;
+    description: string;
+    active: boolean;
+  }
+) {
+  await transaction.notification.upsert({
+    where: {
+      dedupeKey: input.dedupeKey
+    },
+    create: {
+      dedupeKey: input.dedupeKey,
+      organizationId: input.organizationId,
+      caseId: null,
+      category: "observability-incident",
+      title: input.title,
+      description: input.description,
+      status: input.active ? "UNREAD" : "READ"
+    },
+    update: {
+      organizationId: input.organizationId,
+      category: "observability-incident",
+      title: input.title,
+      description: input.description,
+      status: input.active ? "UNREAD" : "READ"
+    }
+  });
+}
+
+export async function syncObservabilityIncidentTriggers(
+  input: {
+    actor: AtlasActorContext;
+    minimumSeverity: AtlasObservabilityAlertSeverity;
+    reason: string;
+    alerts: AtlasObservabilityAlertRecord[];
+    metrics: MetricsWithConfiguration;
+    incidentReadiness: AtlasIncidentReadinessRecord;
+    workerTelemetry?: AtlasWorkerTelemetryRecord | null;
+  },
+  client: DatabaseClient = prisma
+) {
+  assertObservabilityActor(input.actor);
+  const minimumSeverity = normalizeMinimumSeverity(input.minimumSeverity);
+  const reason = normalizeReason(input.reason, "Incident trigger reason");
+  const selectedAlerts = filterAtlasObservabilityAlertsBySeverity(input.alerts, minimumSeverity);
+  const traceIds = collectIncidentTraceIds(input.metrics, input.workerTelemetry);
+  const existingRecords = await client.observabilityIncidentTrigger.findMany({
+    where: {
+      appEnv: appRuntime.appEnv
+    }
+  });
+  const existingByDedupeKey = new Map(existingRecords.map((record) => [record.dedupeKey, record]));
+  const activeDedupeKeys = new Set<string>();
+  const syncedRecords: AtlasObservabilityIncidentTriggerRecord[] = [];
+  let createdCount = 0;
+  let resolvedCount = 0;
+
+  for (const alert of selectedAlerts) {
+    const dedupeKey = `${appRuntime.appEnv}:${alert.id}`;
+    const notificationDedupeKey = `observability-incident:${dedupeKey}`;
+    const reportPath = resolveRepoPath(
+      observabilityRuntime.incidentReportDirectory,
+      appRuntime.appEnv,
+      `${createTimestampFileFragment()}-${alert.id}.json`
+    );
+    const payload = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      appEnv: appRuntime.appEnv,
+      releaseStage: appRuntime.releaseStage,
+      minimumSeverity,
+      reason,
+      alert,
+      traceIds,
+      metrics: input.metrics,
+      workerTelemetry: input.workerTelemetry ?? null,
+      incidentReadiness: input.incidentReadiness
+    };
+    const existing = existingByDedupeKey.get(dedupeKey);
+    writeJsonArtifact(reportPath, payload);
+    activeDedupeKeys.add(dedupeKey);
+
+    const record =
+      existing !== undefined
+        ? await client.observabilityIncidentTrigger.update({
+            where: {
+              id: existing.id
+            },
+            data: {
+              releaseStage: appRuntime.releaseStage,
+              source: alert.source,
+              severity: alert.severity,
+              status: "ACTIVE",
+              title: alert.title,
+              summary: alert.description,
+              alertIds: [alert.id],
+              traceIds,
+              actorUserEmail: input.actor.user.email,
+              reportPath,
+              payload: payload as Prisma.JsonObject,
+              resolvedAt: null
+            }
+          })
+        : await client.observabilityIncidentTrigger.create({
+            data: {
+              dedupeKey,
+              appEnv: appRuntime.appEnv,
+              releaseStage: appRuntime.releaseStage,
+              source: alert.source,
+              severity: alert.severity,
+              status: "ACTIVE",
+              title: alert.title,
+              summary: alert.description,
+              alertIds: [alert.id],
+              traceIds,
+              actorUserEmail: input.actor.user.email,
+              reportPath,
+              payload: payload as Prisma.JsonObject
+            }
+          });
+
+    if (!existing || existing.status !== "ACTIVE") {
+      createdCount += 1;
+      await upsertObservabilityNotification(client, {
+        dedupeKey: notificationDedupeKey,
+        organizationId: input.actor.organization.id,
+        title: alert.title,
+        description: alert.description,
+        active: true
+      });
+      await createObservabilityAuditEvent(client, input.actor, {
+        targetId: record.id,
+        eventType: "observability.incident_triggered",
+        payload: {
+          dedupeKey,
+          alertId: alert.id,
+          reason,
+          traceIds
+        }
+      });
+    }
+
+    syncedRecords.push(mapIncidentTriggerRecord(record));
+  }
+
+  for (const existing of existingRecords) {
+    if (existing.status !== "ACTIVE" || activeDedupeKeys.has(existing.dedupeKey)) {
+      continue;
+    }
+
+    const resolved = await client.observabilityIncidentTrigger.update({
+      where: {
+        id: existing.id
+      },
+      data: {
+        status: "RESOLVED",
+        resolvedAt: new Date()
+      }
+    });
+    resolvedCount += 1;
+    await upsertObservabilityNotification(client, {
+      dedupeKey: `observability-incident:${existing.dedupeKey}`,
+      organizationId: input.actor.organization.id,
+      title: existing.title,
+      description: existing.summary,
+      active: false
+    });
+    await createObservabilityAuditEvent(client, input.actor, {
+      targetId: resolved.id,
+      eventType: "observability.incident_resolved",
+      payload: {
+        dedupeKey: existing.dedupeKey,
+        reason
+      }
+    });
+  }
+
+  const activeRecords = await client.observabilityIncidentTrigger.findMany({
+    where: {
+      appEnv: appRuntime.appEnv,
+      status: "ACTIVE"
+    },
+    orderBy: [
+      {
+        updatedAt: "desc"
+      },
+      {
+        createdAt: "desc"
+      }
+    ]
+  });
+
+  return {
+    items: activeRecords.map((record) => mapIncidentTriggerRecord(record)),
+    createdCount,
+    resolvedCount,
+    activeCount: activeRecords.length
+  };
 }

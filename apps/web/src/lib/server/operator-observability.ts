@@ -1,4 +1,5 @@
 import type { AtlasActorContext, AtlasLocalSessionSelection } from "@atlas/auth";
+import { randomBytes } from "node:crypto";
 import { createAtlasIdentityProviderSessionToken, createAtlasLocalSessionToken } from "@atlas/auth/server";
 import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
@@ -6,7 +7,9 @@ import type {
   AtlasIncidentReadinessRecord,
   AtlasObservabilityAlertDispatchRecord,
   AtlasObservabilityAlertRecord,
+  AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
+  AtlasRuntimeTraceRecord,
   AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
@@ -15,11 +18,17 @@ type AtlasApiEnvelope<T> = {
   items?: T[];
 };
 
+function createHexId(byteLength: number) {
+  return randomBytes(byteLength).toString("hex");
+}
+
 async function fetchOperatorObservabilityResource<T>(
   path: string,
   actor: AtlasActorContext,
   selection: AtlasLocalSessionSelection
 ): Promise<AtlasApiEnvelope<T>> {
+  const traceId = createHexId(16);
+  const spanId = createHexId(8);
   const sessionHeader =
     actor.source === "identity-provider" && actor.sessionId
       ? createAtlasIdentityProviderSessionToken(authRuntime.sessionSigningSecret, selection, {
@@ -34,7 +43,9 @@ async function fetchOperatorObservabilityResource<T>(
     method: "GET",
     cache: "no-store",
     headers: {
-      "x-atlas-local-session": sessionHeader
+      "x-atlas-local-session": sessionHeader,
+      "x-atlas-trace-id": traceId,
+      "traceparent": `00-${traceId}-${spanId}-01`
     }
   });
 
@@ -59,13 +70,26 @@ function formatDateTime(value: string | null) {
 }
 
 export async function loadOperatorObservabilityData(actor: AtlasActorContext, selection: AtlasLocalSessionSelection) {
-  const [metricsResponse, alertsResponse, incidentsResponse, workerResponse, snapshotsResponse, dispatchesResponse] = await Promise.all([
+  const [
+    metricsResponse,
+    alertsResponse,
+    incidentsResponse,
+    workerResponse,
+    snapshotsResponse,
+    dispatchesResponse,
+    incidentTriggersResponse
+  ] = await Promise.all([
     fetchOperatorObservabilityResource<AtlasApiRuntimeTelemetryRecord>("/observability/metrics", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection),
     fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection),
     fetchOperatorObservabilityResource<AtlasWorkerTelemetryRecord>("/observability/worker", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection),
-    fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection)
+    fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection),
+    fetchOperatorObservabilityResource<AtlasObservabilityIncidentTriggerRecord>(
+      "/observability/incident-triggers",
+      actor,
+      selection
+    )
   ]);
 
   return {
@@ -74,7 +98,8 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     incidentReadiness: incidentsResponse.item,
     workerTelemetry: workerResponse.item,
     snapshots: snapshotsResponse.items ?? [],
-    dispatches: dispatchesResponse.items ?? []
+    dispatches: dispatchesResponse.items ?? [],
+    incidentTriggers: incidentTriggersResponse.items ?? []
   };
 }
 
@@ -120,6 +145,19 @@ export function createOperatorDispatchItems(items: AtlasObservabilityAlertDispat
     detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
     statusLabel: item.status,
     statusTone: item.status === "SUCCEEDED" ? "success" : "critical"
+  }));
+}
+
+export function createOperatorIncidentTriggerItems(
+  items: AtlasObservabilityIncidentTriggerRecord[]
+): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.summary,
+    detail: `${item.severity} severity · ${item.traceIds.length} traces · ${item.reportPath}`,
+    statusLabel: item.status,
+    statusTone: item.status === "ACTIVE" ? (item.severity === "critical" ? "critical" : "warning") : "success"
   }));
 }
 
@@ -169,6 +207,14 @@ export function createOperatorMetricsFacts(
     {
       label: "Max request duration",
       value: `${metrics.maxDurationMs} ms`
+    },
+    {
+      label: "Trace coverage",
+      value: `${Math.round(metrics.traceCoverageRate * 100)}%`
+    },
+    {
+      label: "Recent traces",
+      value: String(metrics.recentTraces.length)
     }
   ];
 }
@@ -182,4 +228,37 @@ export function createOperatorRouteMetricItems(metrics: AtlasApiRuntimeTelemetry
     statusLabel: formatDateTime(item.lastSeenAt),
     statusTone: item.errorCount > 0 ? "warning" : "default"
   }));
+}
+
+function formatTraceContext(record: AtlasRuntimeTraceRecord) {
+  const parts = [
+    record.requestId ? `request ${record.requestId}` : null,
+    record.jobId ? `job ${record.jobId}` : null,
+    record.path,
+    record.queueName
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+}
+
+export function createOperatorTraceItems(
+  metrics: AtlasApiRuntimeTelemetryRecord,
+  workerTelemetry: AtlasWorkerTelemetryRecord | null
+): RecordListPanelItem[] {
+  return Array.from(
+    new Map(
+      [...metrics.recentTraces, ...(workerTelemetry?.snapshot?.recentTraces ?? [])]
+        .sort((left, right) => new Date(right.endedAt).getTime() - new Date(left.endedAt).getTime())
+        .map((trace) => [`${trace.sourceService}:${trace.spanId}`, trace] as const)
+    ).values()
+  )
+    .slice(0, 12)
+    .map((trace) => ({
+      id: `${trace.sourceService}:${trace.spanId}`,
+      title: `${trace.sourceService.toUpperCase()} · ${trace.name}`,
+      description: `${trace.status.toUpperCase()} · ${trace.durationMs} ms · ${trace.traceId}`,
+      detail: formatTraceContext(trace),
+      statusLabel: formatDateTime(trace.endedAt),
+      statusTone: trace.status === "error" ? "critical" : "default"
+    }));
 }

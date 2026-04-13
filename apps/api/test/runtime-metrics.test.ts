@@ -3,6 +3,7 @@ import {
   beginApiRequestMetric,
   getApiRuntimeMetricsSnapshot,
   getApiRuntimeTelemetryRecord,
+  recordApiTrace,
   recordApiReadinessSnapshot,
   recordApiRequestMetric,
   resetApiRuntimeMetrics
@@ -21,6 +22,25 @@ describe("api runtime metrics", () => {
       statusCode: 200,
       durationMs: 12
     });
+    recordApiTrace({
+      traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      spanId: "bbbbbbbbbbbbbbbb",
+      parentSpanId: null,
+      sourceService: "api",
+      origin: "http",
+      name: "GET /health",
+      status: "ok",
+      requestId: "request-1",
+      method: "GET",
+      path: "/health",
+      queueKey: null,
+      queueName: null,
+      jobId: null,
+      attempt: null,
+      startedAt: "2026-04-13T00:00:00.000Z",
+      endedAt: "2026-04-13T00:00:00.012Z",
+      durationMs: 12
+    });
     complete();
     recordApiReadinessSnapshot("ready");
 
@@ -29,8 +49,14 @@ describe("api runtime metrics", () => {
     expect(snapshot.totalRequests).toBe(1);
     expect(snapshot.successCount).toBe(1);
     expect(snapshot.errorCount).toBe(0);
+    expect(snapshot.tracedRequestCount).toBe(1);
+    expect(snapshot.traceCoverageRate).toBe(1);
     expect(snapshot.inFlightRequests).toBe(0);
     expect(snapshot.lastReadinessStatus).toBe("ready");
+    expect(snapshot.recentTraces[0]).toMatchObject({
+      traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceService: "api"
+    });
     expect(snapshot.routeMetrics[0]).toMatchObject({
       key: "GET /health",
       totalRequests: 1,

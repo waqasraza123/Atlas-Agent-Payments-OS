@@ -17,7 +17,9 @@ import { getOperatorOverview } from "./operator-workflow";
 import {
   AtlasObservabilityOperationsError,
   dispatchObservabilityAlerts,
-  persistObservabilitySnapshot
+  listObservabilityIncidentTriggers,
+  persistObservabilitySnapshot,
+  syncObservabilityIncidentTriggers
 } from "./observability-operations";
 
 type DatabaseClient = PrismaClient;
@@ -157,6 +159,14 @@ export async function buildObservabilityAutomationPosture(
 
   const workerTelemetry = readPublishedWorkerTelemetry(input.now);
   const overview = await getOperatorOverview(actor, client);
+  const activeIncidentTriggers = await listObservabilityIncidentTriggers(
+    actor,
+    {
+      limit: 50,
+      status: "ACTIVE"
+    },
+    client
+  );
   const alerts = buildAtlasObservabilityAlerts({
     metrics,
     overview,
@@ -169,12 +179,19 @@ export async function buildObservabilityAutomationPosture(
     releaseStage: appRuntime.releaseStage,
     configurationStatus: metrics.configurationStatus,
     hasRequestCorrelation: true,
+    hasDistributedTracing:
+      metrics.traceCoverageRate === 1 &&
+      (!workerTelemetry.snapshot ||
+        workerTelemetry.snapshot.processedCount === 0 ||
+        workerTelemetry.snapshot.traceCoverageRate === 1),
     hasMetricsEndpoint: true,
     hasHealthEndpoints: true,
     hasRollbackVerification: true,
     hasBackupRestoreRunbook: true,
+    hasAutomatedIncidentTriggers: observabilityRuntime.automationTriggerIncidents,
     workerTelemetryStatus: workerTelemetry.status,
-    activeAlertCount: alerts.length
+    activeAlertCount: alerts.length,
+    activeIncidentTriggerCount: activeIncidentTriggers.length
   });
 
   return {
@@ -183,7 +200,8 @@ export async function buildObservabilityAutomationPosture(
     workerTelemetry,
     overview,
     alerts,
-    incidentReadiness
+    incidentReadiness,
+    activeIncidentTriggers
   };
 }
 
@@ -193,6 +211,7 @@ export async function executeObservabilityAutomation(
     reason: string;
     minimumSeverity?: AtlasObservabilityAlertSeverity;
     dispatchAlerts?: boolean;
+    triggerIncidents?: boolean;
     now?: string;
   },
   client: DatabaseClient = prisma
@@ -219,6 +238,21 @@ export async function executeObservabilityAutomation(
     },
     client
   );
+  const incidentTriggers =
+    input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents
+      ? await syncObservabilityIncidentTriggers(
+          {
+            actor: posture.actor,
+            minimumSeverity: observabilityRuntime.incidentMinimumSeverity,
+            reason,
+            alerts: posture.alerts,
+            metrics: posture.metrics,
+            incidentReadiness: posture.incidentReadiness,
+            workerTelemetry: posture.workerTelemetry
+          },
+          client
+        )
+      : null;
   const dispatch = input.dispatchAlerts
     ? await dispatchObservabilityAlerts(
         {
@@ -247,6 +281,7 @@ export async function executeObservabilityAutomation(
     alertCount: posture.alerts.length,
     incidentReadiness: posture.incidentReadiness,
     snapshot,
+    incidentTriggers,
     dispatch
   };
 
@@ -259,6 +294,7 @@ export async function executeObservabilityAutomation(
     report,
     reportPath,
     snapshot,
+    incidentTriggers,
     dispatch,
     workerTelemetry: posture.workerTelemetry
   };

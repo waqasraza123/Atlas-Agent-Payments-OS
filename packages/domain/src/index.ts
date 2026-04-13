@@ -85,6 +85,7 @@ export {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
   calculateAtlasApiErrorRate,
+  calculateAtlasTraceCoverageRate,
   countAtlasObservabilityAlertsBySeverity,
   filterAtlasObservabilityAlertsBySeverity,
   type AtlasApiRuntimeTelemetryRecord,
@@ -95,8 +96,10 @@ export {
   type AtlasObservabilityAlertDispatchRecord,
   type AtlasObservabilityAlertRecord,
   type AtlasObservabilityAlertSeverity,
+  type AtlasObservabilityIncidentTriggerRecord,
   type AtlasObservabilityReleaseStage,
   type AtlasObservabilitySnapshotRecord,
+  type AtlasRuntimeTraceRecord,
   type AtlasWorkerQueueRuntimeMetricRecord,
   type AtlasWorkerRuntimeMetricsSnapshot,
   type AtlasWorkerTelemetryRecord

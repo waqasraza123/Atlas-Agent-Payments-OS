@@ -479,6 +479,29 @@ model ObservabilityAlertDispatch {
   @@index([operationalIntegrationId, completedAt])
 }
 
+model ObservabilityIncidentTrigger {
+  id             String   @id @default(cuid())
+  dedupeKey      String   @unique
+  appEnv         String
+  releaseStage   String
+  source         String
+  severity       String
+  status         String
+  title          String
+  summary        String
+  alertIds       Json
+  traceIds       Json
+  actorUserEmail String
+  reportPath     String
+  payload        Json?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([appEnv, status, updatedAt])
+}
+
 model OperationalExecution {
   id                     String                     @id @default(cuid())
   kind                   OperationalExecutionKind

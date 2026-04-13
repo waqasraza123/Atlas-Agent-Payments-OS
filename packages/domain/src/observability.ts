@@ -21,6 +21,26 @@ export type AtlasApiRouteMetricRecord = {
   lastSeenAt: string;
 };
 
+export type AtlasRuntimeTraceRecord = {
+  traceId: string;
+  spanId: string;
+  parentSpanId: string | null;
+  sourceService: "api" | "worker";
+  origin: "http" | "job";
+  name: string;
+  status: "ok" | "error";
+  requestId: string | null;
+  method: string | null;
+  path: string | null;
+  queueKey: string | null;
+  queueName: string | null;
+  jobId: string | null;
+  attempt: number | null;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+};
+
 export type AtlasApiRuntimeMetricsSnapshot = {
   service: "api";
   startedAt: string;
@@ -28,12 +48,15 @@ export type AtlasApiRuntimeMetricsSnapshot = {
   totalRequests: number;
   successCount: number;
   errorCount: number;
+  tracedRequestCount: number;
+  traceCoverageRate: number;
   averageDurationMs: number;
   maxDurationMs: number;
   inFlightRequests: number;
   lastReadinessStatus: "ready" | "degraded" | "unknown";
   lastReadinessAt: string | null;
   routeMetrics: AtlasApiRouteMetricRecord[];
+  recentTraces: AtlasRuntimeTraceRecord[];
 };
 
 export type AtlasApiRuntimeTelemetryRecord = AtlasApiRuntimeMetricsSnapshot & {
@@ -65,7 +88,10 @@ export type AtlasWorkerRuntimeMetricsSnapshot = {
   readyQueueCount: number;
   processedCount: number;
   failedCount: number;
+  traceCount: number;
+  traceCoverageRate: number;
   queues: AtlasWorkerQueueRuntimeMetricRecord[];
+  recentTraces: AtlasRuntimeTraceRecord[];
 };
 
 export type AtlasWorkerTelemetryRecord = {
@@ -125,6 +151,25 @@ export type AtlasObservabilityAlertDispatchRecord = {
   completedAt: string;
   createdAt: string;
   operationalIntegrationId: string | null;
+};
+
+export type AtlasObservabilityIncidentTriggerRecord = {
+  id: string;
+  dedupeKey: string;
+  appEnv: string;
+  releaseStage: string;
+  source: "runtime" | "operator" | "release";
+  severity: AtlasObservabilityAlertSeverity;
+  status: "ACTIVE" | "RESOLVED";
+  title: string;
+  summary: string;
+  alertIds: string[];
+  traceIds: string[];
+  actorUserEmail: string;
+  reportPath: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AtlasIncidentReadinessItem = {
@@ -245,6 +290,14 @@ export function calculateAtlasApiErrorRate(metrics: AtlasApiRuntimeMetricsSnapsh
   return roundMetric(metrics.errorCount / metrics.totalRequests);
 }
 
+export function calculateAtlasTraceCoverageRate(totalCount: number, tracedCount: number) {
+  if (totalCount === 0) {
+    return 1;
+  }
+
+  return roundMetric(tracedCount / totalCount);
+}
+
 export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInput): AtlasObservabilityAlertRecord[] {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const alerts: AtlasObservabilityAlertRecord[] = [];
@@ -295,6 +348,22 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         metricLabel: "Error rate",
         status: "monitoring",
         runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
+  }
+
+  if (input.metrics.totalRequests > 0 && input.metrics.traceCoverageRate < 1) {
+    alerts.push(
+      createAlertRecord({
+        id: "api-trace-coverage-degraded",
+        title: "API trace coverage is degraded",
+        description: `Observed trace coverage is ${Math.round(input.metrics.traceCoverageRate * 100)}% across ${input.metrics.totalRequests} requests.`,
+        severity: input.metrics.traceCoverageRate < 0.8 ? "critical" : "warning",
+        source: "runtime",
+        metricLabel: "API trace coverage",
+        status: "monitoring",
+        runbookPath: "docs/runbooks/observability-and-alerting-baseline.md",
         updatedAt: generatedAt
       })
     );
@@ -406,6 +475,22 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
           })
         );
       }
+
+      if (workerSnapshot.processedCount > 0 && workerSnapshot.traceCoverageRate < 1) {
+        alerts.push(
+          createAlertRecord({
+            id: "worker-trace-coverage-degraded",
+            title: "Worker trace coverage is degraded",
+            description: `Observed worker trace coverage is ${Math.round(workerSnapshot.traceCoverageRate * 100)}% across ${workerSnapshot.processedCount} processed jobs.`,
+            severity: workerSnapshot.traceCoverageRate < 0.8 ? "critical" : "warning",
+            source: "runtime",
+            metricLabel: "Worker trace coverage",
+            status: "monitoring",
+            runbookPath: "docs/runbooks/observability-and-alerting-baseline.md",
+            updatedAt: generatedAt
+          })
+        );
+      }
     }
   }
 
@@ -448,12 +533,15 @@ export function buildAtlasIncidentReadinessRecord(input: {
   releaseStage: AtlasObservabilityReleaseStage;
   configurationStatus: "valid" | "invalid";
   hasRequestCorrelation: boolean;
+  hasDistributedTracing: boolean;
   hasMetricsEndpoint: boolean;
   hasHealthEndpoints: boolean;
   hasRollbackVerification: boolean;
   hasBackupRestoreRunbook: boolean;
+  hasAutomatedIncidentTriggers: boolean;
   workerTelemetryStatus: AtlasWorkerTelemetryRecord["status"];
   activeAlertCount: number;
+  activeIncidentTriggerCount: number;
 }): AtlasIncidentReadinessRecord {
   const items: AtlasIncidentReadinessItem[] = [
     {
@@ -464,6 +552,15 @@ export function buildAtlasIncidentReadinessRecord(input: {
         ? "API responses carry request correlation ids for runtime tracing."
         : "Request correlation is missing from API runtime responses.",
       runbookPath: "docs/runbooks/production-operations-baseline.md"
+    },
+    {
+      key: "distributed-tracing",
+      label: "Distributed tracing",
+      status: input.hasDistributedTracing ? "ready" : "warning",
+      detail: input.hasDistributedTracing
+        ? "Recent API and worker traces are being captured with shared trace identifiers."
+        : "Recent runtime activity is missing shared trace identifiers or trace coverage has degraded.",
+      runbookPath: "docs/runbooks/observability-and-alerting-baseline.md"
     },
     {
       key: "health-endpoints",
@@ -518,6 +615,17 @@ export function buildAtlasIncidentReadinessRecord(input: {
                 ? "Shared worker telemetry is stale and should not be treated as current."
                 : "Shared worker telemetry is missing and queue runtime visibility is unavailable.",
       runbookPath: "docs/runbooks/production-operations-baseline.md"
+    },
+    {
+      key: "incident-automation",
+      label: "Automated incident triggers",
+      status: input.hasAutomatedIncidentTriggers ? "ready" : "warning",
+      detail: input.hasAutomatedIncidentTriggers
+        ? input.activeIncidentTriggerCount === 0
+          ? "Repo-owned automation can persist and resolve incident triggers from observability alerts."
+          : `${input.activeIncidentTriggerCount} automated incident triggers are currently active for operator follow-up.`
+        : "Observability automation is not yet syncing incident triggers from active alerts.",
+      runbookPath: "docs/runbooks/incident-response-baseline.md"
     },
     {
       key: "active-alert-load",

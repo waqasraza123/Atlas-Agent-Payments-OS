@@ -1,11 +1,18 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { deploymentRuntime, observabilityRuntime } from "@atlas/config";
-import type { AtlasWorkerQueueRuntimeMetricRecord, AtlasWorkerRuntimeMetricsSnapshot } from "@atlas/domain";
+import {
+  calculateAtlasTraceCoverageRate,
+  type AtlasRuntimeTraceRecord,
+  type AtlasWorkerQueueRuntimeMetricRecord,
+  type AtlasWorkerRuntimeMetricsSnapshot
+} from "@atlas/domain";
 
 const workerRuntimeMetricsState = {
   startedAt: new Date().toISOString(),
-  queues: new Map<string, AtlasWorkerQueueRuntimeMetricRecord>()
+  queues: new Map<string, AtlasWorkerQueueRuntimeMetricRecord>(),
+  traceCount: 0,
+  recentTraces: [] as AtlasRuntimeTraceRecord[]
 };
 
 function roundMetric(value: number) {
@@ -30,6 +37,12 @@ function publishWorkerRuntimeMetricsSnapshot() {
     recursive: true
   });
   writeFileSync(filePath, `${JSON.stringify(getWorkerRuntimeMetricsSnapshot(), null, 2)}\n`, "utf8");
+}
+
+function pushRecentTrace(trace: AtlasRuntimeTraceRecord) {
+  workerRuntimeMetricsState.traceCount += 1;
+  workerRuntimeMetricsState.recentTraces.unshift(trace);
+  workerRuntimeMetricsState.recentTraces = workerRuntimeMetricsState.recentTraces.slice(0, observabilityRuntime.traceHistoryLimit);
 }
 
 function getQueueMetricRecord(key: string, name: string) {
@@ -73,6 +86,11 @@ export function recordWorkerQueueFailed(key: string, name: string) {
   publishWorkerRuntimeMetricsSnapshot();
 }
 
+export function recordWorkerTrace(trace: AtlasRuntimeTraceRecord) {
+  pushRecentTrace(trace);
+  publishWorkerRuntimeMetricsSnapshot();
+}
+
 export function getWorkerRuntimeMetricsSnapshot(): AtlasWorkerRuntimeMetricsSnapshot {
   const startedAt = new Date(workerRuntimeMetricsState.startedAt);
   const queues = Array.from(workerRuntimeMetricsState.queues.values()).sort((left, right) =>
@@ -90,13 +108,21 @@ export function getWorkerRuntimeMetricsSnapshot(): AtlasWorkerRuntimeMetricsSnap
     readyQueueCount: queues.filter((queue) => queue.readyCount > 0).length,
     processedCount: queues.reduce((total, queue) => total + queue.processedCount, 0),
     failedCount: queues.reduce((total, queue) => total + queue.failedCount, 0),
-    queues
+    traceCount: workerRuntimeMetricsState.traceCount,
+    traceCoverageRate: calculateAtlasTraceCoverageRate(
+      queues.reduce((total, queue) => total + queue.processedCount + queue.failedCount, 0),
+      workerRuntimeMetricsState.traceCount
+    ),
+    queues,
+    recentTraces: [...workerRuntimeMetricsState.recentTraces]
   };
 }
 
 export function resetWorkerRuntimeMetrics() {
   workerRuntimeMetricsState.startedAt = new Date().toISOString();
   workerRuntimeMetricsState.queues.clear();
+  workerRuntimeMetricsState.traceCount = 0;
+  workerRuntimeMetricsState.recentTraces = [];
   publishWorkerRuntimeMetricsSnapshot();
 }
 

@@ -231,7 +231,8 @@ export async function runObservabilityAutomationAction(formData: FormData) {
       reason: toTextValue(formData.get("reason")),
       minimumSeverity:
         minimumSeverity === "critical" || minimumSeverity === "warning" ? minimumSeverity : "info",
-      dispatchAlerts: toBooleanValue(formData.get("dispatchAlerts"))
+      dispatchAlerts: toBooleanValue(formData.get("dispatchAlerts")),
+      triggerIncidents: toBooleanValue(formData.get("triggerIncidents"))
     });
     revalidatePath("/operator/alerts");
     revalidatePath("/operator/rollout");
@@ -239,8 +240,10 @@ export async function runObservabilityAutomationAction(formData: FormData) {
       "/operator/alerts",
       "Observability automation completed",
       result.dispatch
-        ? `Atlas captured telemetry and dispatched ${result.dispatch.dispatchedAlertCount} alerts automatically.`
-        : "Atlas captured telemetry and completed the repo-owned automation report without external dispatch."
+        ? `Atlas captured telemetry, ${result.incidentTriggers ? `synced ${result.incidentTriggers.activeCount} active incidents, ` : ""}and dispatched ${result.dispatch.dispatchedAlertCount} alerts automatically.`
+        : result.incidentTriggers
+          ? `Atlas captured telemetry and synced ${result.incidentTriggers.activeCount} active incidents without external dispatch.`
+          : "Atlas captured telemetry without external dispatch or incident syncing."
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Observability automation failed", normalizeActionError(error), "error");

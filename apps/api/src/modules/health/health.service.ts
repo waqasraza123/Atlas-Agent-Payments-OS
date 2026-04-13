@@ -4,6 +4,7 @@ import {
   appRuntime,
   atlasProduct,
   createAtlasReleaseManifest,
+  observabilityRuntime,
   storageRuntime,
   validateAtlasRuntimeConfiguration,
   workerRuntime
@@ -14,7 +15,7 @@ import {
   type AtlasIncidentReadinessRecord
 } from "@atlas/domain";
 import { getApiRuntimeTelemetryRecord, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
-import { getOperatorOverview, readPublishedWorkerTelemetry } from "@atlas/database";
+import { getOperatorOverview, listObservabilityIncidentTriggers, readPublishedWorkerTelemetry } from "@atlas/database";
 import { prisma } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import type { AtlasActorContext } from "@atlas/auth";
@@ -232,6 +233,15 @@ export class HealthService {
           recentNotifications: [],
           recentAuditEvents: []
         };
+    const activeIncidentTriggers = actor
+      ? await listObservabilityIncidentTriggers(
+          actor,
+          {
+            limit: 50,
+            status: "ACTIVE"
+          }
+        )
+      : [];
     const workerTelemetry = readPublishedWorkerTelemetry();
     const alerts = buildAtlasObservabilityAlerts({
       metrics,
@@ -245,12 +255,19 @@ export class HealthService {
       releaseStage: appRuntime.releaseStage,
       configurationStatus: metrics.configurationStatus,
       hasRequestCorrelation: true,
+      hasDistributedTracing:
+        metrics.traceCoverageRate === 1 &&
+        (!workerTelemetry.snapshot ||
+          workerTelemetry.snapshot.processedCount === 0 ||
+          workerTelemetry.snapshot.traceCoverageRate === 1),
       hasMetricsEndpoint: true,
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      hasAutomatedIncidentTriggers: observabilityRuntime.automationTriggerIncidents,
       workerTelemetryStatus: workerTelemetry.status,
-      activeAlertCount: alerts.length
+      activeAlertCount: alerts.length,
+      activeIncidentTriggerCount: activeIncidentTriggers.length
     });
   }
 }

@@ -9,10 +9,12 @@ This runbook defines the repo-level operational baseline that now exists after t
 - structured runtime config for app environment, release stage, log level, and healthcheck timeout
 - structured JSON logging for API and worker runtime events
 - API request correlation through `x-atlas-request-id`
+- API trace propagation through `x-atlas-trace-id`, `x-atlas-span-id`, and `traceparent`
 - API live, startup, readiness, and metrics endpoints under `/health`
 - operator observability routes for metrics, alerts, and incident readiness
 - retained observability snapshot capture plus persisted snapshot and dispatch history on `/operator/alerts`
 - shared API and worker runtime snapshots plus worker telemetry visibility on `/operator/alerts`
+- recent API and worker trace visibility plus incident-trigger visibility on `/operator/alerts`
 - release verification script through `pnpm verify:release`
 - runtime smoke verification script through `pnpm verify:ops`
 - environment-template validation through `pnpm verify:env`
@@ -23,6 +25,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - GitHub Actions promotion dispatch and AWS Secrets Manager rotation dispatch through the rollout adapters
 - governed external alert dispatch through owned generic-webhook and Slack webhook adapters plus `ALERT_DISPATCH` operational integrations
 - repo-owned observability automation through `pnpm observability:automation`
+- durable incident-trigger sync plus incident report artifact generation through observability automation
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
 
@@ -51,12 +54,16 @@ With the API running:
 - `HEALTHCHECK_TIMEOUT_MS`
 - `API_BASE_URL`
 - `NEXT_PUBLIC_APP_URL`
+- `OBSERVABILITY_TRACE_HISTORY_LIMIT`
+- `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
+- `OBSERVABILITY_INCIDENT_REPORT_DIR`
+- `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
 
 ## Known Gaps
 
 - readiness still depends on local database, Redis, and object storage availability
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
-- observability now includes runtime metrics and operator alert posture, but not full tracing, external dispatch, or retained telemetry
-- observability now includes shared worker telemetry and repo-owned automation, but not distributed tracing, deeper correlation, or automated incident triggers
+- observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, and durable incident triggers, but not long-term telemetry retention or third-party APM ownership
+- observability automation can sync durable incident triggers, but there is still no timer-driven scheduler or external paging path
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

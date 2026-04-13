@@ -3,11 +3,13 @@ import { listAtlasQueueDefinitions } from "@atlas/domain";
 import { workerEnv } from "./env";
 import { log } from "./lib/logger";
 import { createRedisConnection } from "./lib/redis";
+import { createWorkerJobTraceContext } from "./lib/trace-context";
 import {
   getWorkerRuntimeMetricsSnapshot,
   recordWorkerQueueFailed,
   recordWorkerQueueProcessed,
-  recordWorkerQueueReady
+  recordWorkerQueueReady,
+  recordWorkerTrace
 } from "./lib/runtime-metrics";
 import { getAtlasQueueProcessor } from "./processors";
 
@@ -36,12 +38,54 @@ function createQueueBindings(connection: ConnectionOptions): AtlasQueueBinding[]
     const worker = new Worker(
       definition.name,
       async (job, token) => {
+        const traceContext = createWorkerJobTraceContext(job);
+        const startedAtIso = new Date().toISOString();
+        const startedAt = Date.now();
+
         try {
           const result = await processor(job, token);
           recordWorkerQueueProcessed(definition.key, definition.name);
+          recordWorkerTrace({
+            traceId: traceContext.traceId,
+            spanId: traceContext.spanId,
+            parentSpanId: traceContext.parentSpanId,
+            sourceService: "worker",
+            origin: "job",
+            name: definition.name,
+            status: "ok",
+            requestId: traceContext.requestId,
+            method: null,
+            path: null,
+            queueKey: definition.key,
+            queueName: definition.name,
+            jobId: job.id?.toString() ?? null,
+            attempt: job.attemptsStarted,
+            startedAt: startedAtIso,
+            endedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt
+          });
           return result;
         } catch (error) {
           recordWorkerQueueFailed(definition.key, definition.name);
+          recordWorkerTrace({
+            traceId: traceContext.traceId,
+            spanId: traceContext.spanId,
+            parentSpanId: traceContext.parentSpanId,
+            sourceService: "worker",
+            origin: "job",
+            name: definition.name,
+            status: "error",
+            requestId: traceContext.requestId,
+            method: null,
+            path: null,
+            queueKey: definition.key,
+            queueName: definition.name,
+            jobId: job.id?.toString() ?? null,
+            attempt: job.attemptsStarted,
+            startedAt: startedAtIso,
+            endedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt
+          });
           throw error;
         }
       },
@@ -59,10 +103,15 @@ function createQueueBindings(connection: ConnectionOptions): AtlasQueueBinding[]
     });
 
     worker.on("failed", (job, error) => {
+      const tracePayload =
+        job?.data && typeof job.data === "object" && !Array.isArray(job.data)
+          ? ((job.data as Record<string, unknown>).trace as { traceId?: unknown } | undefined)
+          : undefined;
       log("queue job failed", {
         queueKey: definition.key,
         queueName: definition.name,
         jobId: job?.id,
+        traceId: typeof tracePayload?.traceId === "string" ? tracePayload.traceId : null,
         error: error.message
       });
     });

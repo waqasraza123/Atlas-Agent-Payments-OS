@@ -1195,6 +1195,26 @@ const databaseMock = vi.hoisted(() => ({
       operationalIntegrationId: "integration-1"
     }
   ]),
+  listObservabilityIncidentTriggers: vi.fn(async () => [
+    {
+      id: "incident-trigger-1",
+      dedupeKey: "staging:operator-critical-cases",
+      appEnv: "staging",
+      releaseStage: "private-beta",
+      source: "operator",
+      severity: "critical",
+      status: "ACTIVE",
+      title: "Critical operator cases are open",
+      summary: "1 critical case currently requires immediate investigation.",
+      alertIds: ["operator-critical-cases"],
+      traceIds: ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      actorUserEmail: "operator-admin@atlas.local",
+      reportPath: "/tmp/observability-incident.json",
+      resolvedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ]),
   readPublishedWorkerTelemetry: vi.fn(() => ({
     status: "warning",
     summary: "1 worker job failures are currently recorded.",
@@ -1212,6 +1232,8 @@ const databaseMock = vi.hoisted(() => ({
       readyQueueCount: 2,
       processedCount: 12,
       failedCount: 1,
+      traceCount: 12,
+      traceCoverageRate: 1,
       queues: [
         {
           key: "payments-execution",
@@ -1222,7 +1244,8 @@ const databaseMock = vi.hoisted(() => ({
           lastProcessedAt: new Date().toISOString(),
           lastFailedAt: new Date().toISOString()
         }
-      ]
+      ],
+      recentTraces: []
     }
   }))
 }));
@@ -1266,6 +1289,7 @@ vi.mock("@atlas/database", async () => {
     listOperationalIntegrations: databaseMock.listOperationalIntegrations,
     listObservabilitySnapshots: databaseMock.listObservabilitySnapshots,
     listObservabilityAlertDispatches: databaseMock.listObservabilityAlertDispatches,
+    listObservabilityIncidentTriggers: databaseMock.listObservabilityIncidentTriggers,
     readPublishedWorkerTelemetry: databaseMock.readPublishedWorkerTelemetry,
     listAtlasRolloutAutomationSummary: databaseMock.listAtlasRolloutAutomationSummary,
     listAtlasRestoreDrillReports: databaseMock.listAtlasRestoreDrillReports,
@@ -1394,6 +1418,8 @@ describe("atlas api e2e", () => {
     expect(response.body.service).toBe("api");
     expect(response.body.appEnv).toEqual(expect.any(String));
     expect(response.headers["x-atlas-request-id"]).toEqual(expect.any(String));
+    expect(response.headers["x-atlas-trace-id"]).toMatch(/^[0-9a-f]{32}$/);
+    expect(response.headers["traceparent"]).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
   });
 
   it("serves live, startup, and readiness operations endpoints", async () => {
@@ -2459,6 +2485,9 @@ describe("atlas api e2e", () => {
     const dispatchesResponse = await request(app.getHttpServer())
       .get("/observability/dispatches")
       .set("x-atlas-local-session", "local-token");
+    const incidentTriggersResponse = await request(app.getHttpServer())
+      .get("/observability/incident-triggers")
+      .set("x-atlas-local-session", "local-token");
 
     expect(summaryResponse.status).toBe(200);
     expect(summaryResponse.body.module.key).toBe("observability");
@@ -2494,6 +2523,13 @@ describe("atlas api e2e", () => {
       expect.objectContaining({
         id: "dispatch-1",
         provider: "generic-webhook"
+      })
+    ]);
+    expect(incidentTriggersResponse.status).toBe(200);
+    expect(incidentTriggersResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "incident-trigger-1",
+        status: "ACTIVE"
       })
     ]);
   });

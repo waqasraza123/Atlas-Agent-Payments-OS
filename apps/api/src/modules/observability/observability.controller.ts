@@ -16,6 +16,7 @@ export class ObservabilityController {
     this.worker = this.worker.bind(this);
     this.snapshots = this.snapshots.bind(this);
     this.dispatches = this.dispatches.bind(this);
+    this.incidentTriggers = this.incidentTriggers.bind(this);
   }
 
   @Get("summary")
@@ -57,5 +58,11 @@ export class ObservabilityController {
   @RequireRoles("OWNER", "ADMIN", "OPERATOR")
   dispatches(@CurrentActor() actor: AtlasActorContext) {
     return this.observabilityService.listDispatches(actor);
+  }
+
+  @Get("incident-triggers")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  incidentTriggers(@CurrentActor() actor: AtlasActorContext) {
+    return this.observabilityService.listIncidentTriggers(actor);
   }
 }

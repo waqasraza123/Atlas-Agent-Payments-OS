@@ -3,6 +3,7 @@ import { buildAtlasObservabilityAlerts } from "@atlas/domain";
 import {
   getOperatorOverview,
   listObservabilityAlertDispatches,
+  listObservabilityIncidentTriggers,
   listObservabilitySnapshots,
   readPublishedWorkerTelemetry
 } from "@atlas/database";
@@ -58,6 +59,14 @@ export class ObservabilityService {
   async listDispatches(actor: AtlasActorContext) {
     return {
       items: await listObservabilityAlertDispatches(actor, {
+        limit: 12
+      })
+    };
+  }
+
+  async listIncidentTriggers(actor: AtlasActorContext) {
+    return {
+      items: await listObservabilityIncidentTriggers(actor, {
         limit: 12
       })
     };

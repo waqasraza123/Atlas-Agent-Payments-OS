@@ -39,12 +39,15 @@ function createMetrics(): AtlasApiRuntimeTelemetryRecord {
     totalRequests: 42,
     successCount: 38,
     errorCount: 4,
+    tracedRequestCount: 42,
+    traceCoverageRate: 1,
     averageDurationMs: 24,
     maxDurationMs: 120,
     inFlightRequests: 1,
     lastReadinessStatus: "ready",
     lastReadinessAt: "2026-04-13T00:05:00.000Z",
     routeMetrics: [],
+    recentTraces: [],
     configurationStatus: "valid",
     verificationCommand: "pnpm verify:release",
     revision: "rev-123",
@@ -137,6 +140,17 @@ describe("observability operations", () => {
             createdAt: new Date("2026-04-13T00:10:00.000Z")
           }
         ])
+      },
+      observabilityIncidentTrigger: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        update: vi.fn()
+      },
+      notification: {
+        upsert: vi.fn()
+      },
+      auditEvent: {
+        create: vi.fn()
       }
     } as const;
 
@@ -201,6 +215,17 @@ describe("observability operations", () => {
           }
         ])
       },
+      observabilityIncidentTrigger: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        update: vi.fn()
+      },
+      notification: {
+        upsert: vi.fn()
+      },
+      auditEvent: {
+        create: vi.fn()
+      },
       operationalIntegration: {
         findMany: vi.fn(async () => [
           {
@@ -255,5 +280,142 @@ describe("observability operations", () => {
       provider: "generic-webhook",
       minimumSeverity: "warning"
     });
+  });
+
+  it("syncs durable observability incident triggers from active alerts", async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), "atlas-observability-incidents-"));
+    vi.stubEnv("APP_ENV", "staging");
+    vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", sandbox);
+
+    const client = {
+      observabilityIncidentTrigger: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "incident-old",
+              dedupeKey: "staging:worker-queue-failures",
+              appEnv: "staging",
+              releaseStage: "private-beta",
+              source: "runtime",
+              severity: "critical",
+              status: "ACTIVE",
+              title: "Worker queue failures require review",
+              summary: "6 worker failures were recorded.",
+              alertIds: ["worker-queue-failures"],
+              traceIds: [],
+              actorUserEmail: "operator-admin@atlas.local",
+              reportPath: join(sandbox, "incident-old.json"),
+              payload: null,
+              resolvedAt: null,
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+              updatedAt: new Date("2026-04-13T00:00:00.000Z")
+            }
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: "incident-new",
+              dedupeKey: "staging:operator-critical-cases",
+              appEnv: "staging",
+              releaseStage: "private-beta",
+              source: "operator",
+              severity: "critical",
+              status: "ACTIVE",
+              title: "Critical operator cases are open",
+              summary: "1 critical case currently requires immediate investigation.",
+              alertIds: ["operator-critical-cases"],
+              traceIds: ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+              actorUserEmail: "operator-admin@atlas.local",
+              reportPath: join(sandbox, "incident-new.json"),
+              payload: null,
+              resolvedAt: null,
+              createdAt: new Date("2026-04-13T00:15:00.000Z"),
+              updatedAt: new Date("2026-04-13T00:15:00.000Z")
+            }
+          ]),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "incident-new",
+          ...data,
+          resolvedAt: null,
+          createdAt: new Date("2026-04-13T00:15:00.000Z"),
+          updatedAt: new Date("2026-04-13T00:15:00.000Z")
+        })),
+        update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
+          id: where.id,
+          dedupeKey: where.id === "incident-old" ? "staging:worker-queue-failures" : "staging:operator-critical-cases",
+          appEnv: "staging",
+          releaseStage: "private-beta",
+          source: "runtime",
+          severity: "critical",
+          status: data.status ?? "ACTIVE",
+          title: "Worker queue failures require review",
+          summary: "6 worker failures were recorded.",
+          alertIds: ["worker-queue-failures"],
+          traceIds: [],
+          actorUserEmail: "operator-admin@atlas.local",
+          reportPath: join(sandbox, "incident-old.json"),
+          payload: null,
+          resolvedAt: data.resolvedAt ?? null,
+          createdAt: new Date("2026-04-13T00:00:00.000Z"),
+          updatedAt: new Date("2026-04-13T00:20:00.000Z")
+        }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const { syncObservabilityIncidentTriggers } = await import("./observability-operations");
+    const result = await syncObservabilityIncidentTriggers(
+      {
+        actor: createActor(),
+        minimumSeverity: "critical",
+        reason: "Sync active incidents after reviewing the current runtime posture.",
+        alerts: [createAlerts()[1]],
+        metrics: {
+          ...createMetrics(),
+          recentTraces: [
+            {
+              traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              spanId: "bbbbbbbbbbbbbbbb",
+              parentSpanId: null,
+              sourceService: "api",
+              origin: "http",
+              name: "GET /health",
+              status: "ok",
+              requestId: "request-1",
+              method: "GET",
+              path: "/health",
+              queueKey: null,
+              queueName: null,
+              jobId: null,
+              attempt: null,
+              startedAt: "2026-04-13T00:00:00.000Z",
+              endedAt: "2026-04-13T00:00:00.050Z",
+              durationMs: 50
+            }
+          ]
+        },
+        incidentReadiness: createIncidentReadiness(),
+        workerTelemetry: {
+          status: "healthy",
+          summary: "Shared worker telemetry is current and all queues have reported readiness.",
+          snapshotPath: null,
+          recordedAt: null,
+          staleAfterMinutes: 10,
+          snapshot: null
+        }
+      },
+      client as never
+    );
+
+    expect(result.activeCount).toBe(1);
+    expect(result.createdCount).toBe(1);
+    expect(result.resolvedCount).toBe(1);
+    expect(client.notification.upsert).toHaveBeenCalledTimes(2);
+    expect(client.auditEvent.create).toHaveBeenCalledTimes(2);
   });
 });

@@ -319,6 +319,7 @@ export const observabilityRuntime = {
     process.env.OBSERVABILITY_RUNTIME_SNAPSHOT_DIR,
     "operations-artifacts/observability/runtime"
   ),
+  traceHistoryLimit: readNumber(process.env.OBSERVABILITY_TRACE_HISTORY_LIMIT, 20),
   workerTelemetryStaleAfterMinutes: readNumber(process.env.OBSERVABILITY_WORKER_STALE_AFTER_MINUTES, 10),
   alertDispatchMode: readCommandAdapterMode(process.env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run"),
   alertDispatchProvider: readAlertDispatchProvider(process.env.OBSERVABILITY_ALERT_DISPATCH_PROVIDER),
@@ -331,11 +332,21 @@ export const observabilityRuntime = {
     process.env.OBSERVABILITY_AUTOMATION_REPORT_DIR,
     "operations-artifacts/observability/automation"
   ),
+  incidentReportDirectory: readText(
+    process.env.OBSERVABILITY_INCIDENT_REPORT_DIR,
+    "operations-artifacts/observability/incidents"
+  ),
   automationDefaultMinimumSeverity: (() => {
     const severity = readText(process.env.OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY, "warning");
 
     return severity === "critical" || severity === "info" ? severity : "warning";
   })(),
+  incidentMinimumSeverity: (() => {
+    const severity = readText(process.env.OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY, "critical");
+
+    return severity === "warning" || severity === "info" ? severity : "critical";
+  })(),
+  automationTriggerIncidents: readBoolean(process.env.OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS, true),
   alertDispatchWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL),
   alertDispatchSlackWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL)
 } as const;

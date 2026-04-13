@@ -15,6 +15,7 @@ describe("atlas config", () => {
       canAtlasPromoteEnvironment,
       deploymentAutomationRuntime,
       deploymentRuntime,
+      observabilityRuntime,
       operationsRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
@@ -73,6 +74,10 @@ describe("atlas config", () => {
       "STRIPE_WEBHOOK_SECRET",
       "MINIO_SECRET_KEY"
     ]);
+    expect(observabilityRuntime.traceHistoryLimit).toBe(20);
+    expect(observabilityRuntime.incidentReportDirectory).toBe("operations-artifacts/observability/incidents");
+    expect(observabilityRuntime.incidentMinimumSeverity).toBe("critical");
+    expect(observabilityRuntime.automationTriggerIncidents).toBe(true);
     expect(
       createAtlasStructuredLogPayload("api", "info", "booted", {
         requestId: "req-1"
@@ -403,6 +408,7 @@ describe("atlas config", () => {
     vi.stubEnv("OBSERVABILITY_TELEMETRY_RETENTION_DAYS", "45");
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", "operations-artifacts/observability/snapshots");
     vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", "operations-artifacts/observability/runtime");
+    vi.stubEnv("OBSERVABILITY_TRACE_HISTORY_LIMIT", "30");
     vi.stubEnv("OBSERVABILITY_WORKER_STALE_AFTER_MINUTES", "15");
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_MODE", "command");
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_PROVIDER", "generic-webhook");
@@ -410,6 +416,9 @@ describe("atlas config", () => {
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", "operations-artifacts/observability/dispatches");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", "operations-artifacts/observability/automation");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "critical");
+    vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", "operations-artifacts/observability/incidents");
+    vi.stubEnv("OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY", "warning");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS", "false");
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL", "https://alerts.atlas.local/webhook");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_ENABLED", "true");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_KEY", "BASE_MAINNET");
@@ -487,11 +496,15 @@ describe("atlas config", () => {
     expect(deploymentAutomationRuntime.provider).toBe("github-actions");
     expect(observabilityRuntime.telemetryRetentionDays).toBe(45);
     expect(observabilityRuntime.runtimeSnapshotDirectory).toBe("operations-artifacts/observability/runtime");
+    expect(observabilityRuntime.traceHistoryLimit).toBe(30);
     expect(observabilityRuntime.workerTelemetryStaleAfterMinutes).toBe(15);
     expect(observabilityRuntime.alertDispatchMode).toBe("command");
     expect(observabilityRuntime.alertDispatchProvider).toBe("generic-webhook");
     expect(observabilityRuntime.automationReportDirectory).toBe("operations-artifacts/observability/automation");
     expect(observabilityRuntime.automationDefaultMinimumSeverity).toBe("critical");
+    expect(observabilityRuntime.incidentReportDirectory).toBe("operations-artifacts/observability/incidents");
+    expect(observabilityRuntime.incidentMinimumSeverity).toBe("warning");
+    expect(observabilityRuntime.automationTriggerIncidents).toBe(false);
     expect(observabilityRuntime.alertDispatchWebhookUrl).toBe("https://alerts.atlas.local/webhook");
     expect(operationsRuntime.proofStorageMode).toBe("s3-compatible");
     expect(operationsRuntime.proofStoragePrefix).toBe("rollout-proof/staging");
