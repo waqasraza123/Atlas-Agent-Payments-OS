@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@atlas/auth": "workspace:*",
+    "@atlas/config": "workspace:*",
     "@atlas/domain": "workspace:*",
     "@atlas/types": "workspace:*",
     "@aws-sdk/client-s3": "^3.1029.0",

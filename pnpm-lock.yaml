@@ -176,6 +176,9 @@ importers:
       '@atlas/auth':
         specifier: workspace:*
         version: link:../auth
+      '@atlas/config':
+        specifier: workspace:*
+        version: link:../config
       '@atlas/domain':
         specifier: workspace:*
         version: link:../domain

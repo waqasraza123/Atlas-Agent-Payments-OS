@@ -119,6 +119,7 @@ describe("actor resolution service", () => {
   });
 
   it("resolves a support session into a target tenant while preserving operator principal context", async () => {
+    vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
     const { ActorResolutionService } = await import("../src/modules/actor/actor.service");
 
     prismaMock.membership.findFirst.mockResolvedValue({
@@ -140,8 +141,8 @@ describe("actor resolution service", () => {
       id: "grant-support-1",
       issuedByOrganizationId: "org-operator",
       status: "ACTIVE",
-      expiresAt: new Date("2026-04-13T01:00:00.000Z"),
-      reviewExpiresAt: new Date("2026-04-12T18:00:00.000Z"),
+      expiresAt: new Date("2027-04-13T01:00:00.000Z"),
+      reviewExpiresAt: new Date("2027-04-12T18:00:00.000Z"),
       issuedByUser: {
         email: "operator@atlas.local"
       },
