@@ -400,6 +400,13 @@ describe("atlas config", () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW", "deploy-staging");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_REF", "main");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_GITHUB_API_URL", "https://api.github.com");
+    vi.stubEnv("OBSERVABILITY_TELEMETRY_RETENTION_DAYS", "45");
+    vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", "operations-artifacts/observability/snapshots");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_MODE", "command");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_PROVIDER", "generic-webhook");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_COMMAND", "atlas-alert-dispatch --payload \"$ATLAS_OPERATION_PAYLOAD\"");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", "operations-artifacts/observability/dispatches");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL", "https://alerts.atlas.local/webhook");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_ENABLED", "true");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_KEY", "BASE_MAINNET");
     vi.stubEnv("PROGRAMMABLE_SETTLEMENT_CHAIN_ID", "8453");
@@ -414,6 +421,7 @@ describe("atlas config", () => {
       authRuntime,
       deploymentAutomationRuntime,
       deploymentRuntime,
+      observabilityRuntime,
       operationsRuntime,
       paymentRuntime,
       programmableSettlementRuntime,
@@ -473,6 +481,10 @@ describe("atlas config", () => {
     expect(secretRotationRuntime.provider).toBe("aws-secrets-manager");
     expect(deploymentAutomationRuntime.mode).toBe("command");
     expect(deploymentAutomationRuntime.provider).toBe("github-actions");
+    expect(observabilityRuntime.telemetryRetentionDays).toBe(45);
+    expect(observabilityRuntime.alertDispatchMode).toBe("command");
+    expect(observabilityRuntime.alertDispatchProvider).toBe("generic-webhook");
+    expect(observabilityRuntime.alertDispatchWebhookUrl).toBe("https://alerts.atlas.local/webhook");
     expect(operationsRuntime.proofStorageMode).toBe("s3-compatible");
     expect(operationsRuntime.proofStoragePrefix).toBe("rollout-proof/staging");
     expect(operationsRuntime.restoreDrillMaxAgeHours).toBe(168);
@@ -592,6 +604,9 @@ describe("atlas config", () => {
     vi.stubEnv("DEPLOYMENT_AUTOMATION_MODE", "command");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_PROVIDER", "github-actions");
     vi.stubEnv("DEPLOYMENT_AUTOMATION_COMMAND", "deploy-command");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_MODE", "command");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_PROVIDER", "generic-webhook");
+    vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_COMMAND", "alert-command");
 
     const { validateAtlasRuntimeConfiguration } = await import("./index");
     const result = validateAtlasRuntimeConfiguration("api");
@@ -608,6 +623,7 @@ describe("atlas config", () => {
         "SECRET_ROTATION_AWS_PREFIX",
         "DEPLOYMENT_AUTOMATION_GITHUB_REPOSITORY",
         "DEPLOYMENT_AUTOMATION_GITHUB_WORKFLOW",
+        "OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL",
         "MINIO_REGION",
         "MINIO_BUCKET_OPERATIONS"
       ])
@@ -674,7 +690,8 @@ describe("atlas config", () => {
       AUTH_UPSTREAM_IDENTITY_MODE: "command",
       RESTORE_DRILL_MODE: "command",
       SECRET_ROTATION_MODE: "command",
-      DEPLOYMENT_AUTOMATION_MODE: "command"
+      DEPLOYMENT_AUTOMATION_MODE: "command",
+      OBSERVABILITY_ALERT_DISPATCH_MODE: "command"
     });
 
     expect(result.issues.map((issue) => issue.variable)).toEqual(
@@ -682,7 +699,8 @@ describe("atlas config", () => {
         "AUTH_UPSTREAM_IDENTITY_COMMAND",
         "RESTORE_DRILL_COMMAND",
         "SECRET_ROTATION_COMMAND",
-        "DEPLOYMENT_AUTOMATION_COMMAND"
+        "DEPLOYMENT_AUTOMATION_COMMAND",
+        "OBSERVABILITY_ALERT_DISPATCH_COMMAND"
       ])
     );
   });

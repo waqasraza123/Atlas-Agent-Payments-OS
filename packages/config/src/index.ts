@@ -38,6 +38,7 @@ const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external
 const atlasCommandAdapterModes = ["dry-run", "command"] as const;
 const atlasOperationalProofStorageModes = ["disabled", "s3-compatible"] as const;
 const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
+const atlasAlertDispatchProviders = ["generic-webhook", "slack-webhook"] as const;
 const atlasRestoreDrillProviders = ["local-psql", "ssh-postgres", "kubernetes-job"] as const;
 const atlasSecretRotationProviders = ["generic-secret-manager", "aws-secrets-manager", "hashicorp-vault"] as const;
 const atlasDeploymentAutomationProviders = ["generic-deployer", "github-actions", "argo-rollouts"] as const;
@@ -99,6 +100,12 @@ function readUpstreamIdentityProvider(value: string | undefined) {
     : "generic-oidc-admin";
 }
 
+function readAlertDispatchProvider(value: string | undefined) {
+  return atlasAlertDispatchProviders.includes(value as AtlasAlertDispatchProvider)
+    ? (value as AtlasAlertDispatchProvider)
+    : "generic-webhook";
+}
+
 function readRestoreDrillProvider(value: string | undefined) {
   return atlasRestoreDrillProviders.includes(value as AtlasRestoreDrillProvider)
     ? (value as AtlasRestoreDrillProvider)
@@ -128,6 +135,7 @@ export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[numb
 export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
 export type AtlasOperationalProofStorageMode = (typeof atlasOperationalProofStorageModes)[number];
 export type AtlasUpstreamIdentityProvider = (typeof atlasUpstreamIdentityProviders)[number];
+export type AtlasAlertDispatchProvider = (typeof atlasAlertDispatchProviders)[number];
 export type AtlasRestoreDrillProvider = (typeof atlasRestoreDrillProviders)[number];
 export type AtlasSecretRotationProvider = (typeof atlasSecretRotationProviders)[number];
 export type AtlasDeploymentAutomationProvider = (typeof atlasDeploymentAutomationProviders)[number];
@@ -139,7 +147,8 @@ export type AtlasOperationalIntegrationKind =
   | "RESTORE_DRILL"
   | "SECRET_ROTATION"
   | "DEPLOYMENT_AUTOMATION"
-  | "PROOF_STORAGE";
+  | "PROOF_STORAGE"
+  | "ALERT_DISPATCH";
 export type AtlasOperationalIntegrationVerificationStatus = "PENDING" | "VERIFIED" | "STALE" | "FAILED";
 
 export type AtlasStructuredLogPayload = {
@@ -301,6 +310,20 @@ export const deploymentAutomationRuntime = {
   githubApiUrl: readText(process.env.DEPLOYMENT_AUTOMATION_GITHUB_API_URL, "https://api.github.com"),
   argoServer: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_SERVER),
   argoApplication: readOptionalText(process.env.DEPLOYMENT_AUTOMATION_ARGO_APPLICATION)
+} as const;
+
+export const observabilityRuntime = {
+  telemetryRetentionDays: readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30),
+  snapshotDirectory: readText(process.env.OBSERVABILITY_SNAPSHOT_DIR, "operations-artifacts/observability/snapshots"),
+  alertDispatchMode: readCommandAdapterMode(process.env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run"),
+  alertDispatchProvider: readAlertDispatchProvider(process.env.OBSERVABILITY_ALERT_DISPATCH_PROVIDER),
+  alertDispatchCommand: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_COMMAND),
+  alertDispatchReportDirectory: readText(
+    process.env.OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR,
+    "operations-artifacts/observability/dispatches"
+  ),
+  alertDispatchWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL),
+  alertDispatchSlackWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL)
 } as const;
 
 export type AtlasOperationalStoredArtifact = {
@@ -634,6 +657,11 @@ export function validateAtlasRuntimeConfiguration(
       variable: "DEPLOYMENT_AUTOMATION_COMMAND",
       modeVariable: "DEPLOYMENT_AUTOMATION_MODE",
       modeValue: readCommandAdapterMode(env.DEPLOYMENT_AUTOMATION_MODE, "dry-run")
+    },
+    {
+      variable: "OBSERVABILITY_ALERT_DISPATCH_COMMAND",
+      modeVariable: "OBSERVABILITY_ALERT_DISPATCH_MODE",
+      modeValue: readCommandAdapterMode(env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run")
     }
   ];
 
@@ -788,6 +816,28 @@ export function validateAtlasRuntimeConfiguration(
         env,
         "DEPLOYMENT_AUTOMATION_ARGO_APPLICATION",
         "DEPLOYMENT_AUTOMATION_ARGO_APPLICATION is required when DEPLOYMENT_AUTOMATION_PROVIDER=argo-rollouts."
+      );
+    }
+  }
+
+  if (readCommandAdapterMode(env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run") === "command") {
+    const provider = readAlertDispatchProvider(env.OBSERVABILITY_ALERT_DISPATCH_PROVIDER);
+
+    if (provider === "generic-webhook") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL",
+        "OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=generic-webhook."
+      );
+    }
+
+    if (provider === "slack-webhook") {
+      requireRuntimeVariable(
+        issues,
+        env,
+        "OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL",
+        "OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL is required when OBSERVABILITY_ALERT_DISPATCH_PROVIDER=slack-webhook."
       );
     }
   }
@@ -1119,7 +1169,8 @@ export function validateAtlasOperationalIntegrationSnapshot(
     integration.kind !== "RESTORE_DRILL" &&
     integration.kind !== "SECRET_ROTATION" &&
     integration.kind !== "DEPLOYMENT_AUTOMATION" &&
-    integration.kind !== "PROOF_STORAGE"
+    integration.kind !== "PROOF_STORAGE" &&
+    integration.kind !== "ALERT_DISPATCH"
   ) {
     issues.push("Operational integration snapshot must include a valid kind.");
   }

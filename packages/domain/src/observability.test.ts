@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
+  countAtlasObservabilityAlertsBySeverity,
   calculateAtlasApiErrorRate,
+  filterAtlasObservabilityAlertsBySeverity,
   type AtlasApiRuntimeMetricsSnapshot
 } from "./observability";
 
@@ -79,5 +81,38 @@ describe("atlas observability contracts", () => {
     expect(record.overallStatus).toBe("warning");
     expect(record.items.find((item) => item.key === "active-alert-load")?.status).toBe("warning");
     expect(record.items.find((item) => item.key === "rollback-verification")?.status).toBe("ready");
+  });
+
+  it("filters and counts alerts by minimum severity", () => {
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics: createMetricsSnapshot({
+        lastReadinessStatus: "degraded",
+        totalRequests: 40,
+        errorCount: 8
+      }),
+      overview: {
+        openCaseCount: 2,
+        criticalCaseCount: 1,
+        actionRequiredCount: 1,
+        unreadNotificationCount: 3,
+        delayedCaseCount: 1,
+        failedCaseCount: 0,
+        recentCases: [],
+        recentNotifications: [],
+        recentAuditEvents: []
+      },
+      configurationStatus: "valid",
+      releaseStage: "private-beta",
+      generatedAt: "2026-04-12T00:10:00.000Z"
+    });
+
+    const filtered = filterAtlasObservabilityAlertsBySeverity(alerts, "warning");
+
+    expect(filtered.every((alert) => alert.severity === "critical" || alert.severity === "warning")).toBe(true);
+    expect(countAtlasObservabilityAlertsBySeverity(filtered)).toEqual({
+      critical: expect.any(Number),
+      warning: expect.any(Number),
+      info: 0
+    });
   });
 });

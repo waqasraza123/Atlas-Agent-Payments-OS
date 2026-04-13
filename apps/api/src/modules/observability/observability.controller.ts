@@ -13,6 +13,8 @@ export class ObservabilityController {
     this.metrics = this.metrics.bind(this);
     this.alerts = this.alerts.bind(this);
     this.incidents = this.incidents.bind(this);
+    this.snapshots = this.snapshots.bind(this);
+    this.dispatches = this.dispatches.bind(this);
   }
 
   @Get("summary")
@@ -36,5 +38,17 @@ export class ObservabilityController {
   @RequireRoles("OWNER", "ADMIN", "OPERATOR")
   incidents(@CurrentActor() actor: AtlasActorContext) {
     return this.observabilityService.getIncidentReadiness(actor);
+  }
+
+  @Get("snapshots")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR", "FINANCE")
+  snapshots(@CurrentActor() actor: AtlasActorContext) {
+    return this.observabilityService.listSnapshots(actor);
+  }
+
+  @Get("dispatches")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  dispatches(@CurrentActor() actor: AtlasActorContext) {
+    return this.observabilityService.listDispatches(actor);
   }
 }

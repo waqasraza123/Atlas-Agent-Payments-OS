@@ -1,6 +1,10 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { buildAtlasObservabilityAlerts } from "@atlas/domain";
-import { getOperatorOverview } from "@atlas/database";
+import {
+  getOperatorOverview,
+  listObservabilityAlertDispatches,
+  listObservabilitySnapshots
+} from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import { HealthService } from "../health/health.service";
 import { createDomainSummary } from "../shared/domain-summary";
@@ -37,6 +41,22 @@ export class ObservabilityService {
   async getIncidentReadiness(actor: AtlasActorContext) {
     return {
       item: await this.healthService.getIncidentReadiness(actor)
+    };
+  }
+
+  async listSnapshots(actor: AtlasActorContext) {
+    return {
+      items: await listObservabilitySnapshots(actor, {
+        limit: 12
+      })
+    };
+  }
+
+  async listDispatches(actor: AtlasActorContext) {
+    return {
+      items: await listObservabilityAlertDispatches(actor, {
+        limit: 12
+      })
     };
   }
 }

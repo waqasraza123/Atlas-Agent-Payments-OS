@@ -84,13 +84,17 @@ export {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
   calculateAtlasApiErrorRate,
+  countAtlasObservabilityAlertsBySeverity,
+  filterAtlasObservabilityAlertsBySeverity,
   type AtlasApiRouteMetricRecord,
   type AtlasApiRuntimeMetricsSnapshot,
   type AtlasIncidentReadinessItem,
   type AtlasIncidentReadinessRecord,
+  type AtlasObservabilityAlertDispatchRecord,
   type AtlasObservabilityAlertRecord,
   type AtlasObservabilityAlertSeverity,
-  type AtlasObservabilityReleaseStage
+  type AtlasObservabilityReleaseStage,
+  type AtlasObservabilitySnapshotRecord
 } from "./observability";
 export {
   atlasPaymentMaximumAttemptCount,

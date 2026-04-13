@@ -1156,6 +1156,44 @@ const databaseMock = vi.hoisted(() => ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
+  ]),
+  listObservabilitySnapshots: vi.fn(async () => [
+    {
+      id: "snapshot-1",
+      appEnv: "staging",
+      releaseStage: "private-beta",
+      actorUserEmail: "operator-admin@atlas.local",
+      configurationStatus: "valid",
+      readinessStatus: "ready",
+      totalRequests: 42,
+      errorCount: 4,
+      activeAlertCount: 2,
+      criticalAlertCount: 1,
+      reportPath: "/tmp/observability-snapshot.json",
+      storageUrl: null,
+      expiresAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    }
+  ]),
+  listObservabilityAlertDispatches: vi.fn(async () => [
+    {
+      id: "dispatch-1",
+      provider: "generic-webhook",
+      mode: "command",
+      status: "SUCCEEDED",
+      minimumSeverity: "warning",
+      actorUserEmail: "operator-admin@atlas.local",
+      summary: "2 alerts met the warning threshold for staging.",
+      targetReference: "https://alerts.atlas.local/webhook",
+      reportPath: "/tmp/observability-dispatch.json",
+      dispatchedAlertCount: 2,
+      criticalAlertCount: 1,
+      warningAlertCount: 1,
+      infoAlertCount: 0,
+      completedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      operationalIntegrationId: "integration-1"
+    }
   ])
 }));
 
@@ -1196,6 +1234,8 @@ vi.mock("@atlas/database", async () => {
     verifyOrganizationWallet: databaseMock.verifyOrganizationWallet,
     listExternalIdentityAssignments: databaseMock.listExternalIdentityAssignments,
     listOperationalIntegrations: databaseMock.listOperationalIntegrations,
+    listObservabilitySnapshots: databaseMock.listObservabilitySnapshots,
+    listObservabilityAlertDispatches: databaseMock.listObservabilityAlertDispatches,
     listAtlasRolloutAutomationSummary: databaseMock.listAtlasRolloutAutomationSummary,
     listAtlasRestoreDrillReports: databaseMock.listAtlasRestoreDrillReports,
     listAtlasSecretRotationExecutionReports: databaseMock.listAtlasSecretRotationExecutionReports,
@@ -2379,6 +2419,12 @@ describe("atlas api e2e", () => {
     const incidentsResponse = await request(app.getHttpServer())
       .get("/observability/incidents")
       .set("x-atlas-local-session", "local-token");
+    const snapshotsResponse = await request(app.getHttpServer())
+      .get("/observability/snapshots")
+      .set("x-atlas-local-session", "local-token");
+    const dispatchesResponse = await request(app.getHttpServer())
+      .get("/observability/dispatches")
+      .set("x-atlas-local-session", "local-token");
 
     expect(summaryResponse.status).toBe(200);
     expect(summaryResponse.body.module.key).toBe("observability");
@@ -2394,6 +2440,20 @@ describe("atlas api e2e", () => {
       overallStatus: expect.any(String),
       items: expect.any(Array)
     });
+    expect(snapshotsResponse.status).toBe(200);
+    expect(snapshotsResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "snapshot-1",
+        activeAlertCount: 2
+      })
+    ]);
+    expect(dispatchesResponse.status).toBe(200);
+    expect(dispatchesResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: "dispatch-1",
+        provider: "generic-webhook"
+      })
+    ]);
   });
 
   it("serves operator rollout routes", async () => {

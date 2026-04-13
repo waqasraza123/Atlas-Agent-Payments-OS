@@ -50,6 +50,42 @@ export type AtlasObservabilityAlertRecord = {
   updatedAt: string;
 };
 
+export type AtlasObservabilitySnapshotRecord = {
+  id: string;
+  appEnv: string;
+  releaseStage: string;
+  actorUserEmail: string;
+  configurationStatus: "valid" | "invalid";
+  readinessStatus: "ready" | "degraded" | "unknown";
+  totalRequests: number;
+  errorCount: number;
+  activeAlertCount: number;
+  criticalAlertCount: number;
+  reportPath: string;
+  storageUrl: string | null;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type AtlasObservabilityAlertDispatchRecord = {
+  id: string;
+  provider: string;
+  mode: "dry-run" | "command";
+  status: "SUCCEEDED" | "FAILED";
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  actorUserEmail: string;
+  summary: string;
+  targetReference: string | null;
+  reportPath: string;
+  dispatchedAlertCount: number;
+  criticalAlertCount: number;
+  warningAlertCount: number;
+  infoAlertCount: number;
+  completedAt: string;
+  createdAt: string;
+  operationalIntegrationId: string | null;
+};
+
 export type AtlasIncidentReadinessItem = {
   key: string;
   label: string;
@@ -71,6 +107,10 @@ type AtlasObservabilityAlertInput = {
   releaseStage: AtlasObservabilityReleaseStage;
   generatedAt?: string;
 };
+
+function createSeverityRank(severity: AtlasObservabilityAlertSeverity) {
+  return severity === "critical" ? 0 : severity === "warning" ? 1 : 2;
+}
 
 function roundMetric(value: number) {
   return Number(value.toFixed(2));
@@ -199,14 +239,38 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
   }
 
   return alerts.sort((left, right) => {
-    const severityOrder: Record<AtlasObservabilityAlertSeverity, number> = {
-      critical: 0,
-      warning: 1,
-      info: 2
-    };
-
-    return severityOrder[left.severity] - severityOrder[right.severity];
+    return createSeverityRank(left.severity) - createSeverityRank(right.severity);
   });
+}
+
+export function filterAtlasObservabilityAlertsBySeverity(
+  alerts: AtlasObservabilityAlertRecord[],
+  minimumSeverity: AtlasObservabilityAlertSeverity
+) {
+  const minimumRank = createSeverityRank(minimumSeverity);
+
+  return alerts.filter((alert) => createSeverityRank(alert.severity) <= minimumRank);
+}
+
+export function countAtlasObservabilityAlertsBySeverity(alerts: AtlasObservabilityAlertRecord[]) {
+  return alerts.reduce(
+    (counts, alert) => {
+      if (alert.severity === "critical") {
+        counts.critical += 1;
+      } else if (alert.severity === "warning") {
+        counts.warning += 1;
+      } else {
+        counts.info += 1;
+      }
+
+      return counts;
+    },
+    {
+      critical: 0,
+      warning: 0,
+      info: 0
+    }
+  );
 }
 
 export function buildAtlasIncidentReadinessRecord(input: {

@@ -113,5 +113,6 @@ These are placeholders for tracked future work, not current claims:
 - stronger operator access constraints
 - support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
 - stored non-local restore proof ownership
+- bounded observability retention and externally dispatched alert evidence must remain operator-owned and reviewable
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

@@ -17,6 +17,8 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
   - `GET /observability/metrics`
   - `GET /observability/alerts`
   - `GET /observability/incidents`
+  - `GET /observability/snapshots`
+  - `GET /observability/dispatches`
 
 ## Current Metrics Scope
 
@@ -48,8 +50,8 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
 ## Current Limitations
 
 - metrics are in-memory and process-local
-- there is no long-term metrics retention yet
-- there is no external alert dispatcher yet
+- retained telemetry is operator-captured and stored as bounded repo-owned snapshots rather than continuous time-series history
+- external alert dispatch is operator-triggered and currently limited to the owned generic-webhook and Slack webhook adapters
 - worker metrics are log-visible but not yet exposed through a shared metrics endpoint
 - dashboards are operator-facing product surfaces, not a replacement for future APM tooling
 
@@ -58,3 +60,5 @@ Define the minimum observability posture that Atlas now ships in-repo for broade
 - `pnpm verify:ops`
 - `curl -s http://localhost:4000/health/metrics`
 - `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/alerts`
+- `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/snapshots`
+- `curl -H "x-atlas-local-session: <token>" http://localhost:4000/observability/dispatches`

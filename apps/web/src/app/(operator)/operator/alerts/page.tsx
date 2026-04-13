@@ -1,12 +1,17 @@
 import { DetailGrid, MetricCard, PageHeader, RecordListPanel, StatePanel } from "@atlas/ui";
+import { WorkflowFormField } from "@/components/workflow-form-field";
+import { WorkflowFormPanel } from "@/components/workflow-form-panel";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import {
   createOperatorAlertItems,
+  createOperatorDispatchItems,
   createOperatorIncidentItems,
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
+  createOperatorSnapshotItems,
   loadOperatorObservabilityData
 } from "@/lib/server/operator-observability";
+import { captureObservabilitySnapshotAction, dispatchObservabilityAlertsAction } from "../actions";
 
 export default async function OperatorAlertsPage() {
   const resolution = await resolveWorkspaceActor("OPERATOR");
@@ -20,6 +25,8 @@ export default async function OperatorAlertsPage() {
     const metrics = observability.metrics;
     const alerts = observability.alerts;
     const incidentReadiness = observability.incidentReadiness;
+    const snapshots = observability.snapshots;
+    const dispatches = observability.dispatches;
 
     if (!metrics || !incidentReadiness) {
       return (
@@ -41,10 +48,60 @@ export default async function OperatorAlertsPage() {
         />
         <section className="grid gap-4 xl:grid-cols-5">
           <MetricCard label="Total requests" value={String(metrics.totalRequests)} detail="Requests observed by the API runtime since the current process started." />
-          <MetricCard label="Server errors" value={String(metrics.errorCount)} detail="5xx responses recorded by the API runtime metrics registry." />
-          <MetricCard label="In flight" value={String(metrics.inFlightRequests)} detail="Requests still executing when the metrics snapshot was created." />
           <MetricCard label="Active alerts" value={String(alerts.length)} detail="Open or monitoring alerts derived from runtime and operator posture." />
+          <MetricCard label="Retained snapshots" value={String(snapshots.length)} detail="Persisted observability snapshots kept for later incident review." />
+          <MetricCard label="Alert dispatches" value={String(dispatches.length)} detail="Recent external alert dispatch attempts recorded by Atlas." />
+          <MetricCard label="Server errors" value={String(metrics.errorCount)} detail="5xx responses recorded by the API runtime metrics registry." />
           <MetricCard label="Incident posture" value={incidentReadiness.overallStatus === "ready" ? "Ready" : "Warning"} detail="Current incident-readiness summary for the tracked release stage." />
+        </section>
+        <section className="grid gap-6 xl:grid-cols-2">
+          <WorkflowFormPanel
+            eyebrow="Telemetry retention"
+            title="Capture retained observability snapshot"
+            description="Store the current runtime metrics, alert posture, and incident-readiness state for later incident review and retention-aware trending."
+            action={captureObservabilitySnapshotAction}
+            submitLabel="Capture snapshot"
+          >
+            <WorkflowFormField label="Reason" hint="Describe why this telemetry checkpoint matters operationally.">
+              <textarea
+                name="reason"
+                rows={4}
+                minLength={12}
+                className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                placeholder="Capture a retained telemetry checkpoint before the next staging promotion window."
+                required
+              />
+            </WorkflowFormField>
+          </WorkflowFormPanel>
+          <WorkflowFormPanel
+            eyebrow="External dispatch"
+            title="Dispatch current alerts externally"
+            description="Send the current alert set to the owned external dispatch target while keeping a durable local report of what Atlas sent."
+            action={dispatchObservabilityAlertsAction}
+            submitLabel="Dispatch alerts"
+          >
+            <WorkflowFormField label="Minimum severity" hint="Only alerts at or above this severity will be sent externally.">
+              <select
+                name="minimumSeverity"
+                defaultValue="warning"
+                className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              >
+                <option value="critical">Critical only</option>
+                <option value="warning">Warning and above</option>
+                <option value="info">Info and above</option>
+              </select>
+            </WorkflowFormField>
+            <WorkflowFormField label="Reason" hint="This reason is persisted alongside the dispatch report.">
+              <textarea
+                name="reason"
+                rows={4}
+                minLength={12}
+                className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                placeholder="Dispatch the current alert set to the staging operations webhook for escalation."
+                required
+              />
+            </WorkflowFormField>
+          </WorkflowFormPanel>
         </section>
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <RecordListPanel
@@ -69,6 +126,24 @@ export default async function OperatorAlertsPage() {
               tone={incidentReadiness.overallStatus === "ready" ? "default" : "warning"}
             />
           </div>
+        </section>
+        <section className="grid gap-6 xl:grid-cols-2">
+          <RecordListPanel
+            eyebrow="Retained telemetry"
+            title="Recent observability snapshots"
+            description="Snapshots preserve alert and runtime posture beyond the current process lifetime."
+            items={createOperatorSnapshotItems(snapshots)}
+            emptyTitle="No retained snapshots"
+            emptyDescription="Capture a snapshot to start building retained observability history."
+          />
+          <RecordListPanel
+            eyebrow="Dispatch history"
+            title="Recent external alert dispatches"
+            description="Every external dispatch is recorded locally so incident review can verify what was sent and when."
+            items={createOperatorDispatchItems(dispatches)}
+            emptyTitle="No dispatch history"
+            emptyDescription="External alert dispatches will appear here after the first operator-triggered run."
+          />
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
           <RecordListPanel

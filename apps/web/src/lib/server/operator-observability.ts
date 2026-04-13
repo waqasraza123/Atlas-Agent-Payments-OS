@@ -4,7 +4,9 @@ import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
   AtlasApiRuntimeMetricsSnapshot,
   AtlasIncidentReadinessRecord,
-  AtlasObservabilityAlertRecord
+  AtlasObservabilityAlertDispatchRecord,
+  AtlasObservabilityAlertRecord,
+  AtlasObservabilitySnapshotRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
 type AtlasApiEnvelope<T> = {
@@ -56,19 +58,23 @@ function formatDateTime(value: string | null) {
 }
 
 export async function loadOperatorObservabilityData(actor: AtlasActorContext, selection: AtlasLocalSessionSelection) {
-  const [metricsResponse, alertsResponse, incidentsResponse] = await Promise.all([
+  const [metricsResponse, alertsResponse, incidentsResponse, snapshotsResponse, dispatchesResponse] = await Promise.all([
     fetchOperatorObservabilityResource<AtlasApiRuntimeMetricsSnapshot & {
       configurationStatus: "valid" | "invalid";
       verificationCommand: string;
     }>("/observability/metrics", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection),
-    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection)
+    fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection),
+    fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection),
+    fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection)
   ]);
 
   return {
     metrics: metricsResponse.item,
     alerts: alertsResponse.items ?? [],
-    incidentReadiness: incidentsResponse.item
+    incidentReadiness: incidentsResponse.item,
+    snapshots: snapshotsResponse.items ?? [],
+    dispatches: dispatchesResponse.items ?? []
   };
 }
 
@@ -92,6 +98,28 @@ export function createOperatorIncidentItems(record: AtlasIncidentReadinessRecord
     detail: item.runbookPath,
     statusLabel: item.status === "ready" ? "Ready" : "Warning",
     statusTone: item.status === "ready" ? "success" : "warning"
+  }));
+}
+
+export function createOperatorSnapshotItems(items: AtlasObservabilitySnapshotRecord[]): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: `${item.appEnv} snapshot · ${item.totalRequests} requests`,
+    description: `${item.activeAlertCount} alerts · ${item.criticalAlertCount} critical · ${item.configurationStatus}`,
+    detail: `expires ${formatDateTime(item.expiresAt)} · ${item.reportPath}`,
+    statusLabel: item.readinessStatus.toUpperCase(),
+    statusTone: item.readinessStatus === "degraded" ? "warning" : "default"
+  }));
+}
+
+export function createOperatorDispatchItems(items: AtlasObservabilityAlertDispatchRecord[]): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: `${item.provider} · ${item.dispatchedAlertCount} alerts`,
+    description: item.summary,
+    detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
+    statusLabel: item.status,
+    statusTone: item.status === "SUCCEEDED" ? "success" : "critical"
   }));
 }
 

@@ -145,7 +145,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
         <WorkflowFormPanel
           eyebrow="Execution ownership"
           title="Register rollout integration"
-          description="Command-mode automation now requires one active verified owned target for each integration kind and environment."
+          description="Command-mode automation now requires one active verified owned target for each integration kind and environment, including external alert dispatch."
           action={registerOperationalIntegrationAction}
           submitLabel="Register integration"
         >
@@ -160,6 +160,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
               <option value="SECRET_ROTATION">Secret rotation</option>
               <option value="DEPLOYMENT_AUTOMATION">Deployment automation</option>
               <option value="PROOF_STORAGE">Proof storage</option>
+              <option value="ALERT_DISPATCH">Alert dispatch</option>
             </select>
           </WorkflowFormField>
           <WorkflowFormField label="Target environment" hint="Atlas resolves command-mode ownership against the target environment.">
@@ -229,7 +230,7 @@ export default async function OperatorRolloutPage({ searchParams }: OperatorRoll
           <div className="space-y-1">
             <p className="text-sm font-semibold text-[var(--atlas-ink)]">Owned rollout integrations</p>
             <p className="text-sm text-[var(--atlas-muted)]">
-              Command-mode restore, rotation, promotion, and upstream identity execution now resolve against this owned integration registry.
+              Command-mode restore, rotation, promotion, upstream identity, and alert dispatch execution now resolve against this owned integration registry.
             </p>
           </div>
           <div className="space-y-4">

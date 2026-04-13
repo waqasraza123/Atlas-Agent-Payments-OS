@@ -199,6 +199,7 @@ enum OperationalIntegrationKind {
   SECRET_ROTATION
   DEPLOYMENT_AUTOMATION
   PROOF_STORAGE
+  ALERT_DISPATCH
 }
 
 enum OperationalIntegrationStatus {
@@ -419,12 +420,63 @@ model OperationalIntegration {
   createdByUser      User                                    @relation("OperationalIntegrationCreatedByUser", fields: [createdByUserId], references: [id], onDelete: Restrict)
   updatedByUser      User?                                   @relation("OperationalIntegrationUpdatedByUser", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   executions         OperationalExecution[]
+  observabilityAlertDispatches ObservabilityAlertDispatch[]
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
 
   @@unique([kind, targetEnvironment, provider, label])
   @@index([kind, targetEnvironment, status, verificationStatus])
   @@index([targetEnvironment, provider, status])
+}
+
+model ObservabilitySnapshot {
+  id                    String   @id @default(cuid())
+  appEnv                String
+  releaseStage          String
+  actorUserEmail        String
+  configurationStatus   String
+  readinessStatus       String
+  totalRequests         Int
+  errorCount            Int
+  activeAlertCount      Int
+  criticalAlertCount    Int
+  reportPath            String
+  payload               Json
+  storageProvider       String?
+  storageBucket         String?
+  storageKey            String?
+  storageUrl            String?
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@index([appEnv, createdAt])
+}
+
+model ObservabilityAlertDispatch {
+  id                     String                     @id @default(cuid())
+  provider               String
+  mode                   OperationalExecutionMode
+  status                 OperationalExecutionStatus
+  minimumSeverity        String
+  actorUserEmail         String
+  summary                String
+  targetReference        String?
+  reportPath             String
+  dispatchedAlertCount   Int
+  criticalAlertCount     Int
+  warningAlertCount      Int
+  infoAlertCount         Int
+  payload                Json?
+  operationalIntegrationId String?
+  operationalIntegration OperationalIntegration?   @relation(fields: [operationalIntegrationId], references: [id], onDelete: SetNull)
+  completedAt            DateTime
+  createdAt              DateTime                  @default(now())
+
+  @@index([completedAt])
+  @@index([provider, completedAt])
+  @@index([operationalIntegrationId, completedAt])
 }
 
 model OperationalExecution {

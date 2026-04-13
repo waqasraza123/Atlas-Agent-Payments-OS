@@ -9,6 +9,7 @@ import { createAtlasSupportSessionToken } from "@atlas/auth/server";
 import { appRuntime, authRuntime } from "@atlas/config";
 import {
   createAtlasPromotionBundle,
+  dispatchObservabilityAlerts,
   executeAtlasUpstreamIdentityLifecycle,
   executeAtlasPromotionAutomation,
   executeAtlasRestoreDrill,
@@ -27,11 +28,13 @@ import {
   updateExternalIdentityAssignmentLifecycle,
   revokeIdentityProviderSession,
   issueSupportAccessGrant,
+  persistObservabilitySnapshot,
   recertifySupportAccessGrant,
   resolveSupportAccessReviewCampaignItem,
   reviewSupportAccessGrant,
   revokeSupportAccessGrant,
   AtlasOperationalIntegrationWorkflowError,
+  AtlasObservabilityOperationsError,
   AtlasOperatorWorkflowError,
   AtlasRolloutAutomationError,
   AtlasSupportAccessWorkflowError
@@ -40,6 +43,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
+import { loadOperatorObservabilityData } from "@/lib/server/operator-observability";
 import { buildWorkflowFeedbackHref, type WorkflowFeedbackTone } from "@/lib/workflow-feedback";
 
 function toTextValue(value: FormDataEntryValue | null) {
@@ -50,7 +54,7 @@ function redirectWithFeedback(path: string, title: string, description: string, 
   redirect(buildWorkflowFeedbackHref(path, title, description, tone));
 }
 
-async function requireOperatorActor() {
+async function requireOperatorResolution() {
   const resolution = await resolveWorkspaceActor("OPERATOR");
 
   if (resolution.status !== "ready") {
@@ -62,12 +66,18 @@ async function requireOperatorActor() {
     );
   }
 
+  return resolution;
+}
+
+async function requireOperatorActor() {
+  const resolution = await requireOperatorResolution();
   return resolution.actor;
 }
 
 function normalizeActionError(error: unknown) {
   if (
     error instanceof AtlasOperationalIntegrationWorkflowError ||
+    error instanceof AtlasObservabilityOperationsError ||
     error instanceof AtlasOperatorWorkflowError ||
     error instanceof AtlasSupportAccessWorkflowError ||
     error instanceof AtlasRolloutAutomationError
@@ -137,6 +147,76 @@ export async function performOperatorCaseActionAction(caseId: string, formData: 
       normalizeActionError(error),
       "error"
     );
+  }
+}
+
+export async function captureObservabilitySnapshotAction(formData: FormData) {
+  const resolution = await requireOperatorResolution();
+
+  try {
+    const observability = await loadOperatorObservabilityData(resolution.actor, resolution.selection);
+
+    if (!observability.metrics || !observability.incidentReadiness) {
+      redirectWithFeedback(
+        "/operator/alerts",
+        "Telemetry snapshot failed",
+        "Atlas could not load observability data for retention.",
+        "error"
+      );
+    }
+
+    await persistObservabilitySnapshot({
+      actor: resolution.actor,
+      metrics: observability.metrics,
+      alerts: observability.alerts,
+      incidentReadiness: observability.incidentReadiness,
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/alerts");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Telemetry snapshot stored",
+      "Atlas retained the current observability posture for later incident review."
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry snapshot failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function dispatchObservabilityAlertsAction(formData: FormData) {
+  const resolution = await requireOperatorResolution();
+  const minimumSeverity = toTextValue(formData.get("minimumSeverity"));
+
+  try {
+    const observability = await loadOperatorObservabilityData(resolution.actor, resolution.selection);
+
+    if (!observability.metrics || !observability.incidentReadiness) {
+      redirectWithFeedback(
+        "/operator/alerts",
+        "Alert dispatch failed",
+        "Atlas could not load observability data for dispatch.",
+        "error"
+      );
+    }
+
+    const dispatch = await dispatchObservabilityAlerts({
+      actor: resolution.actor,
+      minimumSeverity:
+        minimumSeverity === "critical" || minimumSeverity === "warning" ? minimumSeverity : "info",
+      reason: toTextValue(formData.get("reason")),
+      alerts: observability.alerts,
+      metrics: observability.metrics,
+      incidentReadiness: observability.incidentReadiness
+    });
+    revalidatePath("/operator/alerts");
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Alert dispatch recorded",
+      `Atlas recorded ${dispatch.dispatchedAlertCount} dispatched alerts through ${dispatch.provider}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Alert dispatch failed", normalizeActionError(error), "error");
   }
 }
 
