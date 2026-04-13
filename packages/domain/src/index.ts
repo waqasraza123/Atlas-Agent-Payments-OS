@@ -81,11 +81,13 @@ export {
   type AtlasOperatorOverviewRecord
 } from "./operator-workflow";
 export {
+  buildAtlasWorkerTelemetryRecord,
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
   calculateAtlasApiErrorRate,
   countAtlasObservabilityAlertsBySeverity,
   filterAtlasObservabilityAlertsBySeverity,
+  type AtlasApiRuntimeTelemetryRecord,
   type AtlasApiRouteMetricRecord,
   type AtlasApiRuntimeMetricsSnapshot,
   type AtlasIncidentReadinessItem,
@@ -94,7 +96,10 @@ export {
   type AtlasObservabilityAlertRecord,
   type AtlasObservabilityAlertSeverity,
   type AtlasObservabilityReleaseStage,
-  type AtlasObservabilitySnapshotRecord
+  type AtlasObservabilitySnapshotRecord,
+  type AtlasWorkerQueueRuntimeMetricRecord,
+  type AtlasWorkerRuntimeMetricsSnapshot,
+  type AtlasWorkerTelemetryRecord
 } from "./observability";
 export {
   atlasPaymentMaximumAttemptCount,

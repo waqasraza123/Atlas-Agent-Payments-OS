@@ -7,6 +7,7 @@ export * from "./external-identity-access";
 export * from "./env-file";
 export * from "./operator-workflow";
 export * from "./observability-operations";
+export * from "./observability-runtime";
 export * from "./operational-integrations";
 export * from "./operational-proof-storage";
 export * from "./payments-workflow";

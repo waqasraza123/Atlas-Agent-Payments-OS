@@ -20,6 +20,13 @@ describe("worker runtime metrics", () => {
     const snapshot = getWorkerRuntimeMetricsSnapshot();
     const queue = snapshot.queues[0];
 
+    expect(snapshot).toMatchObject({
+      service: "worker",
+      queueCount: 1,
+      readyQueueCount: 1,
+      processedCount: 1,
+      failedCount: 1
+    });
     expect(queue).toMatchObject({
       key: "payments-execution",
       readyCount: 1,

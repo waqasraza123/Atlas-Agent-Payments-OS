@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   beginApiRequestMetric,
   getApiRuntimeMetricsSnapshot,
+  getApiRuntimeTelemetryRecord,
   recordApiReadinessSnapshot,
   recordApiRequestMetric,
   resetApiRuntimeMetrics
@@ -34,6 +35,12 @@ describe("api runtime metrics", () => {
       key: "GET /health",
       totalRequests: 1,
       lastStatusCode: 200
+    });
+    expect(getApiRuntimeTelemetryRecord()).toMatchObject({
+      service: "api",
+      configurationStatus: expect.any(String),
+      revision: expect.any(String),
+      deploymentSlot: expect.any(String)
     });
   });
 });

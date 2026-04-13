@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAtlasWorkerTelemetryRecord,
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
   countAtlasObservabilityAlertsBySeverity,
   calculateAtlasApiErrorRate,
   filterAtlasObservabilityAlertsBySeverity,
-  type AtlasApiRuntimeMetricsSnapshot
+  type AtlasApiRuntimeTelemetryRecord
 } from "./observability";
 
-function createMetricsSnapshot(overrides: Partial<AtlasApiRuntimeMetricsSnapshot> = {}): AtlasApiRuntimeMetricsSnapshot {
+function createMetricsSnapshot(overrides: Partial<AtlasApiRuntimeTelemetryRecord> = {}): AtlasApiRuntimeTelemetryRecord {
   return {
     service: "api",
     startedAt: "2026-04-12T00:00:00.000Z",
@@ -22,6 +23,11 @@ function createMetricsSnapshot(overrides: Partial<AtlasApiRuntimeMetricsSnapshot
     lastReadinessStatus: "ready",
     lastReadinessAt: "2026-04-12T00:05:00.000Z",
     routeMetrics: [],
+    configurationStatus: "valid",
+    verificationCommand: "pnpm verify:release",
+    revision: "rev-123",
+    deploymentSlot: "blue",
+    recordedAt: "2026-04-12T00:05:00.000Z",
     ...overrides
   };
 }
@@ -52,6 +58,23 @@ describe("atlas observability contracts", () => {
       },
       configurationStatus: "invalid",
       releaseStage: "ga",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: "/tmp/worker-runtime.json",
+        snapshot: {
+          service: "worker",
+          startedAt: "2026-04-12T00:00:00.000Z",
+          recordedAt: "2026-04-12T00:10:00.000Z",
+          uptimeSeconds: 300,
+          revision: "rev-123",
+          deploymentSlot: "blue",
+          queueCount: 2,
+          readyQueueCount: 1,
+          processedCount: 10,
+          failedCount: 6,
+          queues: []
+        }
+      }),
       generatedAt: "2026-04-12T00:10:00.000Z"
     });
 
@@ -60,10 +83,36 @@ describe("atlas observability contracts", () => {
         "runtime-config-invalid",
         "api-readiness-degraded",
         "api-error-rate-elevated",
-        "operator-critical-cases"
+        "operator-critical-cases",
+        "worker-queue-failures",
+        "worker-queues-not-ready"
       ])
     );
     expect(alerts[0]?.severity).toBe("critical");
+  });
+
+  it("classifies worker telemetry freshness and queue health", () => {
+    const workerTelemetry = buildAtlasWorkerTelemetryRecord({
+      staleAfterMinutes: 10,
+      now: "2026-04-12T00:30:00.000Z",
+      snapshotPath: "/tmp/worker-runtime.json",
+      snapshot: {
+        service: "worker",
+        startedAt: "2026-04-12T00:00:00.000Z",
+        recordedAt: "2026-04-12T00:05:00.000Z",
+        uptimeSeconds: 300,
+        revision: "rev-123",
+        deploymentSlot: "blue",
+        queueCount: 2,
+        readyQueueCount: 2,
+        processedCount: 8,
+        failedCount: 0,
+        queues: []
+      }
+    });
+
+    expect(workerTelemetry.status).toBe("stale");
+    expect(workerTelemetry.summary).toContain("older than 10 minutes");
   });
 
   it("builds incident readiness from release and alert posture", () => {
@@ -75,12 +124,14 @@ describe("atlas observability contracts", () => {
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      workerTelemetryStatus: "healthy",
       activeAlertCount: 2
     });
 
     expect(record.overallStatus).toBe("warning");
     expect(record.items.find((item) => item.key === "active-alert-load")?.status).toBe("warning");
     expect(record.items.find((item) => item.key === "rollback-verification")?.status).toBe("ready");
+    expect(record.items.find((item) => item.key === "worker-telemetry")?.status).toBe("ready");
   });
 
   it("filters and counts alerts by minimum severity", () => {
@@ -103,6 +154,11 @@ describe("atlas observability contracts", () => {
       },
       configurationStatus: "valid",
       releaseStage: "private-beta",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: null,
+        snapshot: null
+      }),
       generatedAt: "2026-04-12T00:10:00.000Z"
     });
 

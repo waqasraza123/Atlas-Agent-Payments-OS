@@ -33,7 +33,8 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - A deployment and recovery baseline is now in place in repo scope through env-profile validation, release manifests, rollback-readiness checks, and backup/restore scripts.
 - An observability and incident-response baseline is now in place in repo scope through API runtime metrics, operator alerting surfaces, worker queue runtime metrics, and incident runbooks.
 - Retained observability snapshots and governed external alert dispatch are now in place in repo scope through persisted snapshot records, dispatch records, operator-triggered workflows, and owned dispatch adapters.
-- The next active implementation slice is the remaining tracing, worker-telemetry, and observability automation gaps needed for broader real-world rollout.
+- Shared worker telemetry and repo-owned observability automation are now in place in repo scope through published runtime snapshots, worker-aware observability alerts, and an owned automation command plus workflow.
+- The next active implementation slice is the remaining distributed tracing, deeper correlation, and automated incident-trigger gaps needed for broader real-world rollout.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks

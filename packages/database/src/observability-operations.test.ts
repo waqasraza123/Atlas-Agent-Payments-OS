@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AtlasActorContext } from "@atlas/auth";
-import type { AtlasApiRuntimeMetricsSnapshot, AtlasIncidentReadinessRecord, AtlasObservabilityAlertRecord } from "@atlas/domain";
+import type { AtlasApiRuntimeTelemetryRecord, AtlasIncidentReadinessRecord, AtlasObservabilityAlertRecord } from "@atlas/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function createActor(): AtlasActorContext {
@@ -31,10 +31,7 @@ function createActor(): AtlasActorContext {
   };
 }
 
-function createMetrics(): AtlasApiRuntimeMetricsSnapshot & {
-  configurationStatus: "valid" | "invalid";
-  verificationCommand: string;
-} {
+function createMetrics(): AtlasApiRuntimeTelemetryRecord {
   return {
     service: "api",
     startedAt: "2026-04-13T00:00:00.000Z",
@@ -49,7 +46,10 @@ function createMetrics(): AtlasApiRuntimeMetricsSnapshot & {
     lastReadinessAt: "2026-04-13T00:05:00.000Z",
     routeMetrics: [],
     configurationStatus: "valid",
-    verificationCommand: "pnpm verify:release"
+    verificationCommand: "pnpm verify:release",
+    revision: "rev-123",
+    deploymentSlot: "blue",
+    recordedAt: "2026-04-13T00:05:00.000Z"
   };
 }
 

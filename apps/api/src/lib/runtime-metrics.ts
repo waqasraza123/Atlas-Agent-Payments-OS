@@ -1,4 +1,11 @@
-import type { AtlasApiRuntimeMetricsSnapshot, AtlasApiRouteMetricRecord } from "@atlas/domain";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { deploymentRuntime, observabilityRuntime, validateAtlasRuntimeConfiguration } from "@atlas/config";
+import type {
+  AtlasApiRuntimeMetricsSnapshot,
+  AtlasApiRuntimeTelemetryRecord,
+  AtlasApiRouteMetricRecord
+} from "@atlas/domain";
 
 type RouteMetricState = {
   method: string;
@@ -32,6 +39,14 @@ function roundMetric(value: number) {
   return Number(value.toFixed(2));
 }
 
+function resolveRuntimeSnapshotPath(fileName: string) {
+  return resolve(import.meta.dirname, "../../..", observabilityRuntime.runtimeSnapshotDirectory, fileName);
+}
+
+function canPublishRuntimeSnapshot() {
+  return process.env.NODE_ENV !== "test";
+}
+
 function createRouteMetricKey(method: string, path: string) {
   return `${method.toUpperCase()} ${path}`;
 }
@@ -48,6 +63,18 @@ function mapRouteMetricRecord(key: string, state: RouteMetricState): AtlasApiRou
     lastStatusCode: state.lastStatusCode,
     lastSeenAt: state.lastSeenAt
   };
+}
+
+function publishApiRuntimeTelemetryRecord() {
+  if (!canPublishRuntimeSnapshot()) {
+    return;
+  }
+
+  const filePath = resolveRuntimeSnapshotPath("api.json");
+  mkdirSync(dirname(filePath), {
+    recursive: true
+  });
+  writeFileSync(filePath, `${JSON.stringify(getApiRuntimeTelemetryRecord(), null, 2)}\n`, "utf8");
 }
 
 export function beginApiRequestMetric() {
@@ -97,6 +124,7 @@ export function recordApiRequestMetric(input: {
   }
 
   apiRuntimeMetricsState.routeMetrics.set(key, current);
+  publishApiRuntimeTelemetryRecord();
 }
 
 export function recordApiReadinessSnapshot(status: "ready" | "degraded") {
@@ -104,6 +132,7 @@ export function recordApiReadinessSnapshot(status: "ready" | "degraded") {
     status,
     recordedAt: new Date().toISOString()
   };
+  publishApiRuntimeTelemetryRecord();
 }
 
 export function getApiRuntimeMetricsSnapshot(): AtlasApiRuntimeMetricsSnapshot {
@@ -130,6 +159,19 @@ export function getApiRuntimeMetricsSnapshot(): AtlasApiRuntimeMetricsSnapshot {
   };
 }
 
+export function getApiRuntimeTelemetryRecord(): AtlasApiRuntimeTelemetryRecord {
+  const configuration = validateAtlasRuntimeConfiguration("api");
+
+  return {
+    ...getApiRuntimeMetricsSnapshot(),
+    configurationStatus: configuration.ok ? "valid" : "invalid",
+    verificationCommand: "pnpm verify:release",
+    revision: deploymentRuntime.revision,
+    deploymentSlot: deploymentRuntime.deploymentSlot,
+    recordedAt: new Date().toISOString()
+  };
+}
+
 export function resetApiRuntimeMetrics() {
   apiRuntimeMetricsState.startedAt = new Date().toISOString();
   apiRuntimeMetricsState.totalRequests = 0;
@@ -140,4 +182,7 @@ export function resetApiRuntimeMetrics() {
   apiRuntimeMetricsState.inFlightRequests = 0;
   apiRuntimeMetricsState.routeMetrics.clear();
   apiRuntimeMetricsState.lastReadiness = null;
+  publishApiRuntimeTelemetryRecord();
 }
+
+publishApiRuntimeTelemetryRecord();

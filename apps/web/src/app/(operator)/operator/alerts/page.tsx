@@ -9,9 +9,14 @@ import {
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
   createOperatorSnapshotItems,
+  createOperatorWorkerQueueItems,
   loadOperatorObservabilityData
 } from "@/lib/server/operator-observability";
-import { captureObservabilitySnapshotAction, dispatchObservabilityAlertsAction } from "../actions";
+import {
+  captureObservabilitySnapshotAction,
+  dispatchObservabilityAlertsAction,
+  runObservabilityAutomationAction
+} from "../actions";
 
 export default async function OperatorAlertsPage() {
   const resolution = await resolveWorkspaceActor("OPERATOR");
@@ -25,6 +30,7 @@ export default async function OperatorAlertsPage() {
     const metrics = observability.metrics;
     const alerts = observability.alerts;
     const incidentReadiness = observability.incidentReadiness;
+    const workerTelemetry = observability.workerTelemetry;
     const snapshots = observability.snapshots;
     const dispatches = observability.dispatches;
 
@@ -46,15 +52,20 @@ export default async function OperatorAlertsPage() {
           title="Alerts and incident readiness"
           description="Review runtime health, operator alert pressure, and incident response posture before issues turn into support escalations."
         />
-        <section className="grid gap-4 xl:grid-cols-5">
+        <section className="grid gap-4 xl:grid-cols-7">
           <MetricCard label="Total requests" value={String(metrics.totalRequests)} detail="Requests observed by the API runtime since the current process started." />
           <MetricCard label="Active alerts" value={String(alerts.length)} detail="Open or monitoring alerts derived from runtime and operator posture." />
+          <MetricCard
+            label="Worker status"
+            value={workerTelemetry?.status ?? "missing"}
+            detail={workerTelemetry?.summary ?? "Shared worker telemetry is not available."}
+          />
           <MetricCard label="Retained snapshots" value={String(snapshots.length)} detail="Persisted observability snapshots kept for later incident review." />
           <MetricCard label="Alert dispatches" value={String(dispatches.length)} detail="Recent external alert dispatch attempts recorded by Atlas." />
           <MetricCard label="Server errors" value={String(metrics.errorCount)} detail="5xx responses recorded by the API runtime metrics registry." />
           <MetricCard label="Incident posture" value={incidentReadiness.overallStatus === "ready" ? "Ready" : "Warning"} detail="Current incident-readiness summary for the tracked release stage." />
         </section>
-        <section className="grid gap-6 xl:grid-cols-2">
+        <section className="grid gap-6 xl:grid-cols-3">
           <WorkflowFormPanel
             eyebrow="Telemetry retention"
             title="Capture retained observability snapshot"
@@ -102,6 +113,41 @@ export default async function OperatorAlertsPage() {
               />
             </WorkflowFormField>
           </WorkflowFormPanel>
+          <WorkflowFormPanel
+            eyebrow="Owned automation"
+            title="Run observability automation"
+            description="Resolve the published API and worker telemetry, store a retained snapshot, and optionally dispatch alerts through the owned automation flow."
+            action={runObservabilityAutomationAction}
+            submitLabel="Run automation"
+          >
+            <WorkflowFormField label="Minimum severity" hint="Used only when automatic external dispatch is enabled.">
+              <select
+                name="minimumSeverity"
+                defaultValue="warning"
+                className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+              >
+                <option value="critical">Critical only</option>
+                <option value="warning">Warning and above</option>
+                <option value="info">Info and above</option>
+              </select>
+            </WorkflowFormField>
+            <WorkflowFormField label="Dispatch externally" hint="When enabled, Atlas will route the selected alerts through the configured external dispatch adapter.">
+              <label className="flex items-center gap-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)]">
+                <input type="checkbox" name="dispatchAlerts" className="h-4 w-4 accent-[var(--atlas-accent)]" />
+                Dispatch alerts after capturing the retained snapshot
+              </label>
+            </WorkflowFormField>
+            <WorkflowFormField label="Reason" hint="This reason is stored on the automation report and downstream records.">
+              <textarea
+                name="reason"
+                rows={4}
+                minLength={12}
+                className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                placeholder="Run the owned observability automation before the next on-call handoff."
+                required
+              />
+            </WorkflowFormField>
+          </WorkflowFormPanel>
         </section>
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <RecordListPanel
@@ -128,6 +174,14 @@ export default async function OperatorAlertsPage() {
           </div>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
+          <RecordListPanel
+            eyebrow="Worker telemetry"
+            title="Worker queue runtime"
+            description={workerTelemetry?.summary ?? "Shared worker telemetry is not available to the operator surface yet."}
+            items={createOperatorWorkerQueueItems(workerTelemetry ?? null)}
+            emptyTitle="No worker queue telemetry"
+            emptyDescription="Start the worker to publish queue runtime telemetry into the shared observability snapshot directory."
+          />
           <RecordListPanel
             eyebrow="Retained telemetry"
             title="Recent observability snapshots"

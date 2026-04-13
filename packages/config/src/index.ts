@@ -315,6 +315,11 @@ export const deploymentAutomationRuntime = {
 export const observabilityRuntime = {
   telemetryRetentionDays: readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30),
   snapshotDirectory: readText(process.env.OBSERVABILITY_SNAPSHOT_DIR, "operations-artifacts/observability/snapshots"),
+  runtimeSnapshotDirectory: readText(
+    process.env.OBSERVABILITY_RUNTIME_SNAPSHOT_DIR,
+    "operations-artifacts/observability/runtime"
+  ),
+  workerTelemetryStaleAfterMinutes: readNumber(process.env.OBSERVABILITY_WORKER_STALE_AFTER_MINUTES, 10),
   alertDispatchMode: readCommandAdapterMode(process.env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run"),
   alertDispatchProvider: readAlertDispatchProvider(process.env.OBSERVABILITY_ALERT_DISPATCH_PROVIDER),
   alertDispatchCommand: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_COMMAND),
@@ -322,6 +327,15 @@ export const observabilityRuntime = {
     process.env.OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR,
     "operations-artifacts/observability/dispatches"
   ),
+  automationReportDirectory: readText(
+    process.env.OBSERVABILITY_AUTOMATION_REPORT_DIR,
+    "operations-artifacts/observability/automation"
+  ),
+  automationDefaultMinimumSeverity: (() => {
+    const severity = readText(process.env.OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY, "warning");
+
+    return severity === "critical" || severity === "info" ? severity : "warning";
+  })(),
   alertDispatchWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL),
   alertDispatchSlackWebhookUrl: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_SLACK_WEBHOOK_URL)
 } as const;

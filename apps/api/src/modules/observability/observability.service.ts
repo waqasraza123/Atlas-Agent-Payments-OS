@@ -3,7 +3,8 @@ import { buildAtlasObservabilityAlerts } from "@atlas/domain";
 import {
   getOperatorOverview,
   listObservabilityAlertDispatches,
-  listObservabilitySnapshots
+  listObservabilitySnapshots,
+  readPublishedWorkerTelemetry
 } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import { HealthService } from "../health/health.service";
@@ -27,13 +28,15 @@ export class ObservabilityService {
       Promise.resolve(this.healthService.getMetrics().item)
     ]);
     const startup = this.healthService.getStartup();
+    const workerTelemetry = readPublishedWorkerTelemetry();
 
     return {
       items: buildAtlasObservabilityAlerts({
         metrics,
         overview,
         configurationStatus: startup.configurationStatus,
-        releaseStage: startup.releaseStage
+        releaseStage: startup.releaseStage,
+        workerTelemetry
       })
     };
   }
@@ -57,6 +60,12 @@ export class ObservabilityService {
       items: await listObservabilityAlertDispatches(actor, {
         limit: 12
       })
+    };
+  }
+
+  getWorkerTelemetry() {
+    return {
+      item: readPublishedWorkerTelemetry()
     };
   }
 }

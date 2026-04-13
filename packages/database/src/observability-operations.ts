@@ -11,7 +11,7 @@ import {
 import {
   countAtlasObservabilityAlertsBySeverity,
   filterAtlasObservabilityAlertsBySeverity,
-  type AtlasApiRuntimeMetricsSnapshot,
+  type AtlasApiRuntimeTelemetryRecord,
   type AtlasIncidentReadinessRecord,
   type AtlasObservabilityAlertDispatchRecord,
   type AtlasObservabilityAlertRecord,
@@ -24,10 +24,7 @@ import { resolveOperationalIntegrationForExecution, touchOperationalIntegrationU
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
-type MetricsWithConfiguration = AtlasApiRuntimeMetricsSnapshot & {
-  configurationStatus: "valid" | "invalid";
-  verificationCommand: string;
-};
+type MetricsWithConfiguration = AtlasApiRuntimeTelemetryRecord;
 
 export class AtlasObservabilityOperationsError extends Error {
   constructor(

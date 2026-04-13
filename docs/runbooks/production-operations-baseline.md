@@ -12,6 +12,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - API live, startup, readiness, and metrics endpoints under `/health`
 - operator observability routes for metrics, alerts, and incident readiness
 - retained observability snapshot capture plus persisted snapshot and dispatch history on `/operator/alerts`
+- shared API and worker runtime snapshots plus worker telemetry visibility on `/operator/alerts`
 - release verification script through `pnpm verify:release`
 - runtime smoke verification script through `pnpm verify:ops`
 - environment-template validation through `pnpm verify:env`
@@ -21,6 +22,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - S3-compatible rollout proof replication through the operations artifact bucket when proof storage is enabled
 - GitHub Actions promotion dispatch and AWS Secrets Manager rotation dispatch through the rollout adapters
 - governed external alert dispatch through owned generic-webhook and Slack webhook adapters plus `ALERT_DISPATCH` operational integrations
+- repo-owned observability automation through `pnpm observability:automation`
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
 
@@ -56,5 +58,5 @@ With the API running:
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
 - observability now includes runtime metrics and operator alert posture, but not full tracing, external dispatch, or retained telemetry
-- observability now includes retained snapshots and governed external dispatch, but not shared worker metrics endpoints, tracing, or automated incident triggers
+- observability now includes shared worker telemetry and repo-owned automation, but not distributed tracing, deeper correlation, or automated incident triggers
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

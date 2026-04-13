@@ -13,8 +13,8 @@ import {
   buildAtlasObservabilityAlerts,
   type AtlasIncidentReadinessRecord
 } from "@atlas/domain";
-import { getApiRuntimeMetricsSnapshot, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
-import { getOperatorOverview } from "@atlas/database";
+import { getApiRuntimeTelemetryRecord, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
+import { getOperatorOverview, readPublishedWorkerTelemetry } from "@atlas/database";
 import { prisma } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import type { AtlasActorContext } from "@atlas/auth";
@@ -212,20 +212,12 @@ export class HealthService {
   }
 
   getMetrics() {
-    const metrics = getApiRuntimeMetricsSnapshot();
-    const startup = this.getStartup();
-
     return {
-      item: {
-        ...metrics,
-        configurationStatus: startup.configurationStatus,
-        verificationCommand: startup.verificationCommand
-      }
+      item: getApiRuntimeTelemetryRecord()
     };
   }
 
   async getIncidentReadiness(actor: AtlasActorContext | null): Promise<AtlasIncidentReadinessRecord> {
-    const startup = this.getStartup();
     const metrics = this.getMetrics().item;
     const overview = actor
       ? await getOperatorOverview(actor)
@@ -240,21 +232,24 @@ export class HealthService {
           recentNotifications: [],
           recentAuditEvents: []
         };
+    const workerTelemetry = readPublishedWorkerTelemetry();
     const alerts = buildAtlasObservabilityAlerts({
       metrics,
       overview,
-      configurationStatus: startup.configurationStatus,
-      releaseStage: appRuntime.releaseStage
+      configurationStatus: metrics.configurationStatus,
+      releaseStage: appRuntime.releaseStage,
+      workerTelemetry
     });
 
     return buildAtlasIncidentReadinessRecord({
       releaseStage: appRuntime.releaseStage,
-      configurationStatus: startup.configurationStatus,
+      configurationStatus: metrics.configurationStatus,
       hasRequestCorrelation: true,
       hasMetricsEndpoint: true,
       hasHealthEndpoints: true,
       hasRollbackVerification: true,
       hasBackupRestoreRunbook: true,
+      workerTelemetryStatus: workerTelemetry.status,
       activeAlertCount: alerts.length
     });
   }

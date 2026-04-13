@@ -10,6 +10,7 @@ import { appRuntime, authRuntime } from "@atlas/config";
 import {
   createAtlasPromotionBundle,
   dispatchObservabilityAlerts,
+  executeObservabilityAutomation,
   executeAtlasUpstreamIdentityLifecycle,
   executeAtlasPromotionAutomation,
   executeAtlasRestoreDrill,
@@ -217,6 +218,32 @@ export async function dispatchObservabilityAlertsAction(formData: FormData) {
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Alert dispatch failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function runObservabilityAutomationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+  const minimumSeverity = toTextValue(formData.get("minimumSeverity"));
+
+  try {
+    const result = await executeObservabilityAutomation({
+      actorUserEmail: actor.user.email,
+      reason: toTextValue(formData.get("reason")),
+      minimumSeverity:
+        minimumSeverity === "critical" || minimumSeverity === "warning" ? minimumSeverity : "info",
+      dispatchAlerts: toBooleanValue(formData.get("dispatchAlerts"))
+    });
+    revalidatePath("/operator/alerts");
+    revalidatePath("/operator/rollout");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Observability automation completed",
+      result.dispatch
+        ? `Atlas captured telemetry and dispatched ${result.dispatch.dispatchedAlertCount} alerts automatically.`
+        : "Atlas captured telemetry and completed the repo-owned automation report without external dispatch."
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Observability automation failed", normalizeActionError(error), "error");
   }
 }
 

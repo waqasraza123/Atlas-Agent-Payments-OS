@@ -2,11 +2,12 @@ import type { AtlasActorContext, AtlasLocalSessionSelection } from "@atlas/auth"
 import { createAtlasIdentityProviderSessionToken, createAtlasLocalSessionToken } from "@atlas/auth/server";
 import { apiRuntime, authRuntime } from "@atlas/config";
 import type {
-  AtlasApiRuntimeMetricsSnapshot,
+  AtlasApiRuntimeTelemetryRecord,
   AtlasIncidentReadinessRecord,
   AtlasObservabilityAlertDispatchRecord,
   AtlasObservabilityAlertRecord,
-  AtlasObservabilitySnapshotRecord
+  AtlasObservabilitySnapshotRecord,
+  AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
 import type { DetailGridItem, RecordListPanelItem } from "@atlas/ui";
 type AtlasApiEnvelope<T> = {
@@ -58,13 +59,11 @@ function formatDateTime(value: string | null) {
 }
 
 export async function loadOperatorObservabilityData(actor: AtlasActorContext, selection: AtlasLocalSessionSelection) {
-  const [metricsResponse, alertsResponse, incidentsResponse, snapshotsResponse, dispatchesResponse] = await Promise.all([
-    fetchOperatorObservabilityResource<AtlasApiRuntimeMetricsSnapshot & {
-      configurationStatus: "valid" | "invalid";
-      verificationCommand: string;
-    }>("/observability/metrics", actor, selection),
+  const [metricsResponse, alertsResponse, incidentsResponse, workerResponse, snapshotsResponse, dispatchesResponse] = await Promise.all([
+    fetchOperatorObservabilityResource<AtlasApiRuntimeTelemetryRecord>("/observability/metrics", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityAlertRecord>("/observability/alerts", actor, selection),
     fetchOperatorObservabilityResource<AtlasIncidentReadinessRecord>("/observability/incidents", actor, selection),
+    fetchOperatorObservabilityResource<AtlasWorkerTelemetryRecord>("/observability/worker", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilitySnapshotRecord>("/observability/snapshots", actor, selection),
     fetchOperatorObservabilityResource<AtlasObservabilityAlertDispatchRecord>("/observability/dispatches", actor, selection)
   ]);
@@ -73,6 +72,7 @@ export async function loadOperatorObservabilityData(actor: AtlasActorContext, se
     metrics: metricsResponse.item,
     alerts: alertsResponse.items ?? [],
     incidentReadiness: incidentsResponse.item,
+    workerTelemetry: workerResponse.item,
     snapshots: snapshotsResponse.items ?? [],
     dispatches: dispatchesResponse.items ?? []
   };
@@ -123,11 +123,19 @@ export function createOperatorDispatchItems(items: AtlasObservabilityAlertDispat
   }));
 }
 
+export function createOperatorWorkerQueueItems(workerTelemetry: AtlasWorkerTelemetryRecord | null): RecordListPanelItem[] {
+  return (workerTelemetry?.snapshot?.queues ?? []).map((item) => ({
+    id: item.key,
+    title: item.name,
+    description: `${item.processedCount} processed · ${item.failedCount} failed`,
+    detail: `ready ${item.readyCount} · last processed ${formatDateTime(item.lastProcessedAt)} · last failed ${formatDateTime(item.lastFailedAt)}`,
+    statusLabel: item.failedCount > 0 ? "Failures" : item.readyCount > 0 ? "Ready" : "Waiting",
+    statusTone: item.failedCount > 0 ? "critical" : item.readyCount > 0 ? "success" : "warning"
+  }));
+}
+
 export function createOperatorMetricsFacts(
-  metrics: AtlasApiRuntimeMetricsSnapshot & {
-    configurationStatus: "valid" | "invalid";
-    verificationCommand: string;
-  }
+  metrics: AtlasApiRuntimeTelemetryRecord
 ): DetailGridItem[] {
   return [
     {
@@ -137,6 +145,14 @@ export function createOperatorMetricsFacts(
     {
       label: "Verification command",
       value: metrics.verificationCommand
+    },
+    {
+      label: "Revision",
+      value: metrics.revision
+    },
+    {
+      label: "Deployment slot",
+      value: metrics.deploymentSlot
     },
     {
       label: "Last readiness status",
@@ -157,7 +173,7 @@ export function createOperatorMetricsFacts(
   ];
 }
 
-export function createOperatorRouteMetricItems(metrics: AtlasApiRuntimeMetricsSnapshot): RecordListPanelItem[] {
+export function createOperatorRouteMetricItems(metrics: AtlasApiRuntimeTelemetryRecord): RecordListPanelItem[] {
   return metrics.routeMetrics.slice(0, 8).map((item) => ({
     id: item.key,
     title: item.key,

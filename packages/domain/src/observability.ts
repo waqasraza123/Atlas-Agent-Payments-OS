@@ -36,6 +36,47 @@ export type AtlasApiRuntimeMetricsSnapshot = {
   routeMetrics: AtlasApiRouteMetricRecord[];
 };
 
+export type AtlasApiRuntimeTelemetryRecord = AtlasApiRuntimeMetricsSnapshot & {
+  configurationStatus: "valid" | "invalid";
+  verificationCommand: string;
+  revision: string;
+  deploymentSlot: string;
+  recordedAt: string;
+};
+
+export type AtlasWorkerQueueRuntimeMetricRecord = {
+  key: string;
+  name: string;
+  readyCount: number;
+  processedCount: number;
+  failedCount: number;
+  lastProcessedAt: string | null;
+  lastFailedAt: string | null;
+};
+
+export type AtlasWorkerRuntimeMetricsSnapshot = {
+  service: "worker";
+  startedAt: string;
+  recordedAt: string;
+  uptimeSeconds: number;
+  revision: string;
+  deploymentSlot: string;
+  queueCount: number;
+  readyQueueCount: number;
+  processedCount: number;
+  failedCount: number;
+  queues: AtlasWorkerQueueRuntimeMetricRecord[];
+};
+
+export type AtlasWorkerTelemetryRecord = {
+  status: "healthy" | "warning" | "critical" | "stale" | "missing";
+  summary: string;
+  snapshotPath: string | null;
+  recordedAt: string | null;
+  staleAfterMinutes: number;
+  snapshot: AtlasWorkerRuntimeMetricsSnapshot | null;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 
 export type AtlasObservabilityAlertRecord = {
@@ -101,10 +142,11 @@ export type AtlasIncidentReadinessRecord = {
 };
 
 type AtlasObservabilityAlertInput = {
-  metrics: AtlasApiRuntimeMetricsSnapshot;
+  metrics: AtlasApiRuntimeTelemetryRecord;
   overview: AtlasOperatorOverviewRecord;
   configurationStatus: "valid" | "invalid";
   releaseStage: AtlasObservabilityReleaseStage;
+  workerTelemetry?: AtlasWorkerTelemetryRecord | null;
   generatedAt?: string;
 };
 
@@ -114,6 +156,74 @@ function createSeverityRank(severity: AtlasObservabilityAlertSeverity) {
 
 function roundMetric(value: number) {
   return Number(value.toFixed(2));
+}
+
+export function buildAtlasWorkerTelemetryRecord(input: {
+  snapshot: AtlasWorkerRuntimeMetricsSnapshot | null;
+  snapshotPath: string | null;
+  staleAfterMinutes: number;
+  now?: string;
+}): AtlasWorkerTelemetryRecord {
+  if (!input.snapshot) {
+    return {
+      status: "missing",
+      summary: "Shared worker telemetry has not been published yet.",
+      snapshotPath: input.snapshotPath,
+      recordedAt: null,
+      staleAfterMinutes: input.staleAfterMinutes,
+      snapshot: null
+    };
+  }
+
+  const now = new Date(input.now ?? new Date().toISOString());
+  const recordedAt = new Date(input.snapshot.recordedAt);
+  const staleThresholdMs = input.staleAfterMinutes * 60 * 1000;
+  const isStale = now.getTime() - recordedAt.getTime() > staleThresholdMs;
+
+  if (isStale) {
+    return {
+      status: "stale",
+      summary: `Worker telemetry is older than ${input.staleAfterMinutes} minutes.`,
+      snapshotPath: input.snapshotPath,
+      recordedAt: input.snapshot.recordedAt,
+      staleAfterMinutes: input.staleAfterMinutes,
+      snapshot: input.snapshot
+    };
+  }
+
+  if (input.snapshot.failedCount > 0) {
+    return {
+      status:
+        input.snapshot.failedCount >= 5 || input.snapshot.failedCount > input.snapshot.processedCount
+          ? "critical"
+          : "warning",
+      summary: `${input.snapshot.failedCount} worker job failures are currently recorded.`,
+      snapshotPath: input.snapshotPath,
+      recordedAt: input.snapshot.recordedAt,
+      staleAfterMinutes: input.staleAfterMinutes,
+      snapshot: input.snapshot
+    };
+  }
+
+  if (input.snapshot.readyQueueCount < input.snapshot.queueCount) {
+    return {
+      status: "warning",
+      summary: `${input.snapshot.readyQueueCount} of ${input.snapshot.queueCount} worker queues have reported readiness.`,
+      snapshotPath: input.snapshotPath,
+      recordedAt: input.snapshot.recordedAt,
+      staleAfterMinutes: input.staleAfterMinutes,
+      snapshot: input.snapshot
+    };
+  }
+
+  return {
+    status: "healthy",
+    summary: "Shared worker telemetry is current and all queues have reported readiness.",
+    snapshotPath: input.snapshotPath,
+    recordedAt: input.snapshot.recordedAt,
+    staleAfterMinutes: input.staleAfterMinutes,
+    snapshot: input.snapshot
+  };
 }
 
 function createAlertRecord(
@@ -238,6 +348,67 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
     );
   }
 
+  if (input.workerTelemetry) {
+    if (input.workerTelemetry.status === "missing" || input.workerTelemetry.status === "stale") {
+      alerts.push(
+        createAlertRecord({
+          id: "worker-telemetry-unavailable",
+          title: "Worker telemetry is unavailable",
+          description:
+            input.workerTelemetry.status === "missing"
+              ? "Atlas could not load the shared worker telemetry snapshot. Queue health should be treated as unverified."
+              : `Worker telemetry is older than ${input.workerTelemetry.staleAfterMinutes} minutes and should be treated as stale.`,
+          severity:
+            input.releaseStage === "ga" || input.releaseStage === "enterprise-rollout" ? "critical" : "warning",
+          source: "runtime",
+          metricLabel: "Worker telemetry",
+          status: "open",
+          runbookPath: "docs/runbooks/production-operations-baseline.md",
+          updatedAt: generatedAt
+        })
+      );
+    }
+
+    if (input.workerTelemetry.snapshot) {
+      const workerSnapshot = input.workerTelemetry.snapshot;
+
+      if (workerSnapshot.failedCount > 0) {
+        alerts.push(
+          createAlertRecord({
+            id: "worker-queue-failures",
+            title: "Worker queue failures require review",
+            description: `${workerSnapshot.failedCount} worker job failures were recorded across ${workerSnapshot.queueCount} queues.`,
+            severity:
+              workerSnapshot.failedCount >= 5 || workerSnapshot.failedCount > workerSnapshot.processedCount
+                ? "critical"
+                : "warning",
+            source: "runtime",
+            metricLabel: "Worker failures",
+            status: "monitoring",
+            runbookPath: "docs/runbooks/incident-response-baseline.md",
+            updatedAt: generatedAt
+          })
+        );
+      }
+
+      if (workerSnapshot.readyQueueCount < workerSnapshot.queueCount) {
+        alerts.push(
+          createAlertRecord({
+            id: "worker-queues-not-ready",
+            title: "One or more worker queues have not reported readiness",
+            description: `${workerSnapshot.readyQueueCount} of ${workerSnapshot.queueCount} worker queues have reported readiness in the current runtime.`,
+            severity: workerSnapshot.readyQueueCount === 0 ? "critical" : "warning",
+            source: "runtime",
+            metricLabel: "Worker queue readiness",
+            status: "monitoring",
+            runbookPath: "docs/runbooks/production-operations-baseline.md",
+            updatedAt: generatedAt
+          })
+        );
+      }
+    }
+  }
+
   return alerts.sort((left, right) => {
     return createSeverityRank(left.severity) - createSeverityRank(right.severity);
   });
@@ -281,6 +452,7 @@ export function buildAtlasIncidentReadinessRecord(input: {
   hasHealthEndpoints: boolean;
   hasRollbackVerification: boolean;
   hasBackupRestoreRunbook: boolean;
+  workerTelemetryStatus: AtlasWorkerTelemetryRecord["status"];
   activeAlertCount: number;
 }): AtlasIncidentReadinessRecord {
   const items: AtlasIncidentReadinessItem[] = [
@@ -329,6 +501,23 @@ export function buildAtlasIncidentReadinessRecord(input: {
         ? "Repo-owned backup and restore commands plus runbooks exist for operator use."
         : "Backup and restore procedures are not yet codified in the repo.",
       runbookPath: "docs/runbooks/database-backup-and-restore.md"
+    },
+    {
+      key: "worker-telemetry",
+      label: "Worker telemetry",
+      status:
+        input.workerTelemetryStatus === "healthy" || input.workerTelemetryStatus === "warning" ? "ready" : "warning",
+      detail:
+        input.workerTelemetryStatus === "healthy"
+          ? "Shared worker telemetry is fresh and queue runtime visibility is available to operators."
+          : input.workerTelemetryStatus === "warning"
+            ? "Shared worker telemetry is available, but one or more queue-level warning signals need review."
+            : input.workerTelemetryStatus === "critical"
+              ? "Shared worker telemetry is available, but worker queue health is currently degraded."
+              : input.workerTelemetryStatus === "stale"
+                ? "Shared worker telemetry is stale and should not be treated as current."
+                : "Shared worker telemetry is missing and queue runtime visibility is unavailable.",
+      runbookPath: "docs/runbooks/production-operations-baseline.md"
     },
     {
       key: "active-alert-load",

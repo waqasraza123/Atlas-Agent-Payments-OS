@@ -1194,7 +1194,37 @@ const databaseMock = vi.hoisted(() => ({
       createdAt: new Date().toISOString(),
       operationalIntegrationId: "integration-1"
     }
-  ])
+  ]),
+  readPublishedWorkerTelemetry: vi.fn(() => ({
+    status: "warning",
+    summary: "1 worker job failures are currently recorded.",
+    snapshotPath: "/tmp/worker-runtime.json",
+    recordedAt: new Date().toISOString(),
+    staleAfterMinutes: 10,
+    snapshot: {
+      service: "worker",
+      startedAt: new Date().toISOString(),
+      recordedAt: new Date().toISOString(),
+      uptimeSeconds: 120,
+      revision: "rev-123",
+      deploymentSlot: "blue",
+      queueCount: 2,
+      readyQueueCount: 2,
+      processedCount: 12,
+      failedCount: 1,
+      queues: [
+        {
+          key: "payments-execution",
+          name: "atlas-phase-0-payments-execution",
+          readyCount: 1,
+          processedCount: 8,
+          failedCount: 1,
+          lastProcessedAt: new Date().toISOString(),
+          lastFailedAt: new Date().toISOString()
+        }
+      ]
+    }
+  }))
 }));
 
 vi.mock("@atlas/database", async () => {
@@ -1236,6 +1266,7 @@ vi.mock("@atlas/database", async () => {
     listOperationalIntegrations: databaseMock.listOperationalIntegrations,
     listObservabilitySnapshots: databaseMock.listObservabilitySnapshots,
     listObservabilityAlertDispatches: databaseMock.listObservabilityAlertDispatches,
+    readPublishedWorkerTelemetry: databaseMock.readPublishedWorkerTelemetry,
     listAtlasRolloutAutomationSummary: databaseMock.listAtlasRolloutAutomationSummary,
     listAtlasRestoreDrillReports: databaseMock.listAtlasRestoreDrillReports,
     listAtlasSecretRotationExecutionReports: databaseMock.listAtlasSecretRotationExecutionReports,
@@ -2419,6 +2450,9 @@ describe("atlas api e2e", () => {
     const incidentsResponse = await request(app.getHttpServer())
       .get("/observability/incidents")
       .set("x-atlas-local-session", "local-token");
+    const workerResponse = await request(app.getHttpServer())
+      .get("/observability/worker")
+      .set("x-atlas-local-session", "local-token");
     const snapshotsResponse = await request(app.getHttpServer())
       .get("/observability/snapshots")
       .set("x-atlas-local-session", "local-token");
@@ -2439,6 +2473,14 @@ describe("atlas api e2e", () => {
     expect(incidentsResponse.body.item).toMatchObject({
       overallStatus: expect.any(String),
       items: expect.any(Array)
+    });
+    expect(workerResponse.status).toBe(200);
+    expect(workerResponse.body.item).toMatchObject({
+      status: "warning",
+      snapshot: expect.objectContaining({
+        service: "worker",
+        failedCount: 1
+      })
     });
     expect(snapshotsResponse.status).toBe(200);
     expect(snapshotsResponse.body.items).toEqual([
