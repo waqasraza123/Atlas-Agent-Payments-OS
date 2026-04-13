@@ -21,6 +21,7 @@ import {
 import type { OrganizationKind } from "@atlas/types";
 import type { DetailGridItem, RecordListPanelItem, TimelinePanelItem } from "@atlas/ui";
 import type { WorkspaceMetric } from "./workspace-data";
+import { auditWorkspaceDetailInspection } from "./tenant-read-audit";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 import { createAtlasFocusedDemoScenarioCards, type AtlasDemoScenarioCard } from "@/lib/demo-scenarios";
 import { buildAtlasLifecycleTimeline } from "@/lib/workspace-timeline";
@@ -1873,29 +1874,41 @@ export async function loadWorkspaceDetailModel(
   surfaceKey: AtlasWorkspaceSurfaceKey,
   recordId: string
 ): Promise<WorkspaceDetailModel | null> {
+  let model: WorkspaceDetailModel | null = null;
+
   if (surfaceKey === "requests" || surfaceKey === "transactions") {
-    return loadRequestDetailModel(actor, surfaceKey, recordId);
+    model = await loadRequestDetailModel(actor, surfaceKey, recordId);
   }
 
-  if (surfaceKey === "approvals") {
-    return loadApprovalDetailModel(actor, recordId);
+  if (!model && surfaceKey === "approvals") {
+    model = await loadApprovalDetailModel(actor, recordId);
   }
 
-  if (surfaceKey === "services") {
-    return loadServiceDetailModel(actor, recordId);
+  if (!model && surfaceKey === "services") {
+    model = await loadServiceDetailModel(actor, recordId);
   }
 
-  if (surfaceKey === "payments") {
-    return loadPaymentDetailModel(actor, recordId);
+  if (!model && surfaceKey === "payments") {
+    model = await loadPaymentDetailModel(actor, recordId);
   }
 
-  if (surfaceKey === "receipts") {
-    return loadReceiptDetailModel(actor, recordId);
+  if (!model && surfaceKey === "receipts") {
+    model = await loadReceiptDetailModel(actor, recordId);
   }
 
-  if (surfaceKey === "activity" || surfaceKey === "audit") {
-    return loadAuditDetailModel(actor, surfaceKey, recordId);
+  if (!model && (surfaceKey === "activity" || surfaceKey === "audit")) {
+    model = await loadAuditDetailModel(actor, surfaceKey, recordId);
   }
 
-  return null;
+  if (!model) {
+    return null;
+  }
+
+  await auditWorkspaceDetailInspection(actor, {
+    surfaceKey,
+    recordId,
+    title: model.title
+  });
+
+  return model;
 }

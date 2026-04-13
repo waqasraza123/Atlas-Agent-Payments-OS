@@ -11,6 +11,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import type { OrganizationKind, PaymentStatus, SpendRequestStatus } from "@atlas/types";
 import type { RecordListPanelItem } from "@atlas/ui";
 import { getWorkspaceEmptyStateDescription, loadWorkspaceOverviewModel, type WorkspaceOverviewModel } from "./workspace-data";
+import { auditWorkspaceSurfaceInspection } from "./tenant-read-audit";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 
 export type WorkspaceSurfaceModel = {
@@ -894,6 +895,11 @@ export async function loadWorkspaceSurfaceModel(
 
   const descriptions = createSurfaceDescriptions(actor.workspace, surfaceKey);
   const activityItems = surfaceKey === "overview" ? overview.activity : primaryItems;
+  await auditWorkspaceSurfaceInspection(actor, {
+    surfaceKey,
+    primaryItemCount: primaryItems.length,
+    activityItemCount: activityItems.length
+  });
 
   return {
     surfaceKey,
