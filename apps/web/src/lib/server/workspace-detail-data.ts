@@ -22,6 +22,13 @@ import type { OrganizationKind } from "@atlas/types";
 import type { DetailGridItem, RecordListPanelItem, TimelinePanelItem } from "@atlas/ui";
 import type { WorkspaceMetric } from "./workspace-data";
 import { auditWorkspaceDetailInspection } from "./tenant-read-audit";
+import {
+  createApprovalDetailWhere,
+  createAuditDetailWhere,
+  createPaymentDetailWhere,
+  createReceiptDetailWhere,
+  createRequestDetailWhere
+} from "./workspace-record-scope";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
 import { createAtlasFocusedDemoScenarioCards, type AtlasDemoScenarioCard } from "@/lib/demo-scenarios";
 import { buildAtlasLifecycleTimeline } from "@/lib/workspace-timeline";
@@ -248,9 +255,9 @@ async function loadRequestDetailModel(
   surfaceKey: Extract<AtlasWorkspaceSurfaceKey, "requests" | "transactions">,
   recordId: string
 ): Promise<WorkspaceDetailModel | null> {
-  const request = await prisma.spendRequest.findUnique({
+  const request = await prisma.spendRequest.findFirst({
     where: {
-      id: recordId
+      ...createRequestDetailWhere(actor, recordId)
     },
     include: {
       organization: true,
@@ -895,19 +902,10 @@ async function loadApprovalDetailModel(actor: AtlasActorContext, recordId: strin
       }
     }
   };
-  const approval =
-    (await prisma.approval.findUnique({
-      where: {
-        id: recordId
-      },
-      include
-    })) ??
-    (await prisma.approval.findUnique({
-      where: {
-        requestId: recordId
-      },
-      include
-    }));
+  const approval = await prisma.approval.findFirst({
+    where: createApprovalDetailWhere(actor, recordId),
+    include
+  });
 
   if (!approval || !canAccessRequest(actor, approval.request)) {
     return null;
@@ -1040,19 +1038,10 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       }
     }
   };
-  const payment =
-    (await prisma.payment.findUnique({
-      where: {
-        id: recordId
-      },
-      include
-    })) ??
-    (await prisma.payment.findUnique({
-      where: {
-        requestId: recordId
-      },
-      include
-    }));
+  const payment = await prisma.payment.findFirst({
+    where: createPaymentDetailWhere(actor, recordId),
+    include
+  });
 
   if (!payment) {
     return null;
@@ -1254,71 +1243,36 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
 }
 
 async function loadReceiptDetailModel(actor: AtlasActorContext, recordId: string): Promise<WorkspaceDetailModel | null> {
-  const receipt =
-    (await prisma.receipt.findUnique({
-      where: {
-        id: recordId
-      },
-      include: {
-        organization: true,
-        request: {
-          include: {
-            sellerOrganization: true,
-            approval: {
-              include: {
-                approver: true
-              }
-            },
-            payment: {
-              include: {
-                attempts: {
-                  orderBy: {
-                    attemptNumber: "desc"
-                  }
+  const receipt = await prisma.receipt.findFirst({
+    where: createReceiptDetailWhere(actor, recordId),
+    include: {
+      organization: true,
+      request: {
+        include: {
+          sellerOrganization: true,
+          approval: {
+            include: {
+              approver: true
+            }
+          },
+          payment: {
+            include: {
+              attempts: {
+                orderBy: {
+                  attemptNumber: "desc"
                 }
               }
-            },
-            auditEvents: {
-              orderBy: {
-                occurredAt: "asc"
-              }
+            }
+          },
+          auditEvents: {
+            orderBy: {
+              occurredAt: "asc"
             }
           }
         }
       }
-    })) ??
-    (await prisma.receipt.findUnique({
-      where: {
-        requestId: recordId
-      },
-      include: {
-        organization: true,
-        request: {
-          include: {
-            sellerOrganization: true,
-            approval: {
-              include: {
-                approver: true
-              }
-            },
-            payment: {
-              include: {
-                attempts: {
-                  orderBy: {
-                    attemptNumber: "desc"
-                  }
-                }
-              }
-            },
-            auditEvents: {
-              orderBy: {
-                occurredAt: "asc"
-              }
-            }
-          }
-        }
-      }
-    }));
+    }
+  });
 
   if (!receipt || !canAccessReceipt(actor, receipt)) {
     return null;
@@ -1651,10 +1605,8 @@ async function loadAuditDetailModel(
   surfaceKey: Extract<AtlasWorkspaceSurfaceKey, "activity" | "audit">,
   recordId: string
 ): Promise<WorkspaceDetailModel | null> {
-  const event = await prisma.auditEvent.findUnique({
-    where: {
-      id: recordId
-    },
+  const event = await prisma.auditEvent.findFirst({
+    where: createAuditDetailWhere(actor, recordId),
     include: {
       organization: true,
       user: true,
