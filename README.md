@@ -1,7 +1,5 @@
 # Atlas Agent Payments OS
 
-[![Phase](https://img.shields.io/badge/phase-0_foundation_hardening-0b1320?style=for-the-badge)](./docs/backlog/phase-0-foundation-detailed.md)
-[![Scope](https://img.shields.io/badge/scope-paid_APIs_%26_digital_services-0f766e?style=for-the-badge)](./docs/product/master-product-spec.md)
 [![License](https://img.shields.io/badge/license-Apache_2.0-1d4ed8?style=for-the-badge)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-24.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10.x-F69220?style=for-the-badge&logo=pnpm&logoColor=white)](https://pnpm.io/)
