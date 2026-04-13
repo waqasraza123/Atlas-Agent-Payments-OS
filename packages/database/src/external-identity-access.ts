@@ -25,6 +25,7 @@ export type AtlasExternalIdentityAssignmentRecord = {
   id: string;
   provider: string;
   externalEmail: string;
+  providerSubject: string | null;
   userId: string;
   userEmail: string;
   userName: string | null;
@@ -36,8 +37,13 @@ export type AtlasExternalIdentityAssignmentRecord = {
   role: MembershipRole;
   status: ExternalIdentityAssignmentStatus;
   statusReason: string | null;
+  upstreamUserId: string | null;
+  upstreamAssignmentId: string | null;
+  upstreamTargetRef: string | null;
+  upstreamStatus: string | null;
   provisionedAt: string;
   lastExchangedAt: string | null;
+  lastUpstreamSyncedAt: string | null;
   statusChangedAt: string | null;
   provisionedByUserEmail: string;
   statusChangedByUserEmail: string | null;
@@ -127,10 +133,16 @@ function mapAssignmentRecord(
     id: string;
     provider: string;
     externalEmail: string;
+    providerSubject: string | null;
     status: ExternalIdentityAssignmentStatus;
     statusReason: string | null;
+    upstreamUserId: string | null;
+    upstreamAssignmentId: string | null;
+    upstreamTargetRef: string | null;
+    upstreamStatus: string | null;
     provisionedAt: Date;
     lastExchangedAt: Date | null;
+    lastUpstreamSyncedAt: Date | null;
     statusChangedAt: Date | null;
     user: {
       id: string;
@@ -160,6 +172,7 @@ function mapAssignmentRecord(
     id: assignment.id,
     provider: assignment.provider,
     externalEmail: assignment.externalEmail,
+    providerSubject: assignment.providerSubject,
     userId: assignment.user.id,
     userEmail: assignment.user.email,
     userName: assignment.user.name,
@@ -171,8 +184,13 @@ function mapAssignmentRecord(
     role: assignment.membership.role,
     status: assignment.status,
     statusReason: assignment.statusReason,
+    upstreamUserId: assignment.upstreamUserId,
+    upstreamAssignmentId: assignment.upstreamAssignmentId,
+    upstreamTargetRef: assignment.upstreamTargetRef,
+    upstreamStatus: assignment.upstreamStatus,
     provisionedAt: assignment.provisionedAt.toISOString(),
     lastExchangedAt: assignment.lastExchangedAt?.toISOString() ?? null,
+    lastUpstreamSyncedAt: assignment.lastUpstreamSyncedAt?.toISOString() ?? null,
     statusChangedAt: assignment.statusChangedAt?.toISOString() ?? null,
     provisionedByUserEmail: assignment.provisionedByUser.email,
     statusChangedByUserEmail: assignment.statusChangedByUser?.email ?? null,

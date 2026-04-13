@@ -76,13 +76,13 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - operator governance can revoke active provider-backed tenant sessions from the same surface
 - operator governance can suspend, reactivate, or revoke persisted provider identity links from the same surface
 - operator governance can provision, suspend, reactivate, and revoke persisted external identity assignments from `/operator/identity-access`
+- command-mode upstream identity sync can now drive vendor-native Okta application assignment ownership and Auth0 organization membership ownership while persisting upstream subjects, provider references, and last sync posture on each Atlas assignment
 - support-mode sessions are blocked from CSV export and actor-scoped reporting paths that would bypass tenant-safe inspection rules
 
 ## Current Gaps
 
 - no external approval workflow outside Atlas for issuing support grants
-- no direct upstream provisioning integration with an external IdP yet
-- no automated directory deprovisioning or SCIM lifecycle yet
+- no upstream push integration beyond the current Okta application-assignment and Auth0 organization-membership ownership baseline
 
 ## Verification Commands
 
@@ -94,6 +94,5 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
-- add direct upstream identity provisioning and deprovisioning beyond the current Atlas-managed assignment ledger
-- add vendor-native upstream identity integration beyond the current provider-aware lifecycle adapter and owned rollout-target baseline
+- add broader upstream directory lifecycle coverage beyond the current Okta application-assignment and Auth0 organization-membership ownership baseline
 - add formal access-review operations beyond the current campaign-driven support-governance baseline

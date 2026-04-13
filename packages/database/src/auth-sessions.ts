@@ -363,7 +363,8 @@ async function exchangeIdentitySession(
           id: externalIdentityAssignment.id
         },
         data: {
-          lastExchangedAt: new Date()
+          lastExchangedAt: new Date(),
+          providerSubject: subject
         }
       });
     }

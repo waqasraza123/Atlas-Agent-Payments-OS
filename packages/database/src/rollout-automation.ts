@@ -192,6 +192,66 @@ function readAdapterResult(stdout: string | null | undefined): AtlasAutomationAd
   return null;
 }
 
+function readAdapterMetadataText(metadata: AtlasAutomationAdapterResult["metadata"] | null | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function mapUpstreamLifecycleStatus(action: AtlasUpstreamIdentityLifecycleAction) {
+  if (action === "SUSPEND") {
+    return "SUSPENDED";
+  }
+
+  if (action === "REVOKE") {
+    return "REVOKED";
+  }
+
+  return "ACTIVE";
+}
+
+async function persistUpstreamIdentityAssignmentState(
+  input: {
+    assignment: AtlasExternalIdentityAssignmentRecord;
+    action: AtlasUpstreamIdentityLifecycleAction;
+    completedAt: string;
+    adapterResult: AtlasAutomationAdapterResult | null;
+    fallbackTargetRef: string | null;
+  },
+  client: DatabaseClient
+) {
+  if (
+    !("externalIdentityAssignment" in client) ||
+    !client.externalIdentityAssignment ||
+    typeof client.externalIdentityAssignment.update !== "function"
+  ) {
+    return;
+  }
+
+  const upstreamUserId =
+    readAdapterMetadataText(input.adapterResult?.metadata, "upstreamUserId") ?? input.assignment.upstreamUserId;
+  const upstreamAssignmentId =
+    readAdapterMetadataText(input.adapterResult?.metadata, "upstreamAssignmentId") ?? input.assignment.upstreamAssignmentId;
+  const providerSubject =
+    readAdapterMetadataText(input.adapterResult?.metadata, "providerSubject") ?? input.assignment.providerSubject;
+  const upstreamTargetRef = input.adapterResult?.targetRef ?? input.fallbackTargetRef ?? input.assignment.upstreamTargetRef;
+  const upstreamStatus =
+    readAdapterMetadataText(input.adapterResult?.metadata, "upstreamStatus") ?? mapUpstreamLifecycleStatus(input.action);
+
+  await client.externalIdentityAssignment.update({
+    where: {
+      id: input.assignment.id
+    },
+    data: {
+      providerSubject,
+      upstreamUserId,
+      upstreamAssignmentId,
+      upstreamTargetRef,
+      upstreamStatus,
+      lastUpstreamSyncedAt: new Date(input.completedAt)
+    }
+  });
+}
+
 function executeConfiguredCommand(
   mode: AtlasCommandAdapterMode,
   command: string | null,
@@ -963,9 +1023,16 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
     action: input.action,
     actorUserEmail: input.actor.user.email,
     assignmentId: input.assignment.id,
+    assignmentProvider: input.assignment.provider,
     externalEmail: input.assignment.externalEmail,
+    providerSubject: input.assignment.providerSubject,
+    upstreamUserId: input.assignment.upstreamUserId,
+    upstreamAssignmentId: input.assignment.upstreamAssignmentId,
+    upstreamTargetRef: input.assignment.upstreamTargetRef,
     organizationSlug: input.assignment.organizationSlug,
     role: input.assignment.role,
+    userEmail: input.assignment.userEmail,
+    userName: input.assignment.userName,
     reason: input.reason,
     operationalIntegrationId: resolvedIntegration?.id ?? null,
     ownerEmail: resolvedIntegration?.ownerEmail ?? null,
@@ -1002,6 +1069,19 @@ export async function executeAtlasUpstreamIdentityLifecycle(input: {
     command,
     adapterResult: command.adapterResult
   };
+
+  if (report.mode === "command") {
+    await persistUpstreamIdentityAssignmentState(
+      {
+        assignment: input.assignment,
+        action: input.action,
+        completedAt: report.generatedAt,
+        adapterResult: report.adapterResult,
+        fallbackTargetRef: resolvedIntegration?.endpointReference ?? null
+      },
+      client
+    );
+  }
 
   writeJsonArtifact(reportPath, report);
   const proofArtifacts = [

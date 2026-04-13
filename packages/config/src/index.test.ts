@@ -349,6 +349,7 @@ describe("atlas config", () => {
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", "atlas-identity-admin --payload \"$ATLAS_OPERATION_PAYLOAD\"");
     vi.stubEnv("AUTH_OKTA_ORG_URL", "https://atlas.okta.example");
     vi.stubEnv("AUTH_OKTA_SCIM_APP_ID", "atlas-okta-app");
+    vi.stubEnv("AUTH_OKTA_API_TOKEN", "okta-token");
     vi.stubEnv("AUTH_IDENTITY_SESSION_TTL_MINUTES", "240");
     vi.stubEnv("AUTH_LOCAL_SESSION_TTL_MINUTES", "120");
     vi.stubEnv("AUTH_SUPPORT_ACCESS_TTL_MINUTES", "30");
@@ -441,6 +442,7 @@ describe("atlas config", () => {
     expect(authRuntime.identityBridgeProvider).toBe("generic-sso");
     expect(upstreamIdentityRuntime.mode).toBe("command");
     expect(upstreamIdentityRuntime.provider).toBe("okta-scim");
+    expect(upstreamIdentityRuntime.oktaApiToken).toBe("okta-token");
     expect(authRuntime.identitySessionTtlMinutes).toBe(240);
     expect(authRuntime.localSessionTtlMinutes).toBe(120);
     expect(authRuntime.supportAccessTtlMinutes).toBe(30);
@@ -599,6 +601,7 @@ describe("atlas config", () => {
       expect.arrayContaining([
         "AUTH_OKTA_ORG_URL",
         "AUTH_OKTA_SCIM_APP_ID",
+        "AUTH_OKTA_API_TOKEN",
         "RESTORE_DRILL_KUBERNETES_NAMESPACE",
         "RESTORE_DRILL_KUBERNETES_JOB_TEMPLATE",
         "SECRET_ROTATION_AWS_REGION",

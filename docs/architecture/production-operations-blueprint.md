@@ -175,7 +175,7 @@ The detailed stage model is defined in [release-maturity-model.md](./release-mat
 - API metrics, operator observability routes, and incident runbooks now exist
 - signed session handling, direct external OIDC exchange into persisted Atlas sessions, reviewable and recertifiable support-access grants, campaign-driven review automation, provider-session revocation, and promotion-manifest automation now exist
 - actor-scoped reporting and export enforcement, tenant-read audit events, restore-drill verification, proof-bearing restore reports, backup integrity manifests, secret-rotation manifest enforcement, and artifact-bound promotion bundles now exist
-- provider-aware rollout adapters, a persisted operational integration ownership registry, a durable rollout execution ledger with integrity-tracked proof artifacts, owned S3-compatible remote proof storage, AWS Secrets Manager rotation dispatch, and GitHub Actions deployment dispatch now exist, but external alert dispatch, long-term metrics retention, and live upstream identity-provider ownership are still pending
+- provider-aware rollout adapters, a persisted operational integration ownership registry, a durable rollout execution ledger with integrity-tracked proof artifacts, owned S3-compatible remote proof storage, AWS Secrets Manager rotation dispatch, GitHub Actions deployment dispatch, and vendor-native upstream identity-provider ownership now exist, but external alert dispatch and long-term metrics retention are still pending
 
 ### Required before a production-grade focused v1 rollout
 

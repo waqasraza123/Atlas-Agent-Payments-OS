@@ -41,6 +41,7 @@ export default async function OperatorIdentityAccessPage() {
   const suspendedAssignments = assignments.filter((assignment) => assignment.status === "SUSPENDED");
   const revokedAssignments = assignments.filter((assignment) => assignment.status === "REVOKED");
   const liveAssignments = assignments.filter((assignment) => assignment.activeSessionCount > 0);
+  const upstreamTrackedAssignments = assignments.filter((assignment) => assignment.lastUpstreamSyncedAt);
 
   return (
     <div className="space-y-6">
@@ -49,7 +50,7 @@ export default async function OperatorIdentityAccessPage() {
         title="Provision external tenant identities"
         description="Atlas now requires an explicit external identity assignment before an external provider token can exchange into a tenant-scoped Atlas session."
       />
-      <section className="grid gap-4 xl:grid-cols-4">
+      <section className="grid gap-4 xl:grid-cols-5">
         <MetricCard
           label="Available targets"
           value={String(organizations.length)}
@@ -69,6 +70,11 @@ export default async function OperatorIdentityAccessPage() {
           label="Live provider sessions"
           value={String(liveAssignments.length)}
           detail="Assignments with at least one currently active provider-backed Atlas session."
+        />
+        <MetricCard
+          label="Upstream tracked"
+          value={String(upstreamTrackedAssignments.length)}
+          detail="Assignments with a recorded live upstream sync timestamp and durable provider reference."
         />
       </section>
       <WorkflowFormPanel
@@ -173,9 +179,15 @@ export default async function OperatorIdentityAccessPage() {
           id: assignment.id,
           title: `${assignment.externalEmail} -> ${assignment.organizationName}`,
           description: `${assignment.provider} · ${assignment.role} · provisioned by ${assignment.provisionedByUserEmail}`,
-          detail: assignment.lastExchangedAt
-            ? `Last exchanged ${new Date(assignment.lastExchangedAt).toLocaleString()} · ${assignment.activeSessionCount} active sessions`
-            : `No successful exchanges yet · ${assignment.activeSessionCount} active sessions`,
+          detail: [
+            assignment.lastExchangedAt
+              ? `Last exchanged ${new Date(assignment.lastExchangedAt).toLocaleString()}`
+              : "No successful exchanges yet",
+            `${assignment.activeSessionCount} active sessions`,
+            assignment.lastUpstreamSyncedAt
+              ? `upstream ${assignment.upstreamStatus ?? "SYNCED"} ${new Date(assignment.lastUpstreamSyncedAt).toLocaleString()}`
+              : "upstream not synced"
+          ].join(" · "),
           statusLabel: assignment.status,
           statusTone: assignment.activeSessionCount > 0 ? "success" : "default"
         }))}
@@ -207,6 +219,14 @@ export default async function OperatorIdentityAccessPage() {
                     {assignment.status} · {assignment.activeSessionCount} active sessions · provisioned{" "}
                     {new Date(assignment.provisionedAt).toLocaleString()}
                   </p>
+                  <p className="text-xs text-[var(--atlas-muted)]">
+                    Upstream: {assignment.upstreamStatus ?? "NOT_SYNCED"}
+                    {assignment.lastUpstreamSyncedAt ? ` · synced ${new Date(assignment.lastUpstreamSyncedAt).toLocaleString()}` : ""}
+                    {assignment.upstreamUserId ? ` · user ${assignment.upstreamUserId}` : ""}
+                  </p>
+                  {assignment.upstreamTargetRef ? (
+                    <p className="text-xs text-[var(--atlas-muted)] break-all">Target: {assignment.upstreamTargetRef}</p>
+                  ) : null}
                   {assignment.statusReason ? (
                     <p className="text-xs text-[var(--atlas-muted)]">Reason: {assignment.statusReason}</p>
                   ) : null}

@@ -66,6 +66,9 @@ function createOperationalIntegrationRecord(overrides: Record<string, unknown> =
 
 function createOperationalIntegrationClient(record = createOperationalIntegrationRecord()) {
   return {
+    externalIdentityAssignment: {
+      update: vi.fn(async () => undefined)
+    },
     operationalIntegration: {
       findMany: vi.fn(async () => [record]),
       update: vi.fn(async () => undefined)
@@ -288,6 +291,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
         id: "assignment-1",
         provider: "okta-design-partner",
         externalEmail: "buyer-admin@example.com",
+        providerSubject: null,
         userId: "user-buyer",
         userEmail: "buyer-admin@example.com",
         userName: "Buyer Admin",
@@ -299,8 +303,13 @@ describe("rollout automation", { timeout: 15000 }, () => {
         role: "ADMIN",
         status: "ACTIVE",
         statusReason: null,
+        upstreamUserId: null,
+        upstreamAssignmentId: null,
+        upstreamTargetRef: null,
+        upstreamStatus: null,
         provisionedAt: new Date().toISOString(),
         lastExchangedAt: null,
+        lastUpstreamSyncedAt: null,
         statusChangedAt: null,
         provisionedByUserEmail: "operator-admin@atlas.local",
         statusChangedByUserEmail: null,
@@ -540,8 +549,10 @@ describe("rollout automation", { timeout: 15000 }, () => {
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_PROVIDER", "okta-scim");
     vi.stubEnv("AUTH_OKTA_ORG_URL", "https://atlas.okta.example");
     vi.stubEnv("AUTH_OKTA_SCIM_APP_ID", "atlas-okta-app");
+    vi.stubEnv("AUTH_OKTA_API_TOKEN", "okta-token");
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_COMMAND", `${process.execPath} ${adapterScriptPath("upstream-identity.mjs")}`);
     vi.stubEnv("AUTH_UPSTREAM_IDENTITY_REPORT_DIR", join(sandbox, "upstream-reports"));
+    vi.stubEnv("ATLAS_SIMULATE_EXTERNAL_EXECUTION", "true");
 
     vi.stubEnv("APP_ENV", "staging");
 
@@ -560,6 +571,7 @@ describe("rollout automation", { timeout: 15000 }, () => {
         id: "assignment-1",
         provider: "okta-design-partner",
         externalEmail: "buyer-admin@example.com",
+        providerSubject: null,
         userId: "user-buyer",
         userEmail: "buyer-admin@example.com",
         userName: "Buyer Admin",
@@ -571,8 +583,13 @@ describe("rollout automation", { timeout: 15000 }, () => {
         role: "ADMIN",
         status: "ACTIVE",
         statusReason: null,
+        upstreamUserId: null,
+        upstreamAssignmentId: null,
+        upstreamTargetRef: null,
+        upstreamStatus: null,
         provisionedAt: new Date().toISOString(),
         lastExchangedAt: null,
+        lastUpstreamSyncedAt: null,
         statusChangedAt: null,
         provisionedByUserEmail: "operator-admin@atlas.local",
         statusChangedByUserEmail: null,
@@ -592,6 +609,19 @@ describe("rollout automation", { timeout: 15000 }, () => {
       expect.objectContaining({
         kind: "UPSTREAM_IDENTITY",
         provider: "okta-scim"
+      })
+    );
+    expect(client.externalIdentityAssignment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "assignment-1"
+        },
+        data: expect.objectContaining({
+          providerSubject: expect.any(String),
+          upstreamUserId: expect.any(String),
+          upstreamStatus: "REVOKED",
+          lastUpstreamSyncedAt: expect.any(Date)
+        })
       })
     );
   });

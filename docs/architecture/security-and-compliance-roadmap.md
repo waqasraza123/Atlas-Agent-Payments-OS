@@ -102,7 +102,6 @@ These are placeholders for tracked future work, not current claims:
 - formal directory provisioning and deprovisioning beyond the current campaign-driven support grant and identity-link governance baseline
 - broad public rollout security posture
 - hardened production auth beyond the current local-first, signed-session, and external OIDC exchange baseline
-- live upstream identity-provider lifecycle operations beyond the current external OIDC exchange, persisted-session, assignment, identity-link lifecycle, provider-aware adapter baseline, and owned rollout-target registry
 
 ## Must Be Done Before Broad Real-World Rollout
 
@@ -113,6 +112,6 @@ These are placeholders for tracked future work, not current claims:
 - secrets management and rotation process
 - stronger operator access constraints
 - support-session review expiry, recertification, reviewability, revoke flows, and operator-governed campaign handling
-- stored non-local restore proof ownership and live upstream identity-provider ownership
+- stored non-local restore proof ownership
 - documented retention, export, and deletion behavior
 - environment and deployment controls must remain reviewable and validated per stage

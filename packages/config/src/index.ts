@@ -201,8 +201,10 @@ export const upstreamIdentityRuntime = {
   reportDirectory: readText(process.env.AUTH_UPSTREAM_IDENTITY_REPORT_DIR, "operations-artifacts/upstream-identity"),
   oktaOrgUrl: readOptionalText(process.env.AUTH_OKTA_ORG_URL),
   oktaScimAppId: readOptionalText(process.env.AUTH_OKTA_SCIM_APP_ID),
+  oktaApiToken: readOptionalText(process.env.AUTH_OKTA_API_TOKEN),
   auth0Domain: readOptionalText(process.env.AUTH_AUTH0_DOMAIN),
-  auth0OrganizationId: readOptionalText(process.env.AUTH_AUTH0_ORGANIZATION_ID)
+  auth0OrganizationId: readOptionalText(process.env.AUTH_AUTH0_ORGANIZATION_ID),
+  auth0ManagementApiToken: readOptionalText(process.env.AUTH_AUTH0_MANAGEMENT_API_TOKEN)
 } as const;
 
 export const apiRuntime = {
@@ -664,6 +666,12 @@ export function validateAtlasRuntimeConfiguration(
         "AUTH_OKTA_SCIM_APP_ID",
         "AUTH_OKTA_SCIM_APP_ID is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=okta-scim."
       );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_OKTA_API_TOKEN",
+        "AUTH_OKTA_API_TOKEN is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=okta-scim."
+      );
     }
 
     if (provider === "auth0-management") {
@@ -678,6 +686,12 @@ export function validateAtlasRuntimeConfiguration(
         env,
         "AUTH_AUTH0_ORGANIZATION_ID",
         "AUTH_AUTH0_ORGANIZATION_ID is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=auth0-management."
+      );
+      requireRuntimeVariable(
+        issues,
+        env,
+        "AUTH_AUTH0_MANAGEMENT_API_TOKEN",
+        "AUTH_AUTH0_MANAGEMENT_API_TOKEN is required when AUTH_UPSTREAM_IDENTITY_PROVIDER=auth0-management."
       );
     }
   }

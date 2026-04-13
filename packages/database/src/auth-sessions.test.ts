@@ -105,7 +105,8 @@ describe("auth session exchange workflow", () => {
         id: "assignment-1"
       },
       data: {
-        lastExchangedAt: expect.any(Date)
+        lastExchangedAt: expect.any(Date),
+        providerSubject: "subject-1"
       }
     });
     expect(transaction.authSession.create).toHaveBeenCalled();
