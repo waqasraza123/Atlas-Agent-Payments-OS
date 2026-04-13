@@ -1,6 +1,7 @@
 import { canAtlasActorMutate, type AtlasActorContext } from "@atlas/auth";
 import { Prisma, type OperationalIntegrationKind, type OperationalIntegrationStatus, type OperationalIntegrationVerificationStatus, type OperationalTargetEnvironment, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { assertAtlasOperatorSessionGovernance } from "./operator-session-governance";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
@@ -58,6 +59,11 @@ function assertOperatorGovernanceActor(actor: AtlasActorContext) {
       "forbidden"
     );
   }
+
+  assertAtlasOperatorSessionGovernance(actor, {
+    surface: "Operational integration governance actions",
+    createError: (message) => new AtlasOperationalIntegrationWorkflowError(message, "forbidden")
+  });
 }
 
 function normalizeRequiredText(value: unknown, label: string, minimumLength = 2) {

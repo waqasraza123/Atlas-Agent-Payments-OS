@@ -30,6 +30,8 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - local session issuance is only allowed in `local` and `development`
 - the web session route signs the cookie payload before storing it
 - the API and web runtimes reject tampered or expired session tokens
+- the API and web runtimes also reject local-development session tokens whenever the runtime is not `local` or `development`
+- the API and web runtimes also reject local-development session tokens whenever `AUTH_PROVIDER_MODE` is not `local-signed`
 - fallback default profiles remain limited to local and development
 
 ## Identity-Bridge Exchange Behavior
@@ -63,10 +65,15 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - support-access sessions are read-only at the API guard layer
 - support-mode writes are also blocked in shared buyer, seller, payment, and programmable-settlement workflow layers
 - support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge` or `AUTH_PROVIDER_MODE=external-oidc`
+- operator governance actions require provider-backed Atlas sessions outside local and development
+- operator governance actions require provider-backed Atlas sessions during `public-beta`, `ga`, and `enterprise-rollout`
+- operator governance actions require external OIDC-backed Atlas sessions during `ga` and `enterprise-rollout`
 - allowed support issuer emails can be limited through `AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS`
 - every issued support session creates a persisted grant record
 - every review decision creates a persisted review record
 - approved grants must be explicitly activated by the requester before support mode starts
+- support-grant activation rejects local-signed grants outside local and development
+- support-grant activation rejects non-external-OIDC grants during `ga` and `enterprise-rollout`
 - support grants can be revoked explicitly before TTL expiry
 - expired grants are marked expired when read
 - active grants move to recertification-required when review expiry is reached
@@ -94,5 +101,5 @@ All current session types are HMAC-signed and time-bounded. Local development an
 
 ## Next Hardening Step
 
+- add deeper tenant-boundary enforcement beyond the current operator-governance and reporting/export guardrails
 - add broader upstream directory lifecycle coverage beyond the current Okta application-assignment and Auth0 organization-membership ownership baseline
-- add formal access-review operations beyond the current campaign-driven support-governance baseline

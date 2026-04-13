@@ -626,12 +626,32 @@ export function listAtlasRuntimeVariables(service: AtlasRuntimeService) {
   return [...atlasServiceRuntimeVariables(service)];
 }
 
+export function canAtlasUseLocalDevelopmentSessions(
+  appEnv: AtlasAppEnvironment,
+  providerMode: AtlasIdentityProviderMode
+) {
+  return providerMode === "local-signed" && (appEnv === "local" || appEnv === "development");
+}
+
+export function requiresAtlasProviderBackedAuthForEnvironment(appEnv: AtlasAppEnvironment) {
+  return appEnv === "staging" || appEnv === "production";
+}
+
+export function requiresAtlasProviderBackedOperatorGovernanceForStage(releaseStage: AtlasReleaseStage) {
+  return releaseStage === "public-beta" || releaseStage === "ga" || releaseStage === "enterprise-rollout";
+}
+
+export function requiresAtlasExternalOidcForReleaseStage(releaseStage: AtlasReleaseStage) {
+  return releaseStage === "ga" || releaseStage === "enterprise-rollout";
+}
+
 export function validateAtlasRuntimeConfiguration(
   service: AtlasRuntimeService,
   env: Record<string, string | undefined> = process.env
 ): AtlasRuntimeValidationResult {
   const appEnv = readAppEnvironment(env.APP_ENV);
   const providerMode = readIdentityProviderMode(env.AUTH_PROVIDER_MODE);
+  const releaseStage = readReleaseStage(env.RELEASE_STAGE);
   const requiredVariables = [
     ...listAtlasRuntimeVariables(service),
     ...(appEnv !== "local"
@@ -911,6 +931,42 @@ export function validateAtlasRuntimeConfiguration(
         "MINIO_BUCKET_OPERATIONS is required when OPERATIONAL_PROOF_STORAGE_MODE=s3-compatible."
       );
     }
+  }
+
+  if (requiresAtlasProviderBackedAuthForEnvironment(appEnv) && providerMode === "local-signed") {
+    issues.push({
+      variable: "AUTH_PROVIDER_MODE",
+      message: `${appEnv} requires AUTH_PROVIDER_MODE=identity-bridge or AUTH_PROVIDER_MODE=external-oidc.`
+    });
+  }
+
+  if (requiresAtlasExternalOidcForReleaseStage(releaseStage) && providerMode !== "external-oidc") {
+    issues.push({
+      variable: "AUTH_PROVIDER_MODE",
+      message: `RELEASE_STAGE=${releaseStage} requires AUTH_PROVIDER_MODE=external-oidc.`
+    });
+  }
+
+  if (
+    (requiresAtlasProviderBackedAuthForEnvironment(appEnv) ||
+      requiresAtlasProviderBackedOperatorGovernanceForStage(releaseStage)) &&
+    readTextList(env.AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS).length === 0
+  ) {
+    issues.push({
+      variable: "AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS",
+      message: `${appEnv} and RELEASE_STAGE=${releaseStage} require AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured for operator governance.`
+    });
+  }
+
+  if (
+    (requiresAtlasProviderBackedAuthForEnvironment(appEnv) ||
+      requiresAtlasProviderBackedOperatorGovernanceForStage(releaseStage)) &&
+    readNumber(env.AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS, 0) <= 0
+  ) {
+    issues.push({
+      variable: "AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS",
+      message: `${appEnv} and RELEASE_STAGE=${releaseStage} require AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS to be explicitly configured for operator governance.`
+    });
   }
 
   return {

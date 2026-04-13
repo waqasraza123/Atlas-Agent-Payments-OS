@@ -3,6 +3,7 @@
 import {
   atlasLocalSessionCookieName,
   createAtlasSupportAccessRecord,
+  type AtlasActorContext,
   type AtlasSupportAccessTargetWorkspace
 } from "@atlas/auth";
 import { createAtlasSupportSessionToken } from "@atlas/auth/server";
@@ -23,6 +24,7 @@ import {
   provisionExternalIdentityAssignment,
   performOperatorCaseAction,
   registerOperationalIntegration,
+  assertAtlasOperatorSessionGovernance,
   updateIdentityProviderLinkLifecycle,
   updateOperationalIntegrationLifecycle,
   updateOperationalIntegrationVerification,
@@ -51,11 +53,18 @@ function toTextValue(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function assertOperatorGovernanceActor(actor: AtlasActorContext, surface: string) {
+  assertAtlasOperatorSessionGovernance(actor, {
+    surface,
+    createError: (message) => new Error(message)
+  });
+}
+
 function redirectWithFeedback(path: string, title: string, description: string, tone: WorkflowFeedbackTone = "default"): never {
   redirect(buildWorkflowFeedbackHref(path, title, description, tone));
 }
 
-async function requireOperatorResolution() {
+async function requireOperatorResolution(surface = "Operator governance actions") {
   const resolution = await resolveWorkspaceActor("OPERATOR");
 
   if (resolution.status !== "ready") {
@@ -67,11 +76,13 @@ async function requireOperatorResolution() {
     );
   }
 
+  assertOperatorGovernanceActor(resolution.actor, surface);
+
   return resolution;
 }
 
-async function requireOperatorActor() {
-  const resolution = await requireOperatorResolution();
+async function requireOperatorActor(surface = "Operator governance actions") {
+  const resolution = await requireOperatorResolution(surface);
   return resolution.actor;
 }
 

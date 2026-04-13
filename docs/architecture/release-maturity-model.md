@@ -148,6 +148,7 @@ This document defines the release stages Atlas should move through and the go or
 
 - broader rollout risks are reviewed and acceptable
 - analytics, export, and support inspection paths stay tenant-scoped under support and provider-backed sessions
+- operator governance actions rely on provider-backed Atlas sessions rather than local-development tokens
 
 ### Docs readiness
 
@@ -177,6 +178,7 @@ This document defines the release stages Atlas should move through and the go or
 - auth, authorization, tenancy, audit, and secret handling meet the target customer bar
 - internal support access does not bypass tenant controls
 - external identity-provider exchange and persisted Atlas session brokering are operationally credible
+- operator governance and support-access activation rely on external OIDC-backed Atlas sessions
 
 ### Docs readiness
 

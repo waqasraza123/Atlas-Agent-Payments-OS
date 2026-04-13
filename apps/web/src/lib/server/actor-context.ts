@@ -12,7 +12,13 @@ import {
   type AtlasSupportAccessRecord
 } from "@atlas/auth";
 import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
-import { appRuntime, authRuntime } from "@atlas/config";
+import {
+  appRuntime,
+  authRuntime,
+  canAtlasUseLocalDevelopmentSessions,
+  requiresAtlasExternalOidcForReleaseStage,
+  requiresAtlasProviderBackedAuthForEnvironment
+} from "@atlas/config";
 import { loadAuthSessionById, prisma, touchAuthSession } from "@atlas/database";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
 import { cookies } from "next/headers";
@@ -52,13 +58,17 @@ async function readSignedSessionSelection(workspace: OrganizationKind) {
   );
 
   if (verification.status === "ready") {
+    if (
+      verification.payload.source === "local-development" &&
+      !canAtlasUseLocalDevelopmentSessions(appRuntime.appEnv, authRuntime.providerMode)
+    ) {
+      return null;
+    }
+
     return verification.payload;
   }
 
-  if (
-    authRuntime.providerMode !== "local-signed" ||
-    (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development")
-  ) {
+  if (!canAtlasUseLocalDevelopmentSessions(appRuntime.appEnv, authRuntime.providerMode)) {
     return null;
   }
 
@@ -268,7 +278,12 @@ async function loadActorContext(input: {
     workspace: membership.organization.kind,
     agentId: input.selection.agentId,
     source: input.source,
-    providerMode: input.source === "identity-bridge" ? "identity-bridge" : authRuntime.providerMode,
+    providerMode:
+      authRuntime.providerMode === "external-oidc"
+        ? "external-oidc"
+        : input.source === "identity-bridge" || authRuntime.providerMode === "identity-bridge"
+          ? "identity-bridge"
+          : "local-signed",
     sessionIssuedAt: input.issuedAt,
     sessionExpiresAt: input.expiresAt,
     sessionId: null
@@ -292,7 +307,10 @@ async function loadActorContext(input: {
     supportGrant.issuedByUser.email.toLowerCase() !== input.selection.userEmail.toLowerCase() ||
     supportGrant.issuedByOrganization.slug !== input.selection.organizationSlug ||
     supportGrant.targetOrganization.slug !== input.supportAccess.targetOrganizationSlug ||
-    supportGrant.targetWorkspace !== input.supportAccess.targetWorkspace
+    supportGrant.targetWorkspace !== input.supportAccess.targetWorkspace ||
+    (requiresAtlasProviderBackedAuthForEnvironment(appRuntime.appEnv) && supportGrant.authProviderMode === "LOCAL_SIGNED") ||
+    (requiresAtlasExternalOidcForReleaseStage(appRuntime.releaseStage) &&
+      supportGrant.authProviderMode !== "EXTERNAL_OIDC")
   ) {
     return null;
   }

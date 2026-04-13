@@ -833,4 +833,75 @@ describe("atlas config", () => {
       "Secret rotation execution report must include the stored manifest path."
     ]);
   });
+
+  it("reports release-stage auth governance violations in runtime validation", async () => {
+    const { validateAtlasRuntimeConfiguration } = await import("./index");
+
+    expect(
+      validateAtlasRuntimeConfiguration("api", {
+        APP_ENV: "staging",
+        LOG_LEVEL: "info",
+        RELEASE_STAGE: "private-beta",
+        AUTH_PROVIDER_MODE: "local-signed",
+        AUTH_SESSION_SIGNING_SECRET: "atlas-secret",
+        AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS: "24",
+        API_PORT: "4000",
+        API_BASE_URL: "https://api.atlas.example",
+        NEXT_PUBLIC_APP_URL: "https://atlas.example",
+        DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        MINIO_ENDPOINT: "minio.atlas.example",
+        MINIO_PORT: "9000",
+        MINIO_REGION: "us-east-1",
+        MINIO_ACCESS_KEY: "atlasminio",
+        MINIO_SECRET_KEY: "atlassecret",
+        MINIO_BUCKET_RECEIPTS: "atlas-receipts",
+        MINIO_BUCKET_OPERATIONS: "atlas-operations",
+        APP_REVISION: "rev-1",
+        DEPLOYMENT_SLOT: "blue",
+        RELEASE_ARTIFACT_ID: "atlas-staging-build",
+        RELEASE_ARTIFACT_SHA256: "a".repeat(64)
+      }).issues.map((issue) => issue.message)
+    ).toEqual(
+      expect.arrayContaining([
+        "staging requires AUTH_PROVIDER_MODE=identity-bridge or AUTH_PROVIDER_MODE=external-oidc.",
+        "staging and RELEASE_STAGE=private-beta require AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS to be explicitly configured for operator governance."
+      ])
+    );
+
+    expect(
+      validateAtlasRuntimeConfiguration("api", {
+        APP_ENV: "production",
+        LOG_LEVEL: "info",
+        RELEASE_STAGE: "ga",
+        AUTH_PROVIDER_MODE: "identity-bridge",
+        AUTH_SESSION_SIGNING_SECRET: "atlas-secret",
+        AUTH_IDENTITY_BRIDGE_SECRET: "bridge-secret",
+        AUTH_IDENTITY_BRIDGE_PROVIDER: "generic-sso",
+        AUTH_IDENTITY_SESSION_TTL_MINUTES: "480",
+        AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS: "operator-admin@atlas.local",
+        AUTH_SUPPORT_ACCESS_REVIEW_TTL_HOURS: "24",
+        API_PORT: "4000",
+        API_BASE_URL: "https://api.atlas.example",
+        NEXT_PUBLIC_APP_URL: "https://atlas.example",
+        DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        MINIO_ENDPOINT: "minio.atlas.example",
+        MINIO_PORT: "9000",
+        MINIO_REGION: "us-east-1",
+        MINIO_ACCESS_KEY: "atlasminio",
+        MINIO_SECRET_KEY: "atlassecret",
+        MINIO_BUCKET_RECEIPTS: "atlas-receipts",
+        MINIO_BUCKET_OPERATIONS: "atlas-operations",
+        APP_REVISION: "rev-2",
+        DEPLOYMENT_SLOT: "green",
+        RELEASE_ARTIFACT_ID: "atlas-production-build",
+        RELEASE_ARTIFACT_SHA256: "b".repeat(64)
+      }).issues.map((issue) => issue.message)
+    ).toEqual(
+      expect.arrayContaining([
+        "RELEASE_STAGE=ga requires AUTH_PROVIDER_MODE=external-oidc."
+      ])
+    );
+  });
 });

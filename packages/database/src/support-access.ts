@@ -13,6 +13,7 @@ import {
   type SupportAccessGrantStatus
 } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { assertAtlasOperatorSessionGovernance, assertAtlasSupportGrantProviderMode } from "./operator-session-governance";
 import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type SupportAccessReadClient = PrismaClient | Prisma.TransactionClient;
@@ -92,6 +93,11 @@ function assertOperatorActor(actor: AtlasActorContext) {
       "forbidden"
     );
   }
+
+  assertAtlasOperatorSessionGovernance(actor, {
+    surface: "Support-access governance actions",
+    createError: (message) => new AtlasSupportAccessWorkflowError(message, "forbidden")
+  });
 }
 
 function assertReviewerRole(role: MembershipRole) {
@@ -622,6 +628,11 @@ export async function activateSupportAccessGrant(
       "forbidden"
     );
   }
+
+  assertAtlasSupportGrantProviderMode(grant.authProviderMode, {
+    surface: "Support-access activation",
+    createError: (message) => new AtlasSupportAccessWorkflowError(message, "forbidden")
+  });
 
   if (grant.status !== "ACTIVE") {
     throw new AtlasSupportAccessWorkflowError(

@@ -118,6 +118,36 @@ describe("actor resolution service", () => {
     expect(prismaMock.supportAccessGrant.findUnique).not.toHaveBeenCalled();
   });
 
+  it("rejects signed local sessions outside local-development runtime boundaries", async () => {
+    vi.stubEnv("APP_ENV", "staging");
+
+    const { ActorResolutionService } = await import("../src/modules/actor/actor.service");
+
+    const service = new ActorResolutionService();
+    const token = createAtlasLocalSessionToken("atlas-local-session-secret", createAtlasLocalSessionSelection("buyer-admin"));
+    const resolution = await service.resolveFromHeaders({
+      "x-atlas-local-session": token
+    });
+
+    expect(resolution.status).toBe("invalid");
+    expect(resolution.status !== "ready" ? resolution.message : "").toMatch(/disabled for the current runtime boundary/i);
+  });
+
+  it("rejects signed local sessions when provider-backed auth is configured", async () => {
+    vi.stubEnv("AUTH_PROVIDER_MODE", "external-oidc");
+
+    const { ActorResolutionService } = await import("../src/modules/actor/actor.service");
+
+    const service = new ActorResolutionService();
+    const token = createAtlasLocalSessionToken("atlas-local-session-secret", createAtlasLocalSessionSelection("buyer-admin"));
+    const resolution = await service.resolveFromHeaders({
+      "x-atlas-local-session": token
+    });
+
+    expect(resolution.status).toBe("invalid");
+    expect(resolution.status !== "ready" ? resolution.message : "").toMatch(/disabled for the current runtime boundary/i);
+  });
+
   it("resolves a support session into a target tenant while preserving operator principal context", async () => {
     vi.stubEnv("AUTH_SUPPORT_ACCESS_ALLOWED_EMAILS", "operator@atlas.local,operator-admin@atlas.local");
     const { ActorResolutionService } = await import("../src/modules/actor/actor.service");

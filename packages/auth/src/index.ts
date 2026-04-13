@@ -362,6 +362,14 @@ export function isAtlasSupportAccessActor(actor: AtlasActorContext) {
   return actor.source === "internal-support" && actor.supportAccess?.mode === atlasSupportAccessMode;
 }
 
+export function isAtlasIdentityProviderActor(actor: AtlasActorContext) {
+  return actor.source === "identity-provider";
+}
+
+export function isAtlasLocalDevelopmentActor(actor: AtlasActorContext) {
+  return actor.source === "local-development";
+}
+
 export function canAtlasSupportAccessMethod(method: string) {
   return atlasSupportAllowedMethods.includes(method.toUpperCase() as (typeof atlasSupportAllowedMethods)[number]);
 }

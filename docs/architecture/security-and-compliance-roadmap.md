@@ -21,6 +21,9 @@ This document tracks the maturity path for auth, authorization, tenancy, auditab
 - deployment-environment validation for sensitive runtime paths
 - signed session tokens with bounded TTL and tamper detection
 - constrained tenant-targeted support-access sessions
+- local-development session rejection outside local and development runtimes
+- provider-backed operator governance sessions for broader rollout stages
+- external OIDC-backed operator governance for GA and enterprise rollout
 
 ### Later maturity
 
@@ -106,7 +109,6 @@ These are placeholders for tracked future work, not current claims:
 ## Must Be Done Before Broad Real-World Rollout
 
 - keep the current observability and incident baseline intact while auth hardening deepens
-- real auth and session hardening beyond local-only development assumptions
 - tenant-boundary validation in application and support paths
 - incident handling and audit export readiness
 - secrets management and rotation process

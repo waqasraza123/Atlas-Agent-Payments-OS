@@ -5,7 +5,7 @@ import {
   type AtlasLocalSessionSelection
 } from "@atlas/auth";
 import { createAtlasLocalSessionToken } from "@atlas/auth/server";
-import { appRuntime, authRuntime } from "@atlas/config";
+import { appRuntime, authRuntime, canAtlasUseLocalDevelopmentSessions } from "@atlas/config";
 import { NextResponse } from "next/server";
 
 function resolveRedirectPath(value: FormDataEntryValue | null) {
@@ -35,10 +35,7 @@ export async function POST(request: Request) {
     return response;
   }
 
-  if (
-    authRuntime.providerMode !== "local-signed" ||
-    (appRuntime.appEnv !== "local" && appRuntime.appEnv !== "development")
-  ) {
+  if (!canAtlasUseLocalDevelopmentSessions(appRuntime.appEnv, authRuntime.providerMode)) {
     return NextResponse.redirect(nextUrl);
   }
 

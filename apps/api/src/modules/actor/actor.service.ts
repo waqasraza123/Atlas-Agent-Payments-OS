@@ -1,6 +1,12 @@
 import { atlasLocalSessionHeaderName, type AtlasActorContext } from "@atlas/auth";
 import { verifyAtlasSignedSessionToken } from "@atlas/auth/server";
-import { appRuntime, authRuntime } from "@atlas/config";
+import {
+  appRuntime,
+  authRuntime,
+  canAtlasUseLocalDevelopmentSessions,
+  requiresAtlasExternalOidcForReleaseStage,
+  requiresAtlasProviderBackedAuthForEnvironment
+} from "@atlas/config";
 import { loadAuthSessionById, prisma, touchAuthSession } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import type { MembershipRole, OrganizationKind } from "@atlas/types";
@@ -146,10 +152,13 @@ export class ActorResolutionService {
     const { payload } = verification;
 
     try {
-      if (payload.source === "local-development" && appRuntime.appEnv === "production") {
+      if (
+        payload.source === "local-development" &&
+        !canAtlasUseLocalDevelopmentSessions(appRuntime.appEnv, authRuntime.providerMode)
+      ) {
         return {
           status: "invalid",
-          message: "Signed local-development sessions are disabled in production"
+          message: "Signed local-development sessions are disabled for the current runtime boundary"
         };
       }
 
@@ -219,7 +228,12 @@ export class ActorResolutionService {
 
       const actor = this.createBaseActor(membership, {
         source: payload.source,
-        providerMode: authRuntime.providerMode === "identity-bridge" ? "identity-bridge" : "local-signed",
+        providerMode:
+          authRuntime.providerMode === "external-oidc"
+            ? "external-oidc"
+            : authRuntime.providerMode === "identity-bridge"
+              ? "identity-bridge"
+              : "local-signed",
         agentId: payload.selection.agentId,
         issuedAt: payload.issuedAt,
         expiresAt: payload.expiresAt,
@@ -251,7 +265,10 @@ export class ActorResolutionService {
         supportGrant.issuedByUser.email.toLowerCase() !== payload.selection.userEmail.toLowerCase() ||
         supportGrant.issuedByOrganization.slug !== payload.selection.organizationSlug ||
         supportGrant.targetOrganization.slug !== payload.supportAccess.targetOrganizationSlug ||
-        supportGrant.targetWorkspace !== payload.supportAccess.targetWorkspace
+        supportGrant.targetWorkspace !== payload.supportAccess.targetWorkspace ||
+        (requiresAtlasProviderBackedAuthForEnvironment(appRuntime.appEnv) && supportGrant.authProviderMode === "LOCAL_SIGNED") ||
+        (requiresAtlasExternalOidcForReleaseStage(appRuntime.releaseStage) &&
+          supportGrant.authProviderMode !== "EXTERNAL_OIDC")
       ) {
         return {
           status: "invalid",

@@ -14,6 +14,7 @@ import {
   recertifySupportAccessGrant,
   revokeSupportAccessGrant
 } from "./support-access";
+import { assertAtlasOperatorSessionGovernance } from "./operator-session-governance";
 import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
@@ -163,6 +164,11 @@ function assertGovernanceActor(actor: AtlasActorContext) {
       "forbidden"
     );
   }
+
+  assertAtlasOperatorSessionGovernance(actor, {
+    surface: "Access governance actions",
+    createError: (message) => new AtlasSupportAccessWorkflowError(message, "forbidden")
+  });
 }
 
 function assertGovernanceReason(value: unknown, label: string) {

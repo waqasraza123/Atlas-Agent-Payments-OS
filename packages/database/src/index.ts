@@ -9,6 +9,7 @@ export * from "./operator-workflow";
 export * from "./observability-operations";
 export * from "./observability-runtime";
 export * from "./operational-integrations";
+export * from "./operator-session-governance";
 export * from "./operational-proof-storage";
 export * from "./payments-workflow";
 export * from "./programmable-settlement";

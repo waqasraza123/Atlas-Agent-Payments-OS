@@ -6,6 +6,7 @@ import {
   type PrismaClient
 } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { assertAtlasOperatorSessionGovernance } from "./operator-session-governance";
 import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;
@@ -71,6 +72,11 @@ function assertGovernanceActor(actor: AtlasActorContext) {
       "forbidden"
     );
   }
+
+  assertAtlasOperatorSessionGovernance(actor, {
+    surface: "External identity governance actions",
+    createError: (message) => new AtlasExternalIdentityAccessWorkflowError(message, "forbidden")
+  });
 }
 
 function normalizeProvider(value: unknown) {

@@ -35,7 +35,8 @@ This document is the execution-side source of truth for Atlas Agent Payments OS.
 - Retained observability snapshots and governed external alert dispatch are now in place in repo scope through persisted snapshot records, dispatch records, operator-triggered workflows, and owned dispatch adapters.
 - Shared worker telemetry and repo-owned observability automation are now in place in repo scope through published runtime snapshots, worker-aware observability alerts, and an owned automation command plus workflow.
 - Distributed tracing, deeper request and job correlation, and automated incident-trigger baseline are now in place in repo scope through API trace propagation, worker trace capture, trace-aware alerts, and durable incident-trigger sync.
-- The next active implementation slice is auth and session hardening beyond local-only development assumptions, deeper tenant-boundary enforcement, and broader release-stage enforcement needed for broader real-world rollout.
+- Stage-aware auth governance is now in place in repo scope through local-session rejection outside local development, provider-backed operator governance requirements, support-grant provider-mode enforcement, and runtime validation for auth-governance drift.
+- The next active implementation slice is the remaining tenant-boundary hardening plus timer-driven incident automation and longer-term telemetry retention needed for broader real-world rollout.
 - The durable docs now cover both the focused v1 build track and the longer-term full-scale platform target state.
 
 ## Execution Tracks
