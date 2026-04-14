@@ -103,6 +103,14 @@ export type AtlasWorkerTelemetryRecord = {
   snapshot: AtlasWorkerRuntimeMetricsSnapshot | null;
 };
 
+export type AtlasObservabilityTelemetryOwnershipRecord = {
+  key: "api-runtime" | "worker-runtime" | "automation-cadence";
+  label: string;
+  status: "healthy" | "warning" | "critical";
+  detail: string;
+  lastRecordedAt: string | null;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -216,6 +224,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   lastRunAt: string | null;
   lastRunStatus: AtlasObservabilityAutomationRunRecord["status"] | null;
   lastReportPath: string | null;
+  telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
   recentRuns: AtlasObservabilityAutomationRunRecord[];
 };
 

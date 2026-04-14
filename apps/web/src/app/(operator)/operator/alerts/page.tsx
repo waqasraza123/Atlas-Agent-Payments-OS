@@ -12,6 +12,7 @@ import {
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
   createOperatorSnapshotItems,
+  createOperatorTelemetryOwnershipItems,
   createOperatorTraceItems,
   createOperatorWorkerQueueItems,
   loadOperatorObservabilityData
@@ -247,12 +248,22 @@ export default async function OperatorAlertsPage() {
             emptyTitle="No automation runs"
             emptyDescription="Run observability automation or enable the worker schedule to start building automation history."
           />
-          <DetailGrid
-            eyebrow="Automation posture"
-            title="Scheduler and retention policy"
-            description="Retention windows and scheduler defaults remain explicit so observability ownership can be audited instead of implied."
-            items={createOperatorAutomationFacts(automation)}
-          />
+          <div className="space-y-6">
+            <DetailGrid
+              eyebrow="Automation posture"
+              title="Scheduler and retention policy"
+              description="Retention windows and scheduler defaults remain explicit so observability ownership can be audited instead of implied."
+              items={createOperatorAutomationFacts(automation)}
+            />
+            <RecordListPanel
+              eyebrow="Telemetry ownership"
+              title="Live telemetry freshness"
+              description="Atlas now makes API runtime, worker runtime, and automation cadence freshness explicit so operators can see whether live telemetry is still owned."
+              items={createOperatorTelemetryOwnershipItems(automation.telemetryOwnership)}
+              emptyTitle="No telemetry ownership signals"
+              emptyDescription="Telemetry ownership signals will appear once observability status is available."
+            />
+          </div>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
           <RecordListPanel

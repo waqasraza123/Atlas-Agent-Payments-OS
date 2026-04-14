@@ -105,6 +105,7 @@ export {
   type AtlasObservabilityRetentionPolicyRecord,
   type AtlasObservabilityReleaseStage,
   type AtlasObservabilitySnapshotRecord,
+  type AtlasObservabilityTelemetryOwnershipRecord,
   type AtlasRuntimeTraceRecord,
   type AtlasWorkerQueueRuntimeMetricRecord,
   type AtlasWorkerRuntimeMetricsSnapshot,

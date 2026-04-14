@@ -10,6 +10,7 @@ import type {
   AtlasObservabilityAutomationStatusRecord,
   AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
+  AtlasObservabilityTelemetryOwnershipRecord,
   AtlasRuntimeTraceRecord,
   AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
@@ -175,6 +176,19 @@ export function createOperatorAutomationRunItems(
     detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone: item.status === "FAILED" ? "critical" : "success"
+  }));
+}
+
+export function createOperatorTelemetryOwnershipItems(
+  items: AtlasObservabilityTelemetryOwnershipRecord[]
+): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.key,
+    title: item.label,
+    description: item.detail,
+    detail: `last recorded ${formatDateTime(item.lastRecordedAt)}`,
+    statusLabel: item.status === "healthy" ? "Healthy" : item.status === "warning" ? "Warning" : "Critical",
+    statusTone: item.status === "healthy" ? "success" : item.status === "warning" ? "warning" : "critical"
   }));
 }
 

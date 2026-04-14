@@ -12,6 +12,7 @@ import {
   type AtlasObservabilityAlertSeverity,
   type AtlasObservabilityAutomationRunRecord,
   type AtlasObservabilityAutomationStatusRecord,
+  type AtlasObservabilityTelemetryOwnershipRecord,
   type AtlasWorkerRuntimeMetricsSnapshot,
   type AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
@@ -126,6 +127,111 @@ function normalizeAutomationReportMinimumSeverity(
   value: AtlasObservabilityAlertSeverity | string | null | undefined
 ): AtlasObservabilityAlertSeverity {
   return value === "critical" || value === "warning" ? value : "info";
+}
+
+function formatAgeLabel(minutes: number) {
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function calculateAgeMinutes(now: Date, recordedAt: string | null) {
+  if (!recordedAt) {
+    return null;
+  }
+
+  return Math.max(0, Math.round((now.getTime() - new Date(recordedAt).getTime()) / 60000));
+}
+
+function buildApiTelemetryOwnershipRecord(now: Date): AtlasObservabilityTelemetryOwnershipRecord {
+  const telemetry = readPublishedApiRuntimeTelemetry();
+
+  if (!telemetry) {
+    return {
+      key: "api-runtime",
+      label: "API runtime telemetry",
+      status: "critical",
+      detail: "No published API runtime snapshot is available for operators.",
+      lastRecordedAt: null
+    };
+  }
+
+  const ageMinutes = calculateAgeMinutes(now, telemetry.recordedAt) ?? 0;
+  const staleAfterMinutes = Math.max(1, observabilityRuntime.workerTelemetryStaleAfterMinutes);
+
+  return {
+    key: "api-runtime",
+    label: "API runtime telemetry",
+    status: ageMinutes <= staleAfterMinutes ? "healthy" : ageMinutes <= staleAfterMinutes * 3 ? "warning" : "critical",
+    detail: `Last published ${formatAgeLabel(ageMinutes)} ago from ${telemetry.deploymentSlot}.`,
+    lastRecordedAt: telemetry.recordedAt
+  };
+}
+
+function buildWorkerTelemetryOwnershipRecord(
+  workerTelemetry: AtlasWorkerTelemetryRecord
+): AtlasObservabilityTelemetryOwnershipRecord {
+  return {
+    key: "worker-runtime",
+    label: "Worker runtime telemetry",
+    status:
+      workerTelemetry.status === "healthy"
+        ? "healthy"
+        : workerTelemetry.status === "warning"
+          ? "warning"
+          : "critical",
+    detail: workerTelemetry.summary,
+    lastRecordedAt: workerTelemetry.recordedAt
+  };
+}
+
+function buildAutomationCadenceOwnershipRecord(
+  now: Date,
+  latestRun: AtlasObservabilityAutomationRunRecord | null
+): AtlasObservabilityTelemetryOwnershipRecord {
+  if (observabilityRuntime.automationScheduleMode !== "interval") {
+    return {
+      key: "automation-cadence",
+      label: "Automation cadence",
+      status: "warning",
+      detail: "Scheduled observability automation is disabled, so telemetry cadence depends on manual runs.",
+      lastRecordedAt: latestRun?.generatedAt ?? null
+    };
+  }
+
+  if (!latestRun) {
+    return {
+      key: "automation-cadence",
+      label: "Automation cadence",
+      status: "critical",
+      detail: "No observability automation run has been recorded for the active schedule.",
+      lastRecordedAt: null
+    };
+  }
+
+  const ageMinutes = calculateAgeMinutes(now, latestRun.generatedAt) ?? 0;
+  const healthyWindowMinutes = Math.max(1, observabilityRuntime.automationScheduleIntervalMinutes * 2);
+
+  if (latestRun.status === "FAILED") {
+    return {
+      key: "automation-cadence",
+      label: "Automation cadence",
+      status: "critical",
+      detail: `Latest automation run failed ${formatAgeLabel(ageMinutes)} ago.`,
+      lastRecordedAt: latestRun.generatedAt
+    };
+  }
+
+  return {
+    key: "automation-cadence",
+    label: "Automation cadence",
+    status:
+      ageMinutes <= healthyWindowMinutes
+        ? "healthy"
+        : ageMinutes <= healthyWindowMinutes * 2
+          ? "warning"
+          : "critical",
+    detail: `Latest automation run completed ${formatAgeLabel(ageMinutes)} ago.`,
+    lastRecordedAt: latestRun.generatedAt
+  };
 }
 
 function mapAutomationRunRecord(
@@ -293,11 +399,14 @@ export function getObservabilityAutomationStatus(
   actor: AtlasActorContext,
   options: {
     limit?: number;
+    now?: string;
   } = {}
 ) {
   assertObservabilityViewer(actor);
   const recentRuns = listObservabilityAutomationRuns(actor, options);
   const latestRun = recentRuns[0] ?? null;
+  const now = new Date(options.now ?? new Date().toISOString());
+  const workerTelemetry = readPublishedWorkerTelemetry(options.now);
 
   return {
     scheduleMode: observabilityRuntime.automationScheduleMode,
@@ -319,6 +428,11 @@ export function getObservabilityAutomationStatus(
     lastRunAt: latestRun?.generatedAt ?? null,
     lastRunStatus: latestRun?.status ?? null,
     lastReportPath: latestRun?.reportPath ?? null,
+    telemetryOwnership: [
+      buildApiTelemetryOwnershipRecord(now),
+      buildWorkerTelemetryOwnershipRecord(workerTelemetry),
+      buildAutomationCadenceOwnershipRecord(now, latestRun)
+    ],
     recentRuns
   } satisfies AtlasObservabilityAutomationStatusRecord;
 }

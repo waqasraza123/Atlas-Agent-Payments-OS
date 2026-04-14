@@ -1,0 +1,38 @@
+import { describe, expect, it } from "vitest";
+import { createOperatorTelemetryOwnershipItems } from "./operator-observability";
+
+describe("createOperatorTelemetryOwnershipItems", () => {
+  it("maps telemetry ownership records into operator list items", () => {
+    const items = createOperatorTelemetryOwnershipItems([
+      {
+        key: "api-runtime",
+        label: "API runtime telemetry",
+        status: "healthy",
+        detail: "Last published 1 minute ago from blue.",
+        lastRecordedAt: "2026-04-13T00:11:00.000Z"
+      },
+      {
+        key: "automation-cadence",
+        label: "Automation cadence",
+        status: "warning",
+        detail: "Scheduled observability automation is disabled, so telemetry cadence depends on manual runs.",
+        lastRecordedAt: null
+      }
+    ]);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "api-runtime",
+        title: "API runtime telemetry",
+        statusLabel: "Healthy",
+        statusTone: "success"
+      }),
+      expect.objectContaining({
+        id: "automation-cadence",
+        title: "Automation cadence",
+        statusLabel: "Warning",
+        statusTone: "warning"
+      })
+    ]);
+  });
+});
