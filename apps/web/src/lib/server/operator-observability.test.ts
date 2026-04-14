@@ -152,6 +152,8 @@ describe("createOperatorTelemetryRemediationOwnershipFacts", () => {
     const items = createOperatorTelemetryRemediationOwnershipFacts({
       status: "acknowledged",
       actorUserEmail: "operator-admin@atlas.local",
+      assignedByUserEmail: null,
+      handoffAction: "ACKNOWLEDGED",
       reason: "Taking ownership of the current telemetry issue.",
       updatedAt: "2026-04-13T00:11:00.000Z",
       reportPath: "/tmp/remediation-1.json",
@@ -165,6 +167,10 @@ describe("createOperatorTelemetryRemediationOwnershipFacts", () => {
     expect(items).toContainEqual({
       label: "Owner",
       value: "operator-admin@atlas.local"
+    });
+    expect(items).toContainEqual({
+      label: "Handoff source",
+      value: "Acknowledged"
     });
   });
 });
@@ -244,6 +250,20 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
   it("renders escalation and re-acknowledgement history distinctly", () => {
     const items = createOperatorTelemetryRemediationActionItems([
       {
+        id: "/tmp/remediation-2.json",
+        action: "TRANSFERRED",
+        generatedAt: "2026-04-13T00:18:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        reason: "Transfer remediation ownership to the current operator on call.",
+        remediationStatus: "escalated",
+        affectedOwnershipKeys: ["automation-cadence"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 0,
+        activeIncidentTriggerCount: 0,
+        reportPath: "/tmp/remediation-2.json"
+      },
+      {
         id: "/tmp/remediation-3.json",
         action: "ESCALATED",
         generatedAt: "2026-04-13T00:20:00.000Z",
@@ -272,6 +292,11 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
     ]);
 
     expect(items).toEqual([
+      expect.objectContaining({
+        title: "Transferred telemetry remediation",
+        statusTone: "critical",
+        detail: expect.stringContaining("owner oncall-operator@atlas.local")
+      }),
       expect.objectContaining({
         title: "Escalated telemetry remediation",
         statusTone: "critical"

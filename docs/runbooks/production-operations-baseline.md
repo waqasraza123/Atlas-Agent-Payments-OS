@@ -41,6 +41,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - telemetry remediation resolution now also reconciles active observability incident triggers in the same workflow and records the resolved or remaining incident counts in the remediation history
 - materially overdue acknowledged telemetry remediation now also upgrades the guided remediation workflow to dispatch-capable recovery so aged handoffs become active escalation, not passive backlog
 - materially overdue remediation escalations now also persist explicit escalation and re-acknowledgement events on the remediation history so the operator handoff trail stays named and durable
+- `/operator/alerts` now also supports explicit telemetry-remediation owner assignment and transfer to validated operator memberships so escalated handoffs keep a durable current owner instead of relying only on acknowledgements
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`

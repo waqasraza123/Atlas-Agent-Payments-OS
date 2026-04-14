@@ -402,6 +402,29 @@ export async function reacknowledgeTelemetryRemediationAction(formData: FormData
   }
 }
 
+export async function handoffTelemetryRemediationOwnershipAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+  const handoffMode = toTextValue(formData.get("handoffMode"));
+
+  try {
+    const result = await recordObservabilityTelemetryRemediationAction(actor, {
+      action: handoffMode === "transfer" ? "TRANSFERRED" : "ASSIGNED",
+      ownerUserEmail: toTextValue(formData.get("ownerUserEmail")),
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/alerts");
+    redirectWithFeedback(
+      "/operator/alerts",
+      result.action === "TRANSFERRED" ? "Telemetry remediation transferred" : "Telemetry remediation assigned",
+      result.action === "TRANSFERRED"
+        ? `Atlas transferred telemetry remediation ownership to ${result.ownerUserEmail ?? "the selected operator"}.`
+        : `Atlas assigned telemetry remediation ownership to ${result.ownerUserEmail ?? "the selected operator"}.`
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry remediation handoff failed", normalizeActionError(error), "error");
+  }
+}
+
 export async function resolveTelemetryRemediationAction(formData: FormData) {
   const actor = await requireOperatorActor();
 

@@ -678,6 +678,342 @@ describe("observability runtime", () => {
     );
   });
 
+  it("assigns telemetry remediation to a validated operator owner", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-assign-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-assign-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-assign-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD", "2");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "FAILED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "failed",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          errorMessage: "Published API runtime snapshot is missing."
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
+      "./observability-runtime"
+    );
+    const client = {
+      membership: {
+        findFirst: vi.fn(async () => ({
+          id: "membership-oncall",
+          role: "OPERATOR",
+          user: {
+            id: "user-oncall",
+            email: "oncall-operator@atlas.local",
+            name: "Oncall Operator"
+          }
+        }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const action = await recordObservabilityTelemetryRemediationAction(
+      actor,
+      {
+        action: "ASSIGNED",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        reason: "Assign telemetry remediation to the current operator on call.",
+        now: "2026-04-13T00:12:00.000Z"
+      },
+      client as never
+    );
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T00:12:30.000Z"
+    });
+
+    expect(action).toMatchObject({
+      action: "ASSIGNED",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
+    expect(status.telemetryRemediationOwnership).toMatchObject({
+      status: "acknowledged",
+      actorUserEmail: "oncall-operator@atlas.local",
+      assignedByUserEmail: "operator-admin@atlas.local",
+      handoffAction: "ASSIGNED"
+    });
+    expect(status.telemetryRemediationFollowUp).toMatchObject({
+      status: "ready",
+      ageMinutes: 1
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          eventType: "observability.telemetry_remediation_assigned"
+        })
+      })
+    );
+  });
+
+  it("transfers telemetry remediation ownership to another operator", async () => {
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-transfer-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-transfer-"));
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD", "2");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "FAILED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "failed",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          errorMessage: "Published API runtime snapshot is missing."
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-11-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ACKNOWLEDGED",
+          generatedAt: "2026-04-13T00:11:00.000Z",
+          actorUserEmail: "initial-owner@atlas.local",
+          reason: "Taking ownership before the next operator handoff.",
+          remediationStatus: "escalated",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
+      "./observability-runtime"
+    );
+    const client = {
+      membership: {
+        findFirst: vi.fn(async () => ({
+          id: "membership-oncall",
+          role: "OPERATOR",
+          user: {
+            id: "user-oncall",
+            email: "oncall-operator@atlas.local",
+            name: "Oncall Operator"
+          }
+        }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const action = await recordObservabilityTelemetryRemediationAction(
+      actor,
+      {
+        action: "TRANSFERRED",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        reason: "Transfer telemetry remediation to the active operator on call.",
+        now: "2026-04-13T00:12:00.000Z"
+      },
+      client as never
+    );
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 6,
+      now: "2026-04-13T00:12:30.000Z"
+    });
+
+    expect(action).toMatchObject({
+      action: "TRANSFERRED",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
+    expect(status.telemetryRemediationOwnership).toMatchObject({
+      status: "acknowledged",
+      actorUserEmail: "oncall-operator@atlas.local",
+      assignedByUserEmail: "operator-admin@atlas.local",
+      handoffAction: "TRANSFERRED"
+    });
+    expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
+      action: "TRANSFERRED",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          eventType: "observability.telemetry_remediation_transferred"
+        })
+      })
+    );
+  });
+
+  it("rejects telemetry remediation assignment to a non-operator identity", async () => {
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-assign-invalid-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-assign-invalid-"));
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "FAILED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "failed",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          errorMessage: "Published API runtime snapshot is missing."
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { recordObservabilityTelemetryRemediationAction } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    await expect(
+      recordObservabilityTelemetryRemediationAction(
+        actor,
+        {
+          action: "ASSIGNED",
+          ownerUserEmail: "buyer-user@atlas.local",
+          reason: "Attempting to assign remediation to a non-operator identity.",
+          now: "2026-04-13T00:12:00.000Z"
+        },
+        {
+          membership: {
+            findFirst: vi.fn(async () => null)
+          }
+        } as never
+      )
+    ).rejects.toMatchObject({
+      code: "forbidden"
+    });
+  });
+
   it("resurfaces overdue acknowledged telemetry remediation follow-up", async () => {
     const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-follow-up-"));
     const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-follow-up-"));

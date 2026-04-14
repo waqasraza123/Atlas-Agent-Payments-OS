@@ -394,6 +394,25 @@ export function createOperatorTelemetryRemediationOwnershipFacts(
       value: ownership.actorUserEmail ?? "Not assigned"
     },
     {
+      label: "Handoff source",
+      value:
+        ownership.handoffAction === "TRANSFERRED"
+          ? "Transferred"
+          : ownership.handoffAction === "ASSIGNED"
+            ? "Assigned"
+            : ownership.handoffAction === "REACKNOWLEDGED"
+              ? "Re-acknowledged"
+              : ownership.handoffAction === "ACKNOWLEDGED"
+                ? "Acknowledged"
+                : ownership.handoffAction === "RESOLVED"
+                  ? "Resolved"
+                  : "Not recorded"
+    },
+    {
+      label: "Assigned by",
+      value: ownership.assignedByUserEmail ?? "Self-owned"
+    },
+    {
       label: "Updated",
       value: formatDateTime(ownership.updatedAt)
     },
@@ -440,21 +459,27 @@ export function createOperatorTelemetryRemediationActionItems(
     title:
       item.action === "RESOLVED"
         ? "Resolved telemetry remediation"
-        : item.action === "REACKNOWLEDGED"
-          ? "Re-acknowledged telemetry remediation"
-          : item.action === "ESCALATED"
-            ? "Escalated telemetry remediation"
-            : "Acknowledged telemetry remediation",
+        : item.action === "TRANSFERRED"
+          ? "Transferred telemetry remediation"
+          : item.action === "ASSIGNED"
+            ? "Assigned telemetry remediation"
+            : item.action === "REACKNOWLEDGED"
+              ? "Re-acknowledged telemetry remediation"
+              : item.action === "ESCALATED"
+                ? "Escalated telemetry remediation"
+                : "Acknowledged telemetry remediation",
     description: item.reason,
     detail:
       item.action === "RESOLVED"
         ? `${item.remediationStatus} posture · resolved ${item.resolvedIncidentTriggerCount} incident triggers · ${item.activeIncidentTriggerCount} active remain · ${item.reportPath}`
+        : item.action === "TRANSFERRED" || item.action === "ASSIGNED"
+          ? `${item.remediationStatus} posture · owner ${item.ownerUserEmail ?? "not recorded"} · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`
         : `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone:
       item.action === "RESOLVED"
         ? "success"
-        : item.action === "ESCALATED"
+        : item.action === "ESCALATED" || item.action === "TRANSFERRED"
           ? "critical"
           : "warning"
   }));

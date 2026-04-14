@@ -144,8 +144,10 @@ export type AtlasObservabilityTelemetryRemediationRecord = {
 
 export type AtlasObservabilityTelemetryRemediationAction =
   | "ACKNOWLEDGED"
+  | "ASSIGNED"
   | "REACKNOWLEDGED"
   | "ESCALATED"
+  | "TRANSFERRED"
   | "RESOLVED";
 
 export type AtlasObservabilityTelemetryRemediationActionRecord = {
@@ -153,6 +155,7 @@ export type AtlasObservabilityTelemetryRemediationActionRecord = {
   action: AtlasObservabilityTelemetryRemediationAction;
   generatedAt: string;
   actorUserEmail: string;
+  ownerUserEmail?: string | null;
   reason: string;
   remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
   affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
@@ -165,6 +168,8 @@ export type AtlasObservabilityTelemetryRemediationActionRecord = {
 export type AtlasObservabilityTelemetryRemediationOwnershipRecord = {
   status: "unassigned" | "acknowledged" | "resolved";
   actorUserEmail: string | null;
+  assignedByUserEmail?: string | null;
+  handoffAction?: AtlasObservabilityTelemetryRemediationAction | null;
   reason: string | null;
   updatedAt: string | null;
   reportPath: string | null;

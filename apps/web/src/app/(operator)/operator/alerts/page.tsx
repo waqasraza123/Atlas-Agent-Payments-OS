@@ -26,6 +26,7 @@ import {
   captureObservabilitySnapshotAction,
   dispatchObservabilityAlertsAction,
   executeRecommendedTelemetryRemediationAction,
+  handoffTelemetryRemediationOwnershipAction,
   reacknowledgeTelemetryRemediationAction,
   recoverTelemetryOwnershipAction,
   resolveTelemetryRemediationAction,
@@ -328,6 +329,43 @@ export default async function OperatorAlertsPage() {
                   minLength={12}
                   className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
                   placeholder="Acknowledge current telemetry remediation ownership before the next operator handoff."
+                  required
+                />
+              </WorkflowFormField>
+            </WorkflowFormPanel>
+            <WorkflowFormPanel
+              eyebrow="Escalation handoff"
+              title="Assign or transfer remediation owner"
+              description="Persist the current named owner when an escalated remediation needs to be handed to another operator instead of relying on a note-only handoff."
+              action={handoffTelemetryRemediationOwnershipAction}
+              submitLabel="Persist owner handoff"
+            >
+              <WorkflowFormField label="Handoff mode" hint="Assign starts ownership without a current owner. Transfer moves an active owner to someone else.">
+                <select
+                  name="handoffMode"
+                  defaultValue="assign"
+                  className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                >
+                  <option value="assign">Assign owner</option>
+                  <option value="transfer">Transfer owner</option>
+                </select>
+              </WorkflowFormField>
+              <WorkflowFormField label="Operator email" hint="Must be an operator membership in the current Atlas operator organization.">
+                <input
+                  type="email"
+                  name="ownerUserEmail"
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="oncall-operator@atlas.local"
+                  required
+                />
+              </WorkflowFormField>
+              <WorkflowFormField label="Reason" hint="Record why ownership moved and what the receiving operator is expected to do next.">
+                <textarea
+                  name="reason"
+                  rows={4}
+                  minLength={12}
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="Transfer telemetry remediation to the current operator on call with the next recovery step."
                   required
                 />
               </WorkflowFormField>
