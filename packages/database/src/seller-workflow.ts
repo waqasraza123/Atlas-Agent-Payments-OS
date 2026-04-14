@@ -726,6 +726,27 @@ export async function listSellerRequestsForActor(actor: AtlasActorContext, clien
   return items;
 }
 
+export async function getSellerAnalyticsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertSellerReadActor(actor);
+  const item = await getSellerAnalytics(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_analytics_inspected",
+      targetType: "seller_analytics_scope",
+      targetId: actor.organization.id,
+      payload: {
+        pendingFulfillmentCount: item.pendingFulfillmentCount,
+        completedRequestCount: item.completedRequestCount,
+        failedRequestCount: item.failedRequestCount,
+        unmatchedRequestCount: item.unmatchedRequestCount
+      }
+    });
+  }
+
+  return item;
+}
+
 export async function getSellerRequest(
   organizationId: string,
   requestId: string,

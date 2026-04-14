@@ -1,9 +1,9 @@
 import {
-  getSellerAnalytics,
-  getSellerProfile,
-  listSellerRequests,
-  listSellerServices,
-  listSellerTeamMembers
+  getSellerAnalyticsForActor,
+  getSellerProfileForActor,
+  listSellerRequestsForActor,
+  listSellerServicesForActor,
+  listSellerTeamMembersForActor
 } from "@atlas/database";
 import { MetricCard, PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
@@ -24,11 +24,11 @@ export default async function SellerPage() {
   }
 
   const [profile, analytics, teamMembers, services, requests] = await Promise.all([
-    getSellerProfile(resolution.actor.organization.id),
-    getSellerAnalytics(resolution.actor.organization.id),
-    listSellerTeamMembers(resolution.actor.organization.id),
-    listSellerServices(resolution.actor.organization.id),
-    listSellerRequests(resolution.actor.organization.id)
+    getSellerProfileForActor(resolution.actor),
+    getSellerAnalyticsForActor(resolution.actor),
+    listSellerTeamMembersForActor(resolution.actor),
+    listSellerServicesForActor(resolution.actor),
+    listSellerRequestsForActor(resolution.actor)
   ]);
 
   return (

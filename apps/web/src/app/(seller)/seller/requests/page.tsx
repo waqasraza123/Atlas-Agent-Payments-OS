@@ -1,4 +1,4 @@
-import { listSellerRequestAnalyticsForActor, listSellerServices } from "@atlas/database";
+import { listSellerRequestAnalyticsForActor, listSellerServicesForActor } from "@atlas/database";
 import { PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { ExportLinkGroup } from "@/components/export-link-group";
 import { FilterPanel } from "@/components/filter-panel";
@@ -27,7 +27,7 @@ export default async function SellerRequestsPage({ searchParams }: SellerRequest
   const params = await searchParams;
   const [requests, services] = await Promise.all([
     listSellerRequestAnalyticsForActor(resolution.actor, params),
-    listSellerServices(resolution.actor.organization.id)
+    listSellerServicesForActor(resolution.actor)
   ]);
 
   const unmatchedRequests = requests.filter((request) => !request.serviceKey);

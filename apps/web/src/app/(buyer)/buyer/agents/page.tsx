@@ -1,4 +1,4 @@
-import { listBuyerAgents, listBuyerPolicies } from "@atlas/database";
+import { listBuyerAgentsForActor, listBuyerPoliciesForActor } from "@atlas/database";
 import { PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { createBuyerAgentAction, updateBuyerAgentAction } from "../actions";
@@ -26,8 +26,8 @@ export default async function BuyerAgentsPage({ searchParams }: BuyerAgentsPageP
 
   const [params, agents, policies] = await Promise.all([
     searchParams,
-    listBuyerAgents(resolution.actor.organization.id),
-    listBuyerPolicies(resolution.actor.organization.id)
+    listBuyerAgentsForActor(resolution.actor),
+    listBuyerPoliciesForActor(resolution.actor)
   ]);
 
   const feedbackTitle = readSingleSearchParam(params.feedbackTitle);

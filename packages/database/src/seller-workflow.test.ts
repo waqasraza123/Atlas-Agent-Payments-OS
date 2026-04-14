@@ -1,6 +1,7 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { describe, expect, it, vi } from "vitest";
 import {
+  getSellerAnalyticsForActor,
   getSellerProfileForActor,
   listSellerRequestsForActor,
   listSellerServicesForActor,
@@ -122,6 +123,45 @@ describe("seller workflow actor-aware reads", () => {
         payload: expect.objectContaining({
           serviceCount: 0,
           requestCount: 0,
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session seller analytics inspection", async () => {
+    const actor = createSupportSellerActor();
+    const client = {
+      service: {
+        findMany: vi.fn(async () => [])
+      },
+      spendRequest: {
+        findMany: vi.fn(async () => [])
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getSellerAnalyticsForActor(actor, client as never);
+
+    expect(item).toMatchObject({
+      pendingFulfillmentCount: 0,
+      completedRequestCount: 0,
+      failedRequestCount: 0,
+      unmatchedRequestCount: 0
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.seller_analytics_inspected",
+        targetType: "seller_analytics_scope",
+        targetId: actor.organization.id,
+        payload: expect.objectContaining({
+          pendingFulfillmentCount: 0,
+          completedRequestCount: 0,
+          failedRequestCount: 0,
+          unmatchedRequestCount: 0,
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

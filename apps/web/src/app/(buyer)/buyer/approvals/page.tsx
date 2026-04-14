@@ -1,4 +1,4 @@
-import { listBuyerApprovals } from "@atlas/database";
+import { listBuyerApprovalsForActor } from "@atlas/database";
 import { PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
@@ -31,7 +31,7 @@ export default async function BuyerApprovalsPage({ searchParams }: BuyerApproval
     return null;
   }
 
-  const [params, approvals] = await Promise.all([searchParams, listBuyerApprovals(resolution.actor.organization.id)]);
+  const [params, approvals] = await Promise.all([searchParams, listBuyerApprovalsForActor(resolution.actor)]);
 
   const feedbackTitle = readSingleSearchParam(params.feedbackTitle);
   const feedbackDescription = readSingleSearchParam(params.feedbackDescription);

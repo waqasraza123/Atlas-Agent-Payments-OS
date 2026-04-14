@@ -1,4 +1,4 @@
-import { listSellerServices } from "@atlas/database";
+import { listSellerServicesForActor } from "@atlas/database";
 import { PageHeader, Panel, RecordListPanel } from "@atlas/ui";
 import { resolveWorkspaceActor } from "@/lib/server/actor-context";
 import { getAtlasWorkspaceDetailHref } from "@/lib/detail-hrefs";
@@ -30,7 +30,7 @@ export default async function SellerServicesPage({ searchParams }: SellerService
   }
 
   const [services, resolvedSearchParams] = await Promise.all([
-    listSellerServices(resolution.actor.organization.id),
+    listSellerServicesForActor(resolution.actor),
     searchParams
   ]);
   const feedback = readWorkflowFeedback(resolvedSearchParams);
