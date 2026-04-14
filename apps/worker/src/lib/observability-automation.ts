@@ -1,5 +1,5 @@
 import { observabilityRuntime } from "@atlas/config";
-import { executeObservabilityAutomation, writeObservabilityAutomationFailureReport } from "@atlas/database";
+import { executeObservabilityAutomationPolicy, writeObservabilityAutomationFailureReport } from "@atlas/database";
 import { log } from "./logger";
 
 type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
@@ -11,7 +11,7 @@ type AtlasWorkerObservabilityAutomationResult = {
 };
 
 type AtlasWorkerObservabilityAutomationDependencies = {
-  executeAutomation: typeof executeObservabilityAutomation;
+  executeAutomationPolicy: typeof executeObservabilityAutomationPolicy;
   writeFailureReport: typeof writeObservabilityAutomationFailureReport;
   logMessage: typeof log;
   setTimeout: typeof globalThis.setTimeout;
@@ -21,7 +21,7 @@ type AtlasWorkerObservabilityAutomationDependencies = {
 };
 
 const defaultDependencies: AtlasWorkerObservabilityAutomationDependencies = {
-  executeAutomation: executeObservabilityAutomation,
+  executeAutomationPolicy: executeObservabilityAutomationPolicy,
   writeFailureReport: writeObservabilityAutomationFailureReport,
   logMessage: log,
   setTimeout: globalThis.setTimeout.bind(globalThis),
@@ -37,6 +37,7 @@ function buildAutomationPayload(trigger: AtlasObservabilityAutomationTrigger, ge
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
     triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+    telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     trigger,
     now: generatedAt
   } as const;
@@ -55,13 +56,17 @@ export async function runWorkerObservabilityAutomationCycle(
   const generatedAt = new Date().toISOString();
 
   try {
-    const result = await dependencies.executeAutomation(buildAutomationPayload(trigger, generatedAt));
+    const result = await dependencies.executeAutomationPolicy(buildAutomationPayload(trigger, generatedAt));
     dependencies.logMessage("worker.observability_automation.completed", {
       trigger,
       reportPath: result.reportPath,
-      snapshotId: result.snapshot.id,
-      dispatchId: result.dispatch?.id ?? null,
-      activeIncidentCount: result.incidentTriggers?.activeCount ?? 0
+      telemetryPolicy: result.telemetryPolicy,
+      telemetryRecoveryStatus: result.telemetryRecoveryStatus,
+      recoveredOwnershipCount: result.recoveredKeys.length,
+      remainingOwnershipCount: result.remainingKeys.length,
+      snapshotId: result.snapshotId,
+      dispatchId: result.dispatchId,
+      activeIncidentCount: result.activeIncidentCount
     });
 
     return {
@@ -78,6 +83,7 @@ export async function runWorkerObservabilityAutomationCycle(
       minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
       dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
       triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+      telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
       generatedAt,
       errorMessage
     });
@@ -87,6 +93,7 @@ export async function runWorkerObservabilityAutomationCycle(
       {
         trigger,
         reportPath: failureReport.reportPath,
+        telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
         error: errorMessage
       },
       "error"
@@ -111,7 +118,8 @@ export function startWorkerObservabilityAutomationScheduler(
   const runScheduledCycle = () => {
     if (activeRun) {
       dependencies.logMessage("worker.observability_automation.skipped", {
-        reason: "previous_run_active"
+        reason: "previous_run_active",
+        telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy
       });
       return activeRun;
     }
@@ -141,6 +149,7 @@ export function startWorkerObservabilityAutomationScheduler(
   dependencies.logMessage("worker.observability_automation.started", {
     intervalMinutes: observabilityRuntime.automationScheduleIntervalMinutes,
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
+    telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
     triggerIncidents: observabilityRuntime.automationTriggerIncidents

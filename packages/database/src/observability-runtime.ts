@@ -12,6 +12,8 @@ import {
   type AtlasObservabilityAlertSeverity,
   type AtlasObservabilityAutomationRunRecord,
   type AtlasObservabilityAutomationStatusRecord,
+  type AtlasObservabilityTelemetryOwnershipPolicy,
+  type AtlasObservabilityTelemetryRecoveryStatus,
   type AtlasObservabilityTelemetryOwnershipRecord,
   type AtlasWorkerRuntimeMetricsSnapshot,
   type AtlasWorkerTelemetryRecord
@@ -32,8 +34,6 @@ import {
 type DatabaseClient = PrismaClient;
 
 type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
-
-type AtlasTelemetryOwnershipRecoveryStatus = "no_action" | "recovered" | "partial" | "unchanged";
 
 type AtlasObservabilityAutomationReportPayload = {
   version: 1;
@@ -59,6 +59,14 @@ type AtlasObservabilityAutomationReportPayload = {
   } | null;
   dispatch?: {
     id?: string | null;
+  } | null;
+  telemetryPolicy?: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecovery?: {
+    status?: AtlasObservabilityTelemetryRecoveryStatus;
+    beforeOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+    afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+    recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+    remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   } | null;
   reportPath?: string;
   errorMessage?: string | null;
@@ -240,11 +248,27 @@ function listDegradedTelemetryOwnershipKeys(items: AtlasObservabilityTelemetryOw
   return items.filter((item) => item.status !== "healthy").map((item) => item.key);
 }
 
+function normalizeTelemetryOwnershipPolicy(
+  value: AtlasObservabilityTelemetryOwnershipPolicy | string | null | undefined
+): AtlasObservabilityTelemetryOwnershipPolicy {
+  return value === "recover" ? "recover" : "monitor";
+}
+
+function normalizeTelemetryRecoveryStatus(
+  value: AtlasObservabilityTelemetryRecoveryStatus | string | null | undefined
+): AtlasObservabilityTelemetryRecoveryStatus {
+  return value === "no_action" || value === "recovered" || value === "partial" || value === "unchanged"
+    ? value
+    : "not_requested";
+}
+
 function mapAutomationRunRecord(
   payload: AtlasObservabilityAutomationReportPayload,
   reportPath: string,
   generatedAtFallback: string
 ): AtlasObservabilityAutomationRunRecord {
+  const telemetryRecovery = payload.telemetryRecovery;
+
   return {
     id: reportPath,
     status: payload.status === "FAILED" ? "FAILED" : "SUCCEEDED",
@@ -255,6 +279,10 @@ function mapAutomationRunRecord(
     minimumSeverity: normalizeAutomationReportMinimumSeverity(payload.minimumSeverity),
     dispatchAlerts: Boolean(payload.dispatchAlerts),
     triggerIncidents: payload.triggerIncidents !== false,
+    telemetryPolicy: normalizeTelemetryOwnershipPolicy(payload.telemetryPolicy),
+    telemetryRecoveryStatus: normalizeTelemetryRecoveryStatus(telemetryRecovery?.status),
+    recoveredOwnershipCount: Array.isArray(telemetryRecovery?.recoveredKeys) ? telemetryRecovery.recoveredKeys.length : 0,
+    remainingOwnershipCount: Array.isArray(telemetryRecovery?.remainingKeys) ? telemetryRecovery.remainingKeys.length : 0,
     alertCount: typeof payload.alertCount === "number" ? payload.alertCount : null,
     activeIncidentCount:
       typeof payload.incidentTriggers?.activeCount === "number" ? payload.incidentTriggers.activeCount : null,
@@ -358,6 +386,78 @@ async function resolveAutomationActor(actorUserEmail: string, client: DatabaseCl
   } satisfies AtlasActorContext;
 }
 
+type AtlasPerformedObservabilityAutomation = {
+  generatedAt: string;
+  trigger: AtlasObservabilityAutomationTrigger;
+  actor: AtlasActorContext;
+  reason: string;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  alertCount: number;
+  snapshot: Awaited<ReturnType<typeof persistObservabilitySnapshot>>;
+  incidentTriggers: Awaited<ReturnType<typeof syncObservabilityIncidentTriggers>> | null;
+  dispatch: Awaited<ReturnType<typeof dispatchObservabilityAlerts>> | null;
+  workerTelemetry: AtlasWorkerTelemetryRecord;
+};
+
+type AtlasObservabilityAutomationPolicyExecutionResult = {
+  reportPath: string;
+  telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecoveryStatus: AtlasObservabilityTelemetryRecoveryStatus;
+  recoveredKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  remainingKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  snapshotId: string | null;
+  dispatchId: string | null;
+  activeIncidentCount: number;
+};
+
+function createObservabilityAutomationReportPayload(input: {
+  generatedAt: string;
+  trigger: AtlasObservabilityAutomationTrigger;
+  actorUserEmail: string | null;
+  reason: string | null;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecoveryStatus: AtlasObservabilityTelemetryRecoveryStatus;
+  beforeOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+  afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+  recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  automation?: AtlasPerformedObservabilityAutomation | null;
+  errorMessage?: string | null;
+}): AtlasObservabilityAutomationReportPayload {
+  return {
+    version: 1,
+    status: input.errorMessage ? "FAILED" : "SUCCEEDED",
+    trigger: input.trigger,
+    generatedAt: input.generatedAt,
+    appEnv: appRuntime.appEnv,
+    releaseStage: appRuntime.releaseStage,
+    actorUserEmail: input.actorUserEmail,
+    reason: input.reason,
+    minimumSeverity: input.minimumSeverity,
+    dispatchAlerts: input.dispatchAlerts,
+    triggerIncidents: input.triggerIncidents,
+    telemetryPolicy: input.telemetryPolicy,
+    telemetryRecovery: {
+      status: input.telemetryRecoveryStatus,
+      beforeOwnership: input.beforeOwnership,
+      afterOwnership: input.afterOwnership,
+      recoveredKeys: input.recoveredKeys ?? [],
+      remainingKeys: input.remainingKeys ?? []
+    },
+    alertCount: input.automation?.alertCount ?? null,
+    workerTelemetry: input.automation?.workerTelemetry ?? null,
+    snapshot: input.automation?.snapshot ?? null,
+    incidentTriggers: input.automation?.incidentTriggers ?? null,
+    dispatch: input.automation?.dispatch ?? null,
+    errorMessage: input.errorMessage ?? null
+  };
+}
+
 export function readPublishedApiRuntimeTelemetry() {
   return readJsonFile<AtlasApiRuntimeTelemetryRecord>(resolveRuntimeSnapshotPath("api.json"));
 }
@@ -418,6 +518,7 @@ export function getObservabilityAutomationStatus(
     scheduleMode: observabilityRuntime.automationScheduleMode,
     intervalMinutes: observabilityRuntime.automationScheduleIntervalMinutes,
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
+    telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
@@ -450,43 +551,40 @@ export function writeObservabilityAutomationFailureReport(input: {
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
   triggerIncidents: boolean;
+  telemetryPolicy?: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecoveryStatus?: AtlasObservabilityTelemetryRecoveryStatus;
   generatedAt?: string;
   errorMessage: string;
 }) {
   const generatedAt = input.generatedAt ?? new Date().toISOString();
-  const reportPath = writeObservabilityAutomationReport({
-    version: 1,
-    status: "FAILED",
-    trigger: input.trigger,
-    generatedAt,
-    appEnv: appRuntime.appEnv,
-    releaseStage: appRuntime.releaseStage,
-    actorUserEmail: input.actorUserEmail,
-    reason: input.reason,
-    minimumSeverity: input.minimumSeverity,
-    dispatchAlerts: input.dispatchAlerts,
-    triggerIncidents: input.triggerIncidents,
-    alertCount: null,
-    workerTelemetry: null,
-    snapshot: null,
-    incidentTriggers: null,
-    dispatch: null,
-    errorMessage: input.errorMessage
-  });
-
-  return mapAutomationRunRecord(
-    {
-      version: 1,
-      status: "FAILED",
-      trigger: input.trigger,
+  const reportPath = writeObservabilityAutomationReport(
+    createObservabilityAutomationReportPayload({
       generatedAt,
+      trigger: input.trigger,
       actorUserEmail: input.actorUserEmail,
       reason: input.reason,
       minimumSeverity: input.minimumSeverity,
       dispatchAlerts: input.dispatchAlerts,
       triggerIncidents: input.triggerIncidents,
+      telemetryPolicy: input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy,
+      telemetryRecoveryStatus: input.telemetryRecoveryStatus ?? "not_requested",
       errorMessage: input.errorMessage
-    },
+    })
+  );
+
+  return mapAutomationRunRecord(
+    createObservabilityAutomationReportPayload({
+      generatedAt,
+      trigger: input.trigger,
+      actorUserEmail: input.actorUserEmail,
+      reason: input.reason,
+      minimumSeverity: input.minimumSeverity,
+      dispatchAlerts: input.dispatchAlerts,
+      triggerIncidents: input.triggerIncidents,
+      telemetryPolicy: input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy,
+      telemetryRecoveryStatus: input.telemetryRecoveryStatus ?? "not_requested",
+      errorMessage: input.errorMessage
+    }),
     reportPath,
     generatedAt
   );
@@ -568,7 +666,7 @@ export async function buildObservabilityAutomationPosture(
   };
 }
 
-export async function executeObservabilityAutomation(
+async function performObservabilityAutomation(
   input: {
     actorUserEmail: string;
     reason: string;
@@ -579,8 +677,8 @@ export async function executeObservabilityAutomation(
     now?: string;
     trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
   },
-  client: DatabaseClient = prisma
-) {
+  client: DatabaseClient
+): Promise<AtlasPerformedObservabilityAutomation> {
   const reason = normalizeReason(input.reason);
   const posture = await buildObservabilityAutomationPosture(
     {
@@ -594,6 +692,9 @@ export async function executeObservabilityAutomation(
       ? input.minimumSeverity
       : observabilityRuntime.automationDefaultMinimumSeverity;
   const trace = input.trace ?? createOwnedExecutionTraceContext("worker");
+  const generatedAt = input.now ?? new Date().toISOString();
+  const dispatchAlerts = Boolean(input.dispatchAlerts);
+  const triggerIncidents = input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents;
   const snapshot = await persistObservabilitySnapshot(
     {
       actor: posture.actor,
@@ -604,22 +705,21 @@ export async function executeObservabilityAutomation(
     },
     client
   );
-  const incidentTriggers =
-    input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents
-      ? await syncObservabilityIncidentTriggers(
-          {
-            actor: posture.actor,
-            minimumSeverity: observabilityRuntime.incidentMinimumSeverity,
-            reason,
-            alerts: posture.alerts,
-            metrics: posture.metrics,
-            incidentReadiness: posture.incidentReadiness,
-            workerTelemetry: posture.workerTelemetry
-          },
-          client
-        )
-      : null;
-  const dispatch = input.dispatchAlerts
+  const incidentTriggers = triggerIncidents
+    ? await syncObservabilityIncidentTriggers(
+        {
+          actor: posture.actor,
+          minimumSeverity: observabilityRuntime.incidentMinimumSeverity,
+          reason,
+          alerts: posture.alerts,
+          metrics: posture.metrics,
+          incidentReadiness: posture.incidentReadiness,
+          workerTelemetry: posture.workerTelemetry
+        },
+        client
+      )
+    : null;
+  const dispatch = dispatchAlerts
     ? await dispatchObservabilityAlerts(
         {
           actor: posture.actor,
@@ -633,37 +733,60 @@ export async function executeObservabilityAutomation(
         client
       )
     : null;
+
   await applyObservabilityRetentionPolicy(client);
-  const report = {
-    version: 1 as const,
-    status: "SUCCEEDED" as const,
+
+  return {
+    generatedAt,
     trigger: input.trigger ?? "manual",
-    generatedAt: input.now ?? new Date().toISOString(),
-    appEnv: appRuntime.appEnv,
-    releaseStage: appRuntime.releaseStage,
-    actorUserEmail: posture.actor.user.email,
+    actor: posture.actor,
     reason,
     minimumSeverity,
-    dispatchAlerts: Boolean(input.dispatchAlerts),
-    triggerIncidents: input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents,
-    metrics: posture.metrics,
-    workerTelemetry: posture.workerTelemetry,
+    dispatchAlerts,
+    triggerIncidents,
     alertCount: posture.alerts.length,
-    incidentReadiness: posture.incidentReadiness,
     snapshot,
     incidentTriggers,
     dispatch,
-    errorMessage: null
+    workerTelemetry: posture.workerTelemetry
   };
+}
+
+export async function executeObservabilityAutomation(
+  input: {
+    actorUserEmail: string;
+    reason: string;
+    minimumSeverity?: AtlasObservabilityAlertSeverity;
+    dispatchAlerts?: boolean;
+    triggerIncidents?: boolean;
+    trigger?: AtlasObservabilityAutomationTrigger;
+    now?: string;
+    trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
+  },
+  client: DatabaseClient = prisma
+) {
+  const automation = await performObservabilityAutomation(input, client);
+  const report = createObservabilityAutomationReportPayload({
+    generatedAt: automation.generatedAt,
+    trigger: automation.trigger,
+    actorUserEmail: automation.actor.user.email,
+    reason: automation.reason,
+    minimumSeverity: automation.minimumSeverity,
+    dispatchAlerts: automation.dispatchAlerts,
+    triggerIncidents: automation.triggerIncidents,
+    telemetryPolicy: "monitor",
+    telemetryRecoveryStatus: "not_requested",
+    automation
+  });
   const reportPath = writeObservabilityAutomationReport(report);
 
   return {
     report,
     reportPath,
-    snapshot,
-    incidentTriggers,
-    dispatch,
-    workerTelemetry: posture.workerTelemetry
+    snapshot: automation.snapshot,
+    incidentTriggers: automation.incidentTriggers,
+    dispatch: automation.dispatch,
+    workerTelemetry: automation.workerTelemetry
   };
 }
 
@@ -673,12 +796,19 @@ export async function recoverObservabilityTelemetryOwnership(
     reason: string;
     minimumSeverity?: AtlasObservabilityAlertSeverity;
     dispatchAlerts?: boolean;
+    trigger?: AtlasObservabilityAutomationTrigger;
     now?: string;
     trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
   },
   client: DatabaseClient = prisma
 ) {
   const actor = await resolveAutomationActor(input.actorUserEmail, client);
+  const reason = normalizeReason(input.reason);
+  const minimumSeverity =
+    input.minimumSeverity === "critical" || input.minimumSeverity === "warning" || input.minimumSeverity === "info"
+      ? input.minimumSeverity
+      : observabilityRuntime.automationDefaultMinimumSeverity;
+  const generatedAt = input.now ?? new Date().toISOString();
   const beforeOwnership = getObservabilityAutomationStatus(actor, {
     limit: 12,
     now: input.now
@@ -686,8 +816,25 @@ export async function recoverObservabilityTelemetryOwnership(
   const degradedBeforeKeys = listDegradedTelemetryOwnershipKeys(beforeOwnership);
 
   if (degradedBeforeKeys.length === 0) {
+    const reportPath = writeObservabilityAutomationReport(
+      createObservabilityAutomationReportPayload({
+        generatedAt,
+        trigger: input.trigger ?? "manual",
+        actorUserEmail: actor.user.email,
+        reason,
+        minimumSeverity,
+        dispatchAlerts: Boolean(input.dispatchAlerts),
+        triggerIncidents: true,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "no_action",
+        beforeOwnership,
+        afterOwnership: beforeOwnership
+      })
+    );
+
     return {
-      status: "no_action" as AtlasTelemetryOwnershipRecoveryStatus,
+      status: "no_action" as AtlasObservabilityTelemetryRecoveryStatus,
+      reportPath,
       beforeOwnership,
       afterOwnership: beforeOwnership,
       recoveredKeys: [] as AtlasObservabilityTelemetryOwnershipRecord["key"][],
@@ -696,37 +843,154 @@ export async function recoverObservabilityTelemetryOwnership(
     };
   }
 
-  const automation = await executeObservabilityAutomation(
+  const automation = await performObservabilityAutomation(
     {
       actorUserEmail: input.actorUserEmail,
-      reason: input.reason,
+      reason,
       minimumSeverity: input.minimumSeverity,
       dispatchAlerts: input.dispatchAlerts,
       triggerIncidents: true,
-      now: input.now,
+      trigger: input.trigger ?? "manual",
+      now: generatedAt,
       trace: input.trace
     },
     client
   );
-  const afterOwnership = getObservabilityAutomationStatus(actor, {
-    limit: 12,
-    now: input.now
-  }).telemetryOwnership;
+  const afterRunRecord = mapAutomationRunRecord(
+    createObservabilityAutomationReportPayload({
+      generatedAt: automation.generatedAt,
+      trigger: automation.trigger,
+      actorUserEmail: automation.actor.user.email,
+      reason: automation.reason,
+      minimumSeverity: automation.minimumSeverity,
+      dispatchAlerts: automation.dispatchAlerts,
+      triggerIncidents: automation.triggerIncidents,
+      telemetryPolicy: "recover",
+      telemetryRecoveryStatus: "unchanged",
+      automation
+    }),
+    "pending-telemetry-recovery",
+    automation.generatedAt
+  );
+  const afterOwnership = [
+    buildApiTelemetryOwnershipRecord(new Date(generatedAt)),
+    buildWorkerTelemetryOwnershipRecord(readPublishedWorkerTelemetry(generatedAt)),
+    buildAutomationCadenceOwnershipRecord(new Date(generatedAt), afterRunRecord)
+  ];
   const degradedAfterKeys = new Set(listDegradedTelemetryOwnershipKeys(afterOwnership));
   const recoveredKeys = degradedBeforeKeys.filter((key) => !degradedAfterKeys.has(key));
   const remainingKeys = [...degradedAfterKeys];
+  const status =
+    remainingKeys.length === 0
+      ? ("recovered" as AtlasObservabilityTelemetryRecoveryStatus)
+      : recoveredKeys.length > 0
+        ? ("partial" as AtlasObservabilityTelemetryRecoveryStatus)
+        : ("unchanged" as AtlasObservabilityTelemetryRecoveryStatus);
+  const reportPath = writeObservabilityAutomationReport(
+    createObservabilityAutomationReportPayload({
+      generatedAt: automation.generatedAt,
+      trigger: automation.trigger,
+      actorUserEmail: automation.actor.user.email,
+      reason: automation.reason,
+      minimumSeverity: automation.minimumSeverity,
+      dispatchAlerts: automation.dispatchAlerts,
+      triggerIncidents: automation.triggerIncidents,
+      telemetryPolicy: "recover",
+      telemetryRecoveryStatus: status,
+      beforeOwnership,
+      afterOwnership,
+      recoveredKeys,
+      remainingKeys,
+      automation
+    })
+  );
 
   return {
-    status:
-      remainingKeys.length === 0
-        ? ("recovered" as AtlasTelemetryOwnershipRecoveryStatus)
-        : recoveredKeys.length > 0
-          ? ("partial" as AtlasTelemetryOwnershipRecoveryStatus)
-          : ("unchanged" as AtlasTelemetryOwnershipRecoveryStatus),
+    status,
+    reportPath,
     beforeOwnership,
     afterOwnership,
     recoveredKeys,
     remainingKeys,
+    automation: {
+      reportPath,
+      snapshot: automation.snapshot,
+      incidentTriggers: automation.incidentTriggers,
+      dispatch: automation.dispatch,
+      workerTelemetry: automation.workerTelemetry
+    }
+  };
+}
+
+export async function executeObservabilityAutomationPolicy(
+  input: {
+    actorUserEmail: string;
+    reason: string;
+    minimumSeverity?: AtlasObservabilityAlertSeverity;
+    dispatchAlerts?: boolean;
+    triggerIncidents?: boolean;
+    trigger?: AtlasObservabilityAutomationTrigger;
+    telemetryPolicy?: AtlasObservabilityTelemetryOwnershipPolicy;
+    now?: string;
+    trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
+  },
+  client: DatabaseClient = prisma
+): Promise<AtlasObservabilityAutomationPolicyExecutionResult> {
+  const telemetryPolicy = normalizeTelemetryOwnershipPolicy(
+    input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy
+  );
+
+  if (telemetryPolicy === "recover") {
+    const recovery = await recoverObservabilityTelemetryOwnership(
+      {
+        actorUserEmail: input.actorUserEmail,
+        reason: input.reason,
+        minimumSeverity: input.minimumSeverity,
+        dispatchAlerts: input.dispatchAlerts,
+        trigger: input.trigger,
+        now: input.now,
+        trace: input.trace
+      },
+      client
+    );
+
+    return {
+      reportPath: recovery.reportPath,
+      telemetryPolicy,
+      telemetryRecoveryStatus: recovery.status,
+      recoveredKeys: recovery.recoveredKeys,
+      remainingKeys: recovery.remainingKeys,
+      snapshotId: recovery.automation?.snapshot.id ?? null,
+      dispatchId: recovery.automation?.dispatch?.id ?? null,
+      activeIncidentCount: recovery.automation?.incidentTriggers?.activeCount ?? 0
+    };
+  }
+
+  const automation = await performObservabilityAutomation(input, client);
+  const report = createObservabilityAutomationReportPayload({
+    generatedAt: automation.generatedAt,
+    trigger: input.trigger ?? "manual",
+    actorUserEmail: automation.actor.user.email,
+    reason: automation.reason,
+    minimumSeverity: automation.minimumSeverity,
+    dispatchAlerts: automation.dispatchAlerts,
+    triggerIncidents: automation.triggerIncidents,
+    telemetryPolicy,
+    telemetryRecoveryStatus: "not_requested",
+    beforeOwnership: [],
+    afterOwnership: [],
     automation
+  });
+  const reportPath = writeObservabilityAutomationReport(report);
+
+  return {
+    reportPath,
+    telemetryPolicy,
+    telemetryRecoveryStatus: "not_requested",
+    recoveredKeys: [],
+    remainingKeys: [],
+    snapshotId: automation.snapshot.id,
+    dispatchId: automation.dispatch?.id ?? null,
+    activeIncidentCount: automation.incidentTriggers?.activeCount ?? 0
   };
 }

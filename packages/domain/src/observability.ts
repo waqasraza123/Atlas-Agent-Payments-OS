@@ -111,6 +111,14 @@ export type AtlasObservabilityTelemetryOwnershipRecord = {
   lastRecordedAt: string | null;
 };
 
+export type AtlasObservabilityTelemetryOwnershipPolicy = "monitor" | "recover";
+export type AtlasObservabilityTelemetryRecoveryStatus =
+  | "not_requested"
+  | "no_action"
+  | "recovered"
+  | "partial"
+  | "unchanged";
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -193,6 +201,10 @@ export type AtlasObservabilityAutomationRunRecord = {
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
   triggerIncidents: boolean;
+  telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecoveryStatus: AtlasObservabilityTelemetryRecoveryStatus;
+  recoveredOwnershipCount: number;
+  remainingOwnershipCount: number;
   alertCount: number | null;
   activeIncidentCount: number | null;
   snapshotId: string | null;
@@ -213,6 +225,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   scheduleMode: "disabled" | "interval";
   intervalMinutes: number;
   startupDelaySeconds: number;
+  telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;

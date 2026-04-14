@@ -12,25 +12,24 @@ describe("worker observability automation", () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "warning");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS", "true");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS", "true");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "monitor");
 
-    const executeAutomation = vi.fn(async () => ({
+    const executeAutomationPolicy = vi.fn(async () => ({
       reportPath: "/tmp/observability-automation.json",
-      snapshot: {
-        id: "snapshot-1"
-      },
-      dispatch: {
-        id: "dispatch-1"
-      },
-      incidentTriggers: {
-        activeCount: 2
-      }
+      telemetryPolicy: "monitor",
+      telemetryRecoveryStatus: "not_requested",
+      recoveredKeys: [],
+      remainingKeys: [],
+      snapshotId: "snapshot-1",
+      dispatchId: "dispatch-1",
+      activeIncidentCount: 2
     }));
     const writeFailureReport = vi.fn();
     const logMessage = vi.fn();
     const { runWorkerObservabilityAutomationCycle } = await import("./observability-automation");
 
     const result = await runWorkerObservabilityAutomationCycle("scheduled", {
-      executeAutomation: executeAutomation as never,
+      executeAutomationPolicy: executeAutomationPolicy as never,
       writeFailureReport: writeFailureReport as never,
       logMessage: logMessage as never,
       setTimeout,
@@ -44,10 +43,11 @@ describe("worker observability automation", () => {
       reportPath: "/tmp/observability-automation.json",
       errorMessage: null
     });
-    expect(executeAutomation).toHaveBeenCalledWith(
+    expect(executeAutomationPolicy).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserEmail: "operator-admin@atlas.local",
         dispatchAlerts: true,
+        telemetryPolicy: "monitor",
         triggerIncidents: true,
         trigger: "scheduled"
       })
@@ -58,7 +58,62 @@ describe("worker observability automation", () => {
       expect.objectContaining({
         snapshotId: "snapshot-1",
         dispatchId: "dispatch-1",
-        activeIncidentCount: 2
+        activeIncidentCount: 2,
+        telemetryPolicy: "monitor",
+        telemetryRecoveryStatus: "not_requested"
+      })
+    );
+  }, 15000);
+
+  it("runs ownership recovery policy when scheduled automation is configured to recover", async () => {
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REASON", "Recover degraded telemetry ownership during the current release slot.");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "warning");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS", "false");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS", "true");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+
+    const executeAutomationPolicy = vi.fn(async () => ({
+      reportPath: "/tmp/observability-automation-recovery.json",
+      telemetryPolicy: "recover",
+      telemetryRecoveryStatus: "partial",
+      recoveredKeys: ["automation-cadence"],
+      remainingKeys: ["worker-runtime"],
+      snapshotId: "snapshot-recovery-1",
+      dispatchId: null,
+      activeIncidentCount: 1
+    }));
+    const { runWorkerObservabilityAutomationCycle } = await import("./observability-automation");
+    const logMessage = vi.fn();
+
+    const result = await runWorkerObservabilityAutomationCycle("scheduled", {
+      executeAutomationPolicy: executeAutomationPolicy as never,
+      writeFailureReport: vi.fn() as never,
+      logMessage: logMessage as never,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval
+    });
+
+    expect(result).toEqual({
+      status: "SUCCEEDED",
+      reportPath: "/tmp/observability-automation-recovery.json",
+      errorMessage: null
+    });
+    expect(executeAutomationPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telemetryPolicy: "recover",
+        trigger: "scheduled"
+      })
+    );
+    expect(logMessage).toHaveBeenCalledWith(
+      "worker.observability_automation.completed",
+      expect.objectContaining({
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "partial",
+        recoveredOwnershipCount: 1,
+        remainingOwnershipCount: 1
       })
     );
   }, 15000);
@@ -77,7 +132,7 @@ describe("worker observability automation", () => {
     const { runWorkerObservabilityAutomationCycle } = await import("./observability-automation");
 
     const result = await runWorkerObservabilityAutomationCycle("scheduled", {
-      executeAutomation: executeAutomation as never,
+      executeAutomationPolicy: executeAutomation as never,
       writeFailureReport: writeFailureReport as never,
       logMessage: logMessage as never,
       setTimeout,
@@ -95,6 +150,7 @@ describe("worker observability automation", () => {
       expect.objectContaining({
         trigger: "scheduled",
         minimumSeverity: "critical",
+        telemetryPolicy: "monitor",
         errorMessage: "Published API runtime snapshot is missing."
       })
     );
@@ -112,6 +168,7 @@ describe("worker observability automation", () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REASON", "Run scheduled observability automation for the current release slot.");
     const timeoutHandle = { unref: vi.fn() };
@@ -121,18 +178,20 @@ describe("worker observability automation", () => {
     const clearTimeoutMock = vi.fn();
     const clearIntervalMock = vi.fn();
     const logMessage = vi.fn();
-    const executeAutomation = vi.fn(async () => ({
+    const executeAutomationPolicy = vi.fn(async () => ({
       reportPath: "/tmp/observability-automation.json",
-      snapshot: {
-        id: "snapshot-1"
-      },
-      dispatch: null,
-      incidentTriggers: null
+      telemetryPolicy: "recover",
+      telemetryRecoveryStatus: "no_action",
+      recoveredKeys: [],
+      remainingKeys: [],
+      snapshotId: null,
+      dispatchId: null,
+      activeIncidentCount: 0
     }));
     const { startWorkerObservabilityAutomationScheduler } = await import("./observability-automation");
 
     const scheduler = startWorkerObservabilityAutomationScheduler({
-      executeAutomation: executeAutomation as never,
+      executeAutomationPolicy: executeAutomationPolicy as never,
       writeFailureReport: vi.fn() as never,
       logMessage: logMessage as never,
       setTimeout: setTimeoutMock as never,

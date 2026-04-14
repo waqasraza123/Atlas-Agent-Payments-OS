@@ -26,7 +26,9 @@ This runbook defines the repo-level operational baseline that now exists after t
 - governed external alert dispatch through owned generic-webhook, Slack webhook, PagerDuty Events, and Opsgenie adapters plus `ALERT_DISPATCH` operational integrations
 - repo-owned observability automation through `pnpm observability:automation`
 - worker-scheduled observability automation through `OBSERVABILITY_AUTOMATION_SCHEDULE_MODE=interval`
+- explicit telemetry-ownership policy through `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY=monitor|recover`
 - durable incident-trigger sync plus incident report artifact generation through observability automation
+- durable telemetry-ownership recovery reports and policy-aware automation history through the worker scheduler and `/operator/alerts`
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
@@ -58,6 +60,7 @@ With the API running:
 - `NEXT_PUBLIC_APP_URL`
 - `OBSERVABILITY_TRACE_HISTORY_LIMIT`
 - `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
+- `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY`
 - `OBSERVABILITY_INCIDENT_REPORT_DIR`
 - `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
 - `OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=pagerduty-events`
@@ -69,6 +72,6 @@ With the API running:
 - readiness still depends on local database, Redis, and object storage availability
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
-- observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, worker-driven automation cadence, and explicit retention windows, but not continuous time-series ownership or third-party APM tooling
-- observability automation can now run on a worker timer and sync durable incident triggers, but continuous time-series ownership and third-party paging lifecycle state are still outside the repo baseline
+- observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, worker-driven automation cadence, scheduler-enforced telemetry-ownership recovery policy, and explicit retention windows, but not continuous time-series ownership or third-party APM tooling
+- observability automation can now run on a worker timer, sync durable incident triggers, and auto-recover degraded telemetry ownership, but continuous time-series ownership and third-party paging lifecycle state are still outside the repo baseline
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

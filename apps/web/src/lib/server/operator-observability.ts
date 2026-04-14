@@ -171,9 +171,17 @@ export function createOperatorAutomationRunItems(
     id: item.id,
     title: `${item.trigger === "scheduled" ? "Scheduled" : "Manual"} automation · ${item.status}`,
     description:
-      item.reason ??
-      (item.errorMessage ? item.errorMessage : `${item.alertCount ?? 0} alerts reviewed at ${item.minimumSeverity}.`),
-    detail: `${item.minimumSeverity} threshold · ${item.reportPath}`,
+      item.errorMessage
+        ? item.errorMessage
+        : item.telemetryRecoveryStatus === "recovered"
+          ? `Recovered ${item.recoveredOwnershipCount} telemetry ownership signal${item.recoveredOwnershipCount === 1 ? "" : "s"}.`
+          : item.telemetryRecoveryStatus === "partial"
+            ? `Recovered ${item.recoveredOwnershipCount} telemetry ownership signal${item.recoveredOwnershipCount === 1 ? "" : "s"} with ${item.remainingOwnershipCount} still degraded.`
+            : item.telemetryRecoveryStatus === "no_action"
+              ? "Telemetry ownership was already healthy, so no recovery run was required."
+              : item.reason ??
+                `${item.alertCount ?? 0} alerts reviewed at ${item.minimumSeverity}.`,
+    detail: `${item.telemetryPolicy} policy · ${item.minimumSeverity} threshold · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone: item.status === "FAILED" ? "critical" : "success"
   }));
@@ -265,6 +273,10 @@ export function createOperatorAutomationFacts(
     {
       label: "Startup delay",
       value: `${automation.startupDelaySeconds} seconds`
+    },
+    {
+      label: "Telemetry policy",
+      value: automation.telemetryPolicy === "recover" ? "Recover degraded ownership" : "Monitor only"
     },
     {
       label: "Automation actor",

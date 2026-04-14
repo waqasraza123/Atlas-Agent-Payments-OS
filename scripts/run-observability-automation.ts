@@ -1,4 +1,5 @@
-import { executeObservabilityAutomation } from "../packages/database/src/observability-runtime.ts";
+import { observabilityRuntime } from "../packages/config/src/index.ts";
+import { executeObservabilityAutomationPolicy } from "../packages/database/src/observability-runtime.ts";
 
 function readFlag(name: string) {
   const flag = `--${name}`;
@@ -29,24 +30,32 @@ async function main() {
   const actorUserEmail = requireFlag("actor-user-email");
   const reason = requireFlag("reason");
   const minimumSeverity = readFlag("minimum-severity");
-  const result = await executeObservabilityAutomation({
+  const telemetryPolicy =
+    readFlag("telemetry-policy") === "recover" || hasSwitch("recover-ownership")
+      ? "recover"
+      : observabilityRuntime.automationTelemetryOwnershipPolicy;
+  const result = await executeObservabilityAutomationPolicy({
     actorUserEmail,
     reason,
     minimumSeverity:
       minimumSeverity === "critical" || minimumSeverity === "warning" || minimumSeverity === "info"
         ? minimumSeverity
         : undefined,
-    dispatchAlerts: hasSwitch("dispatch")
+    dispatchAlerts: hasSwitch("dispatch"),
+    telemetryPolicy
   });
 
   console.log(
     JSON.stringify(
       {
         reportPath: result.reportPath,
-        snapshotId: result.snapshot.id,
-        dispatchId: result.dispatch?.id ?? null,
-        dispatchedAlertCount: result.dispatch?.dispatchedAlertCount ?? 0,
-        workerTelemetryStatus: result.workerTelemetry.status
+        telemetryPolicy: result.telemetryPolicy,
+        telemetryRecoveryStatus: result.telemetryRecoveryStatus,
+        recoveredOwnershipCount: result.recoveredKeys.length,
+        remainingOwnershipCount: result.remainingKeys.length,
+        snapshotId: result.snapshotId,
+        dispatchId: result.dispatchId,
+        activeIncidentCount: result.activeIncidentCount
       },
       null,
       2

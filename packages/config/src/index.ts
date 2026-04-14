@@ -37,6 +37,7 @@ const atlasAppEnvironments = ["local", "development", "staging", "production"] a
 const atlasIdentityProviderModes = ["local-signed", "identity-bridge", "external-oidc"] as const;
 const atlasCommandAdapterModes = ["dry-run", "command"] as const;
 const atlasAutomationScheduleModes = ["disabled", "interval"] as const;
+const atlasTelemetryOwnershipPolicies = ["monitor", "recover"] as const;
 const atlasOperationalProofStorageModes = ["disabled", "s3-compatible"] as const;
 const atlasUpstreamIdentityProviders = ["generic-oidc-admin", "okta-scim", "auth0-management"] as const;
 const atlasAlertDispatchProviders = [
@@ -100,6 +101,12 @@ function readAutomationScheduleMode(value: string | undefined) {
     : "disabled";
 }
 
+function readTelemetryOwnershipPolicy(value: string | undefined) {
+  return atlasTelemetryOwnershipPolicies.includes(value as AtlasTelemetryOwnershipPolicy)
+    ? (value as AtlasTelemetryOwnershipPolicy)
+    : "monitor";
+}
+
 function readOperationalProofStorageMode(value: string | undefined, fallback: AtlasOperationalProofStorageMode) {
   return atlasOperationalProofStorageModes.includes(value as AtlasOperationalProofStorageMode)
     ? (value as AtlasOperationalProofStorageMode)
@@ -146,6 +153,7 @@ export type AtlasAppEnvironment = (typeof atlasAppEnvironments)[number];
 export type AtlasIdentityProviderMode = (typeof atlasIdentityProviderModes)[number];
 export type AtlasCommandAdapterMode = (typeof atlasCommandAdapterModes)[number];
 export type AtlasAutomationScheduleMode = (typeof atlasAutomationScheduleModes)[number];
+export type AtlasTelemetryOwnershipPolicy = (typeof atlasTelemetryOwnershipPolicies)[number];
 export type AtlasOperationalProofStorageMode = (typeof atlasOperationalProofStorageModes)[number];
 export type AtlasUpstreamIdentityProvider = (typeof atlasUpstreamIdentityProviders)[number];
 export type AtlasAlertDispatchProvider = (typeof atlasAlertDispatchProviders)[number];
@@ -373,6 +381,9 @@ export const observabilityRuntime = {
   automationScheduleMode: readAutomationScheduleMode(process.env.OBSERVABILITY_AUTOMATION_SCHEDULE_MODE),
   automationScheduleIntervalMinutes: readNumber(process.env.OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES, 15),
   automationScheduleStartupDelaySeconds: readNumber(process.env.OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS, 30),
+  automationTelemetryOwnershipPolicy: readTelemetryOwnershipPolicy(
+    process.env.OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY
+  ),
   automationActorUserEmail: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL),
   automationReason: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_REASON),
   automationDispatchAlerts: readBoolean(process.env.OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS, false),
@@ -742,6 +753,7 @@ export function validateAtlasRuntimeConfiguration(
     ...(service === "worker" && automationScheduleMode === "interval"
       ? [
           "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
+          "OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY",
           "OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL",
           "OBSERVABILITY_AUTOMATION_REASON"
         ]
@@ -786,6 +798,18 @@ export function validateAtlasRuntimeConfiguration(
       modeValue: readCommandAdapterMode(env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run")
     }
   ];
+
+  const telemetryOwnershipPolicy = env.OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY?.trim();
+
+  if (
+    telemetryOwnershipPolicy &&
+    !atlasTelemetryOwnershipPolicies.includes(telemetryOwnershipPolicy as AtlasTelemetryOwnershipPolicy)
+  ) {
+    issues.push({
+      variable: "OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY",
+      message: "OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY must be monitor or recover."
+    });
+  }
 
   for (const requirement of commandModeRequirements) {
     if (requirement.modeValue === "command") {

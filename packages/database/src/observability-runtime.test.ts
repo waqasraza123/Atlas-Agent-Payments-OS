@@ -299,6 +299,8 @@ describe("observability runtime", () => {
     expect(result.remainingKeys).toEqual([]);
     expect(result.beforeOwnership.find((item) => item.key === "automation-cadence")?.status).toBe("critical");
     expect(result.afterOwnership.find((item) => item.key === "automation-cadence")?.status).toBe("healthy");
+    expect(existsSync(result.reportPath)).toBe(true);
+    expect(readFileSync(result.reportPath, "utf8")).toContain('"telemetryPolicy": "recover"');
     expect(result.automation?.snapshot.id).toBe("snapshot-automation-1");
   });
 
@@ -425,6 +427,8 @@ describe("observability runtime", () => {
     );
 
     expect(result.status).toBe("no_action");
+    expect(existsSync(result.reportPath)).toBe(true);
+    expect(readFileSync(result.reportPath, "utf8")).toContain('"status": "no_action"');
     expect(result.automation).toBeNull();
     expect(result.recoveredKeys).toEqual([]);
     expect(result.remainingKeys).toEqual([]);
@@ -438,6 +442,7 @@ describe("observability runtime", () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
     writeFileSync(
       join(runtimeSandbox, "api.json"),
@@ -506,6 +511,12 @@ describe("observability runtime", () => {
           minimumSeverity: "warning",
           dispatchAlerts: false,
           triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "partial",
+            recoveredKeys: ["automation-cadence"],
+            remainingKeys: ["worker-runtime"]
+          },
           alertCount: 2,
           workerTelemetry: {
             status: "healthy"
@@ -558,11 +569,16 @@ describe("observability runtime", () => {
     expect(runs[0]).toMatchObject({
       status: "SUCCEEDED",
       trigger: "scheduled",
+      telemetryPolicy: "recover",
+      telemetryRecoveryStatus: "partial",
+      recoveredOwnershipCount: 1,
+      remainingOwnershipCount: 1,
       snapshotId: "snapshot-1"
     });
     expect(status).toMatchObject({
       scheduleMode: "interval",
       intervalMinutes: 20,
+      telemetryPolicy: "recover",
       actorUserEmail: "operator-admin@atlas.local",
       dispatchProvider: "generic-webhook",
       dispatchDeliveryKind: "alert-dispatch",

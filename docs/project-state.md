@@ -50,6 +50,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Operator observability now exposes explicit telemetry-ownership freshness for published API runtime snapshots, worker runtime snapshots, and automation cadence so live telemetry stewardship is visible beyond retained artifacts alone
 - Shared observability alert compilation now escalates stale telemetry-ownership signals into runtime alerts across operator alerts, incident-readiness posture, and observability automation so degraded ownership becomes actionable instead of passive
 - Operator observability now includes a dedicated telemetry-ownership recovery workflow that runs a targeted automation cycle, compares before-and-after ownership posture, and reports recovered versus unresolved ownership signals
+- Worker-scheduled observability automation now enforces an explicit telemetry-ownership policy, can auto-recover degraded ownership on schedule, and leaves durable policy-aware recovery reports plus operator-visible policy posture
 - Direct identity-provider lifecycle governance now exists through persisted provider links with suspend, reactivate, and revoke controls plus provider-session revocation from the operator support surface
 - Direct external identity provisioning and deprovisioning baseline now exists through persisted external identity assignments, operator-managed lifecycle controls, assignment-backed external OIDC exchange enforcement, a dedicated operator identity-access surface, persisted upstream provider subjects and sync state, and vendor-native Okta/Auth0 lifecycle synchronization
 - Rollout execution visibility now exists through an operator rollout surface, restore-drill execution reports, secret-rotation execution reports, promotion execution reports, upstream identity execution reports, a persisted operational integration registry with active and verified execution gating, a durable rollout execution ledger with integrity-tracked proof artifacts, and owned S3-compatible remote proof storage metadata on stored operational artifacts
@@ -149,7 +150,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Shared worker telemetry and repo-owned observability automation are now in place in repo scope
 - Timer-driven observability automation and retention policy baseline are now in place in repo scope
 - Broader web and external-integration trace propagation plus repo-owned external paging are now in place in repo scope
-- The current active execution slice is the remaining tenant-boundary hardening plus deeper telemetry ownership for broader real-world rollout
+- The current active execution slice is deeper telemetry ownership actionability plus any remaining tenant-boundary hardening for broader real-world rollout
 - The focused v1 wedge remains unchanged while the docs now also define the longer-term platform and operations target state
 - Local development auth currently relies on seeded memberships plus signed local session tokens carried in the shared session cookie and the `x-atlas-local-session` request header contract
 - The broader rollout baseline now supports direct external OIDC token verification, exchange into persisted Atlas sessions, provider-mode runtime enforcement, and signed session verification against stored auth-session records
@@ -171,7 +172,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Receipt artifact generation beyond JSON-backed receipt truth
 - Configurable analytics and broader reporting automation
 - Full release-engineering implementation for multi-environment deployment execution, environment promotion, and rollback discipline
-- Continuous telemetry ownership beyond retained repo artifacts
+- Broader continuous telemetry ownership beyond the current scheduler-enforced policy and retained repo artifacts
 - Broader auth maturity, SSO, formal organization-switching governance, and deeper tenant-isolation hardening beyond the current signed-session, stage-aware operator-governance, and lifecycle-governance baseline
 - Production-ready Stripe webhook ingestion and settlement confirmation lifecycle
 - Broader support tooling, compliance workstreams, and enterprise deployment controls
