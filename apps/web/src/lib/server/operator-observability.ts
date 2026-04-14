@@ -439,7 +439,10 @@ export function createOperatorTelemetryRemediationActionItems(
     id: item.id,
     title: `${item.action === "ACKNOWLEDGED" ? "Acknowledged" : "Resolved"} telemetry remediation`,
     description: item.reason,
-    detail: `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
+    detail:
+      item.action === "RESOLVED"
+        ? `${item.remediationStatus} posture · resolved ${item.resolvedIncidentTriggerCount} incident triggers · ${item.activeIncidentTriggerCount} active remain · ${item.reportPath}`
+        : `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone: item.action === "RESOLVED" ? "success" : "warning"
   }));

@@ -1368,6 +1368,8 @@ const databaseMock = vi.hoisted(() => ({
         remediationStatus: "escalated",
         affectedOwnershipKeys: ["worker-runtime"],
         latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 0,
+        activeIncidentTriggerCount: 0,
         reportPath: "/tmp/remediation-1.json"
       }
     ],

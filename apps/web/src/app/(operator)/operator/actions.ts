@@ -387,7 +387,7 @@ export async function resolveTelemetryRemediationAction(formData: FormData) {
   const actor = await requireOperatorActor();
 
   try {
-    await recordObservabilityTelemetryRemediationAction(actor, {
+    const result = await recordObservabilityTelemetryRemediationAction(actor, {
       action: "RESOLVED",
       reason: toTextValue(formData.get("reason"))
     });
@@ -395,7 +395,11 @@ export async function resolveTelemetryRemediationAction(formData: FormData) {
     redirectWithFeedback(
       "/operator/alerts",
       "Telemetry remediation resolved",
-      "Atlas recorded an explicit closure for the current telemetry remediation posture."
+      result.resolvedIncidentTriggerCount > 0
+        ? `Atlas recorded an explicit closure and resolved ${result.resolvedIncidentTriggerCount} linked incident trigger${result.resolvedIncidentTriggerCount === 1 ? "" : "s"}.`
+        : result.activeIncidentTriggerCount > 0
+          ? `Atlas recorded an explicit closure and reconciled incident posture while ${result.activeIncidentTriggerCount} unrelated incident trigger${result.activeIncidentTriggerCount === 1 ? " remains" : "s remain"} active.`
+          : "Atlas recorded an explicit closure and reconciled the linked incident posture."
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Telemetry remediation resolution failed", normalizeActionError(error), "error");

@@ -153,6 +153,8 @@ export type AtlasObservabilityTelemetryRemediationActionRecord = {
   remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
   affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   latestAutomationReportPath: string | null;
+  resolvedIncidentTriggerCount: number;
+  activeIncidentTriggerCount: number;
   reportPath: string;
 };
 

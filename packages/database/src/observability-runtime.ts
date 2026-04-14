@@ -89,6 +89,8 @@ type AtlasObservabilityTelemetryRemediationReportPayload = {
   remediationStatus: "ready" | "action_required" | "escalated";
   affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   latestAutomationReportPath: string | null;
+  resolvedIncidentTriggerCount?: number;
+  activeIncidentTriggerCount?: number;
   reportPath?: string;
 };
 
@@ -408,6 +410,9 @@ function mapTelemetryRemediationActionRecord(
         : "action_required",
     affectedOwnershipKeys: Array.isArray(payload.affectedOwnershipKeys) ? payload.affectedOwnershipKeys : [],
     latestAutomationReportPath: typeof payload.latestAutomationReportPath === "string" ? payload.latestAutomationReportPath : null,
+    resolvedIncidentTriggerCount:
+      typeof payload.resolvedIncidentTriggerCount === "number" ? payload.resolvedIncidentTriggerCount : 0,
+    activeIncidentTriggerCount: typeof payload.activeIncidentTriggerCount === "number" ? payload.activeIncidentTriggerCount : 0,
     reportPath
   };
 }
@@ -695,10 +700,69 @@ async function createTelemetryRemediationAuditEvent(
         remediationStatus: action.remediationStatus,
         affectedOwnershipKeys: action.affectedOwnershipKeys,
         latestAutomationReportPath: action.latestAutomationReportPath,
+        resolvedIncidentTriggerCount: action.resolvedIncidentTriggerCount,
+        activeIncidentTriggerCount: action.activeIncidentTriggerCount,
         reportPath: action.reportPath
       } satisfies Prisma.InputJsonObject
     }
   });
+}
+
+async function syncTelemetryRemediationIncidentPosture(
+  actor: AtlasActorContext,
+  reason: string,
+  now: string,
+  client: DatabaseClient
+) {
+  const metrics = readPublishedApiRuntimeTelemetry();
+
+  if (!metrics) {
+    throw new AtlasObservabilityOperationsError(
+      "Telemetry remediation resolution requires a published API runtime snapshot so current incident posture can be reconciled.",
+      "bad_request"
+    );
+  }
+
+  const [overview, activeIncidentTriggers] = await Promise.all([
+    getOperatorOverview(actor, client),
+    listObservabilityIncidentTriggers(
+      actor,
+      {
+        limit: 50,
+        status: "ACTIVE"
+      },
+      client
+    )
+  ]);
+  const workerTelemetry = readPublishedWorkerTelemetry(now);
+  const automationStatus = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now
+  });
+  const { alerts, incidentReadiness } = buildObservabilityAutomationAlertState({
+    metrics,
+    overview,
+    workerTelemetry,
+    telemetryOwnership: automationStatus.telemetryOwnership,
+    latestAutomationRun: automationStatus.recentRuns[0] ?? null,
+    telemetryRecoveryEscalation: automationStatus.telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp: automationStatus.telemetryRemediationFollowUp,
+    activeIncidentTriggerCount: activeIncidentTriggers.length,
+    now
+  });
+
+  return syncObservabilityIncidentTriggers(
+    {
+      actor,
+      minimumSeverity: observabilityRuntime.incidentMinimumSeverity,
+      reason,
+      alerts,
+      metrics,
+      incidentReadiness,
+      workerTelemetry
+    },
+    client
+  );
 }
 
 function normalizeReason(value: string) {
@@ -1566,6 +1630,15 @@ export async function recordObservabilityTelemetryRemediationAction(
     input.action === "RESOLVED"
       ? (status.recentTelemetryRemediationActions[0]?.affectedOwnershipKeys ?? [])
       : status.telemetryRemediation.affectedOwnershipKeys;
+  const incidentTriggerSync =
+    input.action === "RESOLVED"
+      ? await syncTelemetryRemediationIncidentPosture(actor, reason, generatedAt, client)
+      : {
+          items: [],
+          createdCount: 0,
+          resolvedCount: 0,
+          activeCount: 0
+        };
   const reportPath = writeTelemetryRemediationReport({
     version: 1,
     action: input.action,
@@ -1574,7 +1647,9 @@ export async function recordObservabilityTelemetryRemediationAction(
     reason,
     remediationStatus: status.telemetryRemediation.status,
     affectedOwnershipKeys,
-    latestAutomationReportPath: status.lastReportPath
+    latestAutomationReportPath: status.lastReportPath,
+    resolvedIncidentTriggerCount: incidentTriggerSync.resolvedCount,
+    activeIncidentTriggerCount: incidentTriggerSync.activeCount
   });
   await applyObservabilityRetentionPolicy();
   const action = mapTelemetryRemediationActionRecord(
@@ -1586,7 +1661,9 @@ export async function recordObservabilityTelemetryRemediationAction(
       reason,
       remediationStatus: status.telemetryRemediation.status,
       affectedOwnershipKeys,
-      latestAutomationReportPath: status.lastReportPath
+      latestAutomationReportPath: status.lastReportPath,
+      resolvedIncidentTriggerCount: incidentTriggerSync.resolvedCount,
+      activeIncidentTriggerCount: incidentTriggerSync.activeCount
     },
     reportPath,
     generatedAt

@@ -201,6 +201,8 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
         remediationStatus: "action_required",
         affectedOwnershipKeys: ["worker-runtime"],
         latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 0,
+        activeIncidentTriggerCount: 0,
         reportPath: "/tmp/remediation-1.json"
       }
     ]);
@@ -209,6 +211,32 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
       expect.objectContaining({
         title: "Acknowledged telemetry remediation",
         statusTone: "warning"
+      })
+    ]);
+  });
+
+  it("renders incident reconciliation details for remediation closure history", () => {
+    const items = createOperatorTelemetryRemediationActionItems([
+      {
+        id: "/tmp/remediation-2.json",
+        action: "RESOLVED",
+        generatedAt: "2026-04-13T00:15:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Closing telemetry remediation after healthy ownership was restored.",
+        remediationStatus: "ready",
+        affectedOwnershipKeys: ["automation-cadence"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 1,
+        activeIncidentTriggerCount: 0,
+        reportPath: "/tmp/remediation-2.json"
+      }
+    ]);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        title: "Resolved telemetry remediation",
+        detail: "ready posture · resolved 1 incident triggers · 0 active remain · /tmp/remediation-2.json",
+        statusTone: "success"
       })
     ]);
   });

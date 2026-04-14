@@ -652,7 +652,9 @@ describe("observability runtime", () => {
     });
     expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
       action: "ACKNOWLEDGED",
-      reason: "Taking ownership of the current telemetry remediation issue."
+      reason: "Taking ownership of the current telemetry remediation issue.",
+      resolvedIncidentTriggerCount: 0,
+      activeIncidentTriggerCount: 0
     });
     expect(client.notification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -937,6 +939,12 @@ describe("observability runtime", () => {
     const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
       "./observability-runtime"
     );
+    observabilityOperationsMock.syncObservabilityIncidentTriggers.mockResolvedValueOnce({
+      items: [],
+      createdCount: 0,
+      resolvedCount: 1,
+      activeCount: 0
+    });
     const client = {
       notification: {
         upsert: vi.fn(async () => undefined)
@@ -980,12 +988,24 @@ describe("observability runtime", () => {
 
     expect(action).toMatchObject({
       action: "RESOLVED",
-      remediationStatus: "ready"
+      remediationStatus: "ready",
+      resolvedIncidentTriggerCount: 1,
+      activeIncidentTriggerCount: 0
     });
     expect(status.telemetryRemediationOwnership).toMatchObject({
       status: "resolved",
       actorUserEmail: "operator-admin@atlas.local"
     });
+    expect(observabilityOperationsMock.syncObservabilityIncidentTriggers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alerts: expect.not.arrayContaining([
+          expect.objectContaining({
+            id: "telemetry-ownership-automation-cadence"
+          })
+        ])
+      }),
+      client
+    );
     expect(client.notification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
@@ -997,7 +1017,11 @@ describe("observability runtime", () => {
     expect(client.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          eventType: "observability.telemetry_remediation_resolved"
+          eventType: "observability.telemetry_remediation_resolved",
+          payload: expect.objectContaining({
+            resolvedIncidentTriggerCount: 1,
+            activeIncidentTriggerCount: 0
+          })
         })
       })
     );
