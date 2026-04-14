@@ -780,6 +780,7 @@ export function buildAtlasObservabilityTelemetryRemediation(input: {
   telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
   latestAutomationRun: AtlasObservabilityAutomationRunRecord | null;
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
+  telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
   dispatchAlerts: boolean;
   triggerIncidents: boolean;
   minimumSeverity: AtlasObservabilityAlertSeverity;
@@ -826,6 +827,40 @@ export function buildAtlasObservabilityTelemetryRemediation(input: {
       minimumSeverity: "critical",
       dispatchAlerts: true,
       triggerIncidents: true,
+      affectedOwnershipKeys,
+      latestReportPath,
+      runbookPath
+    };
+  }
+
+  if (input.telemetryRemediationFollowUp?.status === "critical") {
+    return {
+      status: "escalated",
+      title: "Acknowledged telemetry remediation is materially overdue",
+      detail: `${input.telemetryRemediationFollowUp.detail} ${affectedLabelSummary} still require intervention.`,
+      recommendedAction: "run-recovery-and-dispatch",
+      recommendedActionLabel: "Run escalated recovery",
+      reason: "Run guided telemetry remediation after the acknowledgement follow-up window was materially breached.",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      affectedOwnershipKeys,
+      latestReportPath,
+      runbookPath
+    };
+  }
+
+  if (input.telemetryRemediationFollowUp?.status === "warning") {
+    return {
+      status: "action_required",
+      title: "Acknowledged telemetry remediation needs follow-up",
+      detail: `${input.telemetryRemediationFollowUp.detail} ${affectedLabelSummary} still require intervention.`,
+      recommendedAction: "run-recovery",
+      recommendedActionLabel: "Run guided follow-up recovery",
+      reason: "Run guided telemetry remediation after the acknowledgement follow-up window started to age out.",
+      minimumSeverity: hasCriticalOwnership ? "critical" : "warning",
+      dispatchAlerts: false,
+      triggerIncidents: input.triggerIncidents,
       affectedOwnershipKeys,
       latestReportPath,
       runbookPath

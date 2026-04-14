@@ -488,13 +488,13 @@ function buildTelemetryRemediationOwnership(
 }
 
 function buildTelemetryRemediationFollowUp(
-  remediation: AtlasObservabilityAutomationStatusRecord["telemetryRemediation"],
+  telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[],
   ownership: AtlasObservabilityTelemetryRemediationOwnershipRecord,
   now: Date
 ): AtlasObservabilityTelemetryRemediationFollowUpRecord {
   const thresholdMinutes = Math.max(1, observabilityRuntime.automationRemediationFollowUpMinutes);
 
-  if (remediation.recommendedAction === "none") {
+  if (telemetryOwnership.every((item) => item.status === "healthy")) {
     return {
       status: "ready",
       thresholdMinutes,
@@ -1291,10 +1291,19 @@ export function getObservabilityAutomationStatus(
     recentTelemetryRemediationActions
   );
   const telemetryRemediationFollowUp = buildTelemetryRemediationFollowUp(
-    telemetryRemediation,
+    telemetryOwnership,
     telemetryRemediationOwnership,
     now
   );
+  const finalTelemetryRemediation = buildAtlasObservabilityTelemetryRemediation({
+    telemetryOwnership,
+    latestAutomationRun: latestRun,
+    telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp,
+    dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+    triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+    minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity
+  });
 
   return {
     scheduleMode: observabilityRuntime.automationScheduleMode,
@@ -1302,7 +1311,7 @@ export function getObservabilityAutomationStatus(
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
     telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     telemetryRecoveryEscalation,
-    telemetryRemediation,
+    telemetryRemediation: finalTelemetryRemediation,
     telemetryRemediationOwnership,
     telemetryRemediationFollowUp,
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
@@ -1972,7 +1981,7 @@ export async function recoverObservabilityTelemetryOwnership(
     currentStatus.recentTelemetryRemediationActions
   );
   const afterTelemetryRemediationFollowUp = buildTelemetryRemediationFollowUp(
-    afterTelemetryRemediation,
+    afterOwnership,
     afterTelemetryRemediationOwnership,
     new Date(generatedAt)
   );

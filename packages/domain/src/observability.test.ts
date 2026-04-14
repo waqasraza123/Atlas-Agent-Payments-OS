@@ -294,6 +294,45 @@ describe("atlas observability contracts", () => {
     });
   });
 
+  it("escalates remediation guidance when acknowledged follow-up is materially overdue", () => {
+    const remediation = buildAtlasObservabilityTelemetryRemediation({
+      telemetryOwnership: [
+        {
+          key: "automation-cadence",
+          label: "Automation cadence",
+          status: "critical",
+          detail: "No observability automation run has been recorded for the active schedule.",
+          lastRecordedAt: null
+        }
+      ],
+      latestAutomationRun: null,
+      telemetryRecoveryEscalation: {
+        status: "idle",
+        consecutiveBreachedRuns: 0,
+        threshold: 2,
+        detail: "Telemetry auto-recovery has not breached its target."
+      },
+      telemetryRemediationFollowUp: {
+        status: "critical",
+        thresholdMinutes: 60,
+        ageMinutes: 135,
+        detail: "Telemetry remediation follow-up is materially overdue after 135 minutes since acknowledgement."
+      },
+      dispatchAlerts: false,
+      triggerIncidents: true,
+      minimumSeverity: "warning"
+    });
+
+    expect(remediation).toMatchObject({
+      status: "escalated",
+      title: "Acknowledged telemetry remediation is materially overdue",
+      recommendedAction: "run-recovery-and-dispatch",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      minimumSeverity: "critical"
+    });
+  });
+
   it("classifies worker telemetry freshness and queue health", () => {
     const workerTelemetry = buildAtlasWorkerTelemetryRecord({
       staleAfterMinutes: 10,

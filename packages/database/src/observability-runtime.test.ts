@@ -777,6 +777,10 @@ describe("observability runtime", () => {
       thresholdMinutes: 60,
       ageMinutes: 75
     });
+    expect(status.telemetryRemediation).toMatchObject({
+      status: "escalated",
+      recommendedAction: "run-recovery-and-dispatch"
+    });
     expect(client.notification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({
@@ -785,6 +789,72 @@ describe("observability runtime", () => {
         })
       })
     );
+  });
+
+  it("escalates remediation guidance when the acknowledged follow-up window is materially overdue", async () => {
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-follow-up-critical-"));
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES", "60");
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-00-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ACKNOWLEDGED",
+          generatedAt: "2026-04-13T00:00:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Taking ownership of the current telemetry remediation issue.",
+          remediationStatus: "action_required",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T02:15:00.000Z"
+    });
+
+    expect(status.telemetryRemediationFollowUp).toMatchObject({
+      status: "critical",
+      ageMinutes: 135
+    });
+    expect(status.telemetryRemediation).toMatchObject({
+      status: "escalated",
+      title: "Acknowledged telemetry remediation is materially overdue",
+      recommendedAction: "run-recovery-and-dispatch",
+      dispatchAlerts: true,
+      triggerIncidents: true
+    });
   });
 
   it("requires healthy telemetry ownership before remediation can be resolved", async () => {
