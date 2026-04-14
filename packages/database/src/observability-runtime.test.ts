@@ -596,6 +596,14 @@ describe("observability runtime", () => {
     const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
       "./observability-runtime"
     );
+    const client = {
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
     const actor = {
       user: {
         id: "user-operator",
@@ -623,7 +631,7 @@ describe("observability runtime", () => {
       action: "ACKNOWLEDGED",
       reason: "Taking ownership of the current telemetry remediation issue.",
       now: "2026-04-13T00:12:00.000Z"
-    });
+    }, client as never);
     const status = getObservabilityAutomationStatus(actor, {
       limit: 5,
       now: "2026-04-13T00:12:30.000Z"
@@ -641,6 +649,26 @@ describe("observability runtime", () => {
       action: "ACKNOWLEDGED",
       reason: "Taking ownership of the current telemetry remediation issue."
     });
+    expect(client.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          category: "observability-remediation",
+          status: "UNREAD"
+        }),
+        update: expect.objectContaining({
+          description: expect.stringContaining("acknowledged"),
+          status: "UNREAD"
+        })
+      })
+    );
+    expect(client.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          eventType: "observability.telemetry_remediation_acknowledged",
+          targetType: "ObservabilityRemediation"
+        })
+      })
+    );
   });
 
   it("requires healthy telemetry ownership before remediation can be resolved", async () => {
@@ -795,6 +823,14 @@ describe("observability runtime", () => {
     const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
       "./observability-runtime"
     );
+    const client = {
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
     const actor = {
       user: {
         id: "user-operator",
@@ -822,7 +858,7 @@ describe("observability runtime", () => {
       action: "RESOLVED",
       reason: "Closing telemetry remediation after healthy ownership was restored.",
       now: "2026-04-13T00:12:00.000Z"
-    });
+    }, client as never);
     const status = getObservabilityAutomationStatus(actor, {
       limit: 5,
       now: "2026-04-13T00:12:30.000Z"
@@ -836,6 +872,21 @@ describe("observability runtime", () => {
       status: "resolved",
       actorUserEmail: "operator-admin@atlas.local"
     });
+    expect(client.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          category: "observability-remediation",
+          status: "READ"
+        })
+      })
+    );
+    expect(client.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          eventType: "observability.telemetry_remediation_resolved"
+        })
+      })
+    );
   });
 
   it("records failure escalation artifacts when recover-mode automation fails before recovery posture is computed", async () => {
@@ -888,6 +939,9 @@ describe("observability runtime", () => {
             kind: "OPERATOR"
           }
         }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
       }
     } as const;
 
@@ -961,6 +1015,15 @@ describe("observability runtime", () => {
         remainingKeys: ["api-runtime", "automation-cadence"]
       }
     });
+    expect(client.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          category: "observability-remediation",
+          status: "UNREAD",
+          title: "Telemetry remediation requires escalation"
+        })
+      })
+    );
   });
 
   it("lists automation history and current scheduler posture from stored reports", async () => {

@@ -76,7 +76,11 @@ export function createOperatorNotificationItems(
     title: item.title,
     description: item.description,
     detail: formatDateTime(item.updatedAt),
-    href: item.caseId ? getAtlasWorkspaceDetailHref("OPERATOR", "exceptions", item.caseId) ?? undefined : undefined,
+    href: item.caseId
+      ? getAtlasWorkspaceDetailHref("OPERATOR", "exceptions", item.caseId) ?? undefined
+      : item.category.startsWith("observability-")
+        ? "/operator/alerts"
+        : undefined,
     statusLabel: formatAtlasNotificationStatusLabel(item.status),
     statusTone: item.status === "UNREAD" ? "warning" : "default"
   }));

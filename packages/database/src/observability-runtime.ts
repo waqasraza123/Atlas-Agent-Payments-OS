@@ -6,9 +6,9 @@ import {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
   buildAtlasObservabilityTelemetryRemediation,
+  buildAtlasWorkerTelemetryRecord,
   getAtlasObservabilityDeliveryKind,
   isAtlasPagingProvider,
-  buildAtlasWorkerTelemetryRecord,
   type AtlasApiRuntimeTelemetryRecord,
   type AtlasIncidentReadinessRecord,
   type AtlasObservabilityAlertRecord,
@@ -25,7 +25,7 @@ import {
   type AtlasWorkerRuntimeMetricsSnapshot,
   type AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
-import { type PrismaClient } from "./generated/client/index.js";
+import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
 import { createOwnedExecutionTraceContext } from "./operation-trace";
 import { getOperatorOverview } from "./operator-workflow";
@@ -38,7 +38,7 @@ import {
   syncObservabilityIncidentTriggers
 } from "./observability-operations";
 
-type DatabaseClient = PrismaClient;
+type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
 
@@ -479,6 +479,160 @@ function buildTelemetryRemediationOwnership(
         ? "Telemetry ownership is healthy and awaiting explicit resolution closure."
         : "The current telemetry remediation posture is not acknowledged by an active operator owner."
   };
+}
+
+function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityAutomationStatusRecord) {
+  const isActive = status.telemetryRemediation.recommendedAction !== "none";
+  const isEscalated = status.telemetryRemediation.status === "escalated";
+  const isAcknowledged = status.telemetryRemediationOwnership.status === "acknowledged";
+  const title = isEscalated
+    ? "Telemetry remediation requires escalation"
+    : isActive
+      ? "Telemetry remediation requires operator follow-up"
+      : "Telemetry remediation resolved";
+  const description = isEscalated
+    ? isAcknowledged && status.telemetryRemediationOwnership.actorUserEmail
+      ? `${status.telemetryRemediationOwnership.actorUserEmail} acknowledged the current telemetry remediation posture, but Atlas is keeping the escalation surfaced until ownership is restored or explicitly closed.`
+      : `${status.telemetryRemediation.detail} Atlas is keeping this issue surfaced until ownership is restored or explicitly closed.`
+    : isActive
+      ? isAcknowledged && status.telemetryRemediationOwnership.actorUserEmail
+        ? `${status.telemetryRemediationOwnership.actorUserEmail} acknowledged the current telemetry remediation posture. ${status.telemetryRemediation.detail}`
+        : `${status.telemetryRemediation.detail} Recommended response: ${status.telemetryRemediation.recommendedActionLabel}.`
+      : status.telemetryRemediationOwnership.status === "resolved" &&
+          status.telemetryRemediationOwnership.actorUserEmail &&
+          status.telemetryRemediationOwnership.reason
+        ? `${status.telemetryRemediationOwnership.actorUserEmail} resolved the latest telemetry remediation posture. ${status.telemetryRemediationOwnership.reason}`
+        : "Telemetry ownership is currently healthy and no active remediation follow-up remains queued.";
+
+  return {
+    dedupeKey: `observability-remediation:${appRuntime.appEnv}`,
+    title,
+    description,
+    status: isActive && (isEscalated || !isAcknowledged) ? "UNREAD" : "READ",
+    metadata: {
+      remediationStatus: status.telemetryRemediation.status,
+      ownershipStatus: status.telemetryRemediationOwnership.status,
+      recommendedAction: status.telemetryRemediation.recommendedAction,
+      affectedOwnershipKeys: status.telemetryRemediation.affectedOwnershipKeys,
+      latestAutomationReportPath: status.telemetryRemediation.latestReportPath,
+      remediationReportPath: status.telemetryRemediationOwnership.reportPath,
+      remediationUpdatedAt: status.telemetryRemediationOwnership.updatedAt
+    } satisfies Prisma.InputJsonObject
+  } as const;
+}
+
+async function syncObservabilityTelemetryRemediationNotification(
+  actor: AtlasActorContext,
+  status: AtlasObservabilityAutomationStatusRecord,
+  client: DatabaseClient
+) {
+  const notificationClient = client as unknown as {
+    notification?: {
+      upsert?: (args: {
+        where: {
+          dedupeKey: string;
+        };
+        create: {
+          dedupeKey: string;
+          organizationId: string;
+          caseId: null;
+          category: string;
+          title: string;
+          description: string;
+          status: "UNREAD" | "READ";
+          metadata: Prisma.InputJsonObject;
+        };
+        update: {
+          organizationId: string;
+          category: string;
+          title: string;
+          description: string;
+          status: "UNREAD" | "READ";
+          metadata: Prisma.InputJsonObject;
+        };
+      }) => Promise<unknown>;
+    };
+  };
+
+  if (!notificationClient.notification?.upsert) {
+    return;
+  }
+
+  const notification = buildTelemetryRemediationNotificationRecord(status);
+
+  await notificationClient.notification.upsert({
+    where: {
+      dedupeKey: notification.dedupeKey
+    },
+    create: {
+      dedupeKey: notification.dedupeKey,
+      organizationId: actor.organization.id,
+      caseId: null,
+      category: "observability-remediation",
+      title: notification.title,
+      description: notification.description,
+      status: notification.status,
+      metadata: notification.metadata
+    },
+    update: {
+      organizationId: actor.organization.id,
+      category: "observability-remediation",
+      title: notification.title,
+      description: notification.description,
+      status: notification.status,
+      metadata: notification.metadata
+    }
+  });
+}
+
+async function createTelemetryRemediationAuditEvent(
+  actor: AtlasActorContext,
+  action: AtlasObservabilityTelemetryRemediationActionRecord,
+  client: DatabaseClient
+) {
+  const auditClient = client as unknown as {
+    auditEvent?: {
+      create?: (args: {
+        data: {
+          organizationId: string;
+          userId: string;
+          actorType: "HUMAN";
+          eventType: string;
+          targetType: string;
+          targetId: string;
+          requestId: null;
+          payload: Prisma.InputJsonValue;
+        };
+      }) => Promise<unknown>;
+    };
+  };
+
+  if (!auditClient.auditEvent?.create) {
+    return;
+  }
+
+  await auditClient.auditEvent.create({
+    data: {
+      organizationId: actor.organization.id,
+      userId: actor.user.id,
+      actorType: "HUMAN",
+      eventType:
+        action.action === "RESOLVED"
+          ? "observability.telemetry_remediation_resolved"
+          : "observability.telemetry_remediation_acknowledged",
+      targetType: "ObservabilityRemediation",
+      targetId: action.reportPath,
+      requestId: null,
+      payload: {
+        action: action.action,
+        reason: action.reason,
+        remediationStatus: action.remediationStatus,
+        affectedOwnershipKeys: action.affectedOwnershipKeys,
+        latestAutomationReportPath: action.latestAutomationReportPath,
+        reportPath: action.reportPath
+      } satisfies Prisma.InputJsonObject
+    }
+  });
 }
 
 function normalizeReason(value: string) {
@@ -1035,6 +1189,21 @@ export function getObservabilityAutomationStatus(
   } satisfies AtlasObservabilityAutomationStatusRecord;
 }
 
+async function syncTelemetryRemediationNotificationFromCurrentStatus(
+  actor: AtlasActorContext,
+  input: {
+    limit?: number;
+    now?: string;
+  },
+  client: DatabaseClient
+) {
+  await syncObservabilityTelemetryRemediationNotification(
+    actor,
+    getObservabilityAutomationStatus(actor, input),
+    client
+  );
+}
+
 export function writeObservabilityAutomationFailureReport(input: {
   trigger: AtlasObservabilityAutomationTrigger;
   actorUserEmail: string | null;
@@ -1250,6 +1419,14 @@ export async function recordObservabilityAutomationFailure(
     generatedAt,
     errorMessage: input.errorMessage
   });
+  await syncTelemetryRemediationNotificationFromCurrentStatus(
+    actor,
+    {
+      limit: 12,
+      now: generatedAt
+    },
+    client
+  );
 
   return {
     reportPath: report.reportPath,
@@ -1266,7 +1443,8 @@ export async function recordObservabilityTelemetryRemediationAction(
     action: AtlasObservabilityTelemetryRemediationAction;
     reason: string;
     now?: string;
-  }
+  },
+  client: DatabaseClient = prisma
 ) {
   assertObservabilityViewer(actor);
   const reason = normalizeReason(input.reason);
@@ -1323,8 +1501,7 @@ export async function recordObservabilityTelemetryRemediationAction(
     latestAutomationReportPath: status.lastReportPath
   });
   await applyObservabilityRetentionPolicy();
-
-  return mapTelemetryRemediationActionRecord(
+  const action = mapTelemetryRemediationActionRecord(
     {
       version: 1,
       action: input.action,
@@ -1338,6 +1515,17 @@ export async function recordObservabilityTelemetryRemediationAction(
     reportPath,
     generatedAt
   );
+  await syncTelemetryRemediationNotificationFromCurrentStatus(
+    actor,
+    {
+      limit: 12,
+      now: generatedAt
+    },
+    client
+  );
+  await createTelemetryRemediationAuditEvent(actor, action, client);
+
+  return action;
 }
 
 export async function buildObservabilityAutomationPosture(
@@ -1482,6 +1670,14 @@ export async function executeObservabilityAutomation(
     automation
   });
   const reportPath = writeObservabilityAutomationReport(report);
+  await syncTelemetryRemediationNotificationFromCurrentStatus(
+    automation.actor,
+    {
+      limit: 12,
+      now: automation.generatedAt
+    },
+    client
+  );
 
   return {
     report,
@@ -1535,6 +1731,14 @@ export async function recoverObservabilityTelemetryOwnership(
         beforeOwnership,
         afterOwnership: beforeOwnership
       })
+    );
+    await syncTelemetryRemediationNotificationFromCurrentStatus(
+      actor,
+      {
+        limit: 12,
+        now: generatedAt
+      },
+      client
     );
 
     return {
@@ -1658,6 +1862,14 @@ export async function recoverObservabilityTelemetryOwnership(
       automation
     })
   );
+  await syncTelemetryRemediationNotificationFromCurrentStatus(
+    posture.actor,
+    {
+      limit: 12,
+      now: generatedAt
+    },
+    client
+  );
 
   return {
     status,
@@ -1737,6 +1949,14 @@ export async function executeObservabilityAutomationPolicy(
     automation
   });
   const reportPath = writeObservabilityAutomationReport(report);
+  await syncTelemetryRemediationNotificationFromCurrentStatus(
+    automation.actor,
+    {
+      limit: 12,
+      now: automation.generatedAt
+    },
+    client
+  );
 
   return {
     reportPath,
