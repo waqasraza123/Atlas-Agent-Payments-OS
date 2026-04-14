@@ -1329,6 +1329,7 @@ const databaseMock = vi.hoisted(() => ({
       snapshotRetentionDays: 30,
       dispatchRetentionDays: 30,
       incidentRetentionDays: 30,
+      remediationRetentionDays: 30,
       automationRetentionDays: 30
     },
     lastRunAt: new Date().toISOString(),
@@ -1341,6 +1342,27 @@ const databaseMock = vi.hoisted(() => ({
         status: "warning",
         detail: "Shared worker telemetry is available, but one or more queue-level warning signals need review.",
         lastRecordedAt: new Date().toISOString()
+      }
+    ],
+    telemetryRemediationOwnership: {
+      status: "acknowledged",
+      actorUserEmail: "operator-admin@atlas.local",
+      reason: "Taking ownership of the current telemetry issue.",
+      updatedAt: new Date().toISOString(),
+      reportPath: "/tmp/remediation-1.json",
+      detail: "Telemetry remediation is currently acknowledged by operator-admin@atlas.local."
+    },
+    recentTelemetryRemediationActions: [
+      {
+        id: "/tmp/remediation-1.json",
+        action: "ACKNOWLEDGED",
+        generatedAt: new Date().toISOString(),
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Taking ownership of the current telemetry issue.",
+        remediationStatus: "escalated",
+        affectedOwnershipKeys: ["worker-runtime"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        reportPath: "/tmp/remediation-1.json"
       }
     ],
     recentRuns: [
@@ -2752,6 +2774,10 @@ describe("atlas api e2e", () => {
       telemetryRemediation: {
         status: "escalated",
         recommendedAction: "run-recovery-and-dispatch"
+      },
+      telemetryRemediationOwnership: {
+        status: "acknowledged",
+        actorUserEmail: "operator-admin@atlas.local"
       }
     });
     expect(automationRunsResponse.status).toBe(200);

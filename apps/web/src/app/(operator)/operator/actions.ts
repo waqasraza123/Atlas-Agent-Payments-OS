@@ -19,6 +19,7 @@ import {
   findLatestAtlasRestoreDrillReport,
   findLatestAtlasSecretRotationExecutionReport,
   getObservabilityAutomationStatus,
+  recordObservabilityTelemetryRemediationAction,
   recoverObservabilityTelemetryOwnership,
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
@@ -360,6 +361,44 @@ export async function executeRecommendedTelemetryRemediationAction(_formData: Fo
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Guided telemetry remediation failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function acknowledgeTelemetryRemediationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    await recordObservabilityTelemetryRemediationAction(actor, {
+      action: "ACKNOWLEDGED",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/alerts");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Telemetry remediation acknowledged",
+      "Atlas recorded operator ownership of the current telemetry remediation posture."
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry remediation acknowledgement failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function resolveTelemetryRemediationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    await recordObservabilityTelemetryRemediationAction(actor, {
+      action: "RESOLVED",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/alerts");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Telemetry remediation resolved",
+      "Atlas recorded an explicit closure for the current telemetry remediation posture."
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry remediation resolution failed", normalizeActionError(error), "error");
   }
 }
 

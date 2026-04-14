@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createOperatorAutomationFacts,
   createOperatorAutomationRunItems,
+  createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
+  createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems
 } from "./operator-observability";
 
@@ -80,12 +82,22 @@ describe("createOperatorAutomationFacts", () => {
         snapshotRetentionDays: 30,
         dispatchRetentionDays: 30,
         incidentRetentionDays: 30,
+        remediationRetentionDays: 30,
         automationRetentionDays: 30
       },
       lastRunAt: null,
       lastRunStatus: null,
       lastReportPath: null,
       telemetryOwnership: [],
+      telemetryRemediationOwnership: {
+        status: "acknowledged",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Taking ownership of the current telemetry issue.",
+        updatedAt: "2026-04-13T00:11:00.000Z",
+        reportPath: "/tmp/remediation-1.json",
+        detail: "Telemetry remediation is currently acknowledged by operator-admin@atlas.local."
+      },
+      recentTelemetryRemediationActions: [],
       recentRuns: []
     });
 
@@ -125,6 +137,53 @@ describe("createOperatorTelemetryRemediationFacts", () => {
       label: "Recommended action",
       value: "Run escalated recovery"
     });
+  });
+});
+
+describe("createOperatorTelemetryRemediationOwnershipFacts", () => {
+  it("surfaces remediation ownership and closure details", () => {
+    const items = createOperatorTelemetryRemediationOwnershipFacts({
+      status: "acknowledged",
+      actorUserEmail: "operator-admin@atlas.local",
+      reason: "Taking ownership of the current telemetry issue.",
+      updatedAt: "2026-04-13T00:11:00.000Z",
+      reportPath: "/tmp/remediation-1.json",
+      detail: "Telemetry remediation is currently acknowledged by operator-admin@atlas.local."
+    });
+
+    expect(items).toContainEqual({
+      label: "Owner state",
+      value: "Acknowledged"
+    });
+    expect(items).toContainEqual({
+      label: "Owner",
+      value: "operator-admin@atlas.local"
+    });
+  });
+});
+
+describe("createOperatorTelemetryRemediationActionItems", () => {
+  it("maps remediation closure history into operator list items", () => {
+    const items = createOperatorTelemetryRemediationActionItems([
+      {
+        id: "/tmp/remediation-1.json",
+        action: "ACKNOWLEDGED",
+        generatedAt: "2026-04-13T00:11:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Taking ownership of the current telemetry issue.",
+        remediationStatus: "action_required",
+        affectedOwnershipKeys: ["worker-runtime"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        reportPath: "/tmp/remediation-1.json"
+      }
+    ]);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        title: "Acknowledged telemetry remediation",
+        statusTone: "warning"
+      })
+    ]);
   });
 });
 

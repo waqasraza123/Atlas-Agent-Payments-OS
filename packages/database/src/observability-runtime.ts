@@ -15,6 +15,9 @@ import {
   type AtlasObservabilityAlertSeverity,
   type AtlasObservabilityAutomationRunRecord,
   type AtlasObservabilityAutomationStatusRecord,
+  type AtlasObservabilityTelemetryRemediationAction,
+  type AtlasObservabilityTelemetryRemediationActionRecord,
+  type AtlasObservabilityTelemetryRemediationOwnershipRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,
@@ -76,6 +79,18 @@ type AtlasObservabilityAutomationReportPayload = {
   errorMessage?: string | null;
 };
 
+type AtlasObservabilityTelemetryRemediationReportPayload = {
+  version: 1;
+  action: AtlasObservabilityTelemetryRemediationAction;
+  generatedAt: string;
+  actorUserEmail: string;
+  reason: string;
+  remediationStatus: "ready" | "action_required" | "escalated";
+  affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  latestAutomationReportPath: string | null;
+  reportPath?: string;
+};
+
 function resolveRuntimeSnapshotPath(fileName: string) {
   return resolve(import.meta.dirname, "../../..", observabilityRuntime.runtimeSnapshotDirectory, fileName);
 }
@@ -87,6 +102,16 @@ function resolveAutomationReportPath() {
     observabilityRuntime.automationReportDirectory,
     appRuntime.appEnv,
     `${new Date().toISOString().replace(/[:.]/g, "-")}-observability-automation.json`
+  );
+}
+
+function resolveRemediationReportPath() {
+  return resolve(
+    import.meta.dirname,
+    "../../..",
+    observabilityRuntime.remediationReportDirectory,
+    appRuntime.appEnv,
+    `${new Date().toISOString().replace(/[:.]/g, "-")}-telemetry-remediation.json`
   );
 }
 
@@ -361,6 +386,99 @@ function writeObservabilityAutomationReport(payload: AtlasObservabilityAutomatio
   writeFileSync(reportPath, `${JSON.stringify({ ...payload, reportPath }, null, 2)}\n`, "utf8");
 
   return reportPath;
+}
+
+function mapTelemetryRemediationActionRecord(
+  payload: AtlasObservabilityTelemetryRemediationReportPayload,
+  reportPath: string,
+  generatedAtFallback: string
+): AtlasObservabilityTelemetryRemediationActionRecord {
+  return {
+    id: reportPath,
+    action: payload.action === "RESOLVED" ? "RESOLVED" : "ACKNOWLEDGED",
+    generatedAt: payload.generatedAt ?? generatedAtFallback,
+    actorUserEmail: payload.actorUserEmail,
+    reason: payload.reason,
+    remediationStatus:
+      payload.remediationStatus === "ready" ||
+      payload.remediationStatus === "action_required" ||
+      payload.remediationStatus === "escalated"
+        ? payload.remediationStatus
+        : "action_required",
+    affectedOwnershipKeys: Array.isArray(payload.affectedOwnershipKeys) ? payload.affectedOwnershipKeys : [],
+    latestAutomationReportPath: typeof payload.latestAutomationReportPath === "string" ? payload.latestAutomationReportPath : null,
+    reportPath
+  };
+}
+
+function writeTelemetryRemediationReport(payload: AtlasObservabilityTelemetryRemediationReportPayload) {
+  const reportPath = resolveRemediationReportPath();
+
+  mkdirSync(dirname(reportPath), {
+    recursive: true
+  });
+  writeFileSync(reportPath, `${JSON.stringify({ ...payload, reportPath }, null, 2)}\n`, "utf8");
+
+  return reportPath;
+}
+
+function buildTelemetryRemediationOwnership(
+  remediation: AtlasObservabilityAutomationStatusRecord["telemetryRemediation"],
+  recentActions: AtlasObservabilityTelemetryRemediationActionRecord[]
+): AtlasObservabilityTelemetryRemediationOwnershipRecord {
+  const latestAction = recentActions[0] ?? null;
+
+  if (!latestAction) {
+    return {
+      status: "unassigned",
+      actorUserEmail: null,
+      reason: null,
+      updatedAt: null,
+      reportPath: null,
+      detail:
+        remediation.status === "ready"
+          ? "Telemetry ownership is healthy and no remediation owner is currently assigned."
+          : "No operator has acknowledged the current telemetry remediation posture yet."
+    };
+  }
+
+  if (remediation.status === "ready" && latestAction.action === "RESOLVED") {
+    return {
+      status: "resolved",
+      actorUserEmail: latestAction.actorUserEmail,
+      reason: latestAction.reason,
+      updatedAt: latestAction.generatedAt,
+      reportPath: latestAction.reportPath,
+      detail: `Telemetry remediation was resolved by ${latestAction.actorUserEmail}.`
+    };
+  }
+
+  if (
+    remediation.status !== "ready" &&
+    latestAction.action === "ACKNOWLEDGED" &&
+    latestAction.affectedOwnershipKeys.some((key) => remediation.affectedOwnershipKeys.includes(key))
+  ) {
+    return {
+      status: "acknowledged",
+      actorUserEmail: latestAction.actorUserEmail,
+      reason: latestAction.reason,
+      updatedAt: latestAction.generatedAt,
+      reportPath: latestAction.reportPath,
+      detail: `Telemetry remediation is currently acknowledged by ${latestAction.actorUserEmail}.`
+    };
+  }
+
+  return {
+    status: "unassigned",
+    actorUserEmail: null,
+    reason: null,
+    updatedAt: null,
+    reportPath: null,
+    detail:
+      remediation.status === "ready"
+        ? "Telemetry ownership is healthy and awaiting explicit resolution closure."
+        : "The current telemetry remediation posture is not acknowledged by an active operator owner."
+  };
 }
 
 function normalizeReason(value: string) {
@@ -828,6 +946,33 @@ export function listObservabilityAutomationRuns(
     .slice(0, options.limit ?? 12);
 }
 
+export function listObservabilityTelemetryRemediationActions(
+  actor: AtlasActorContext,
+  options: {
+    limit?: number;
+  } = {}
+) {
+  assertObservabilityViewer(actor);
+
+  return collectJsonArtifactFiles(resolve(import.meta.dirname, "../../..", observabilityRuntime.remediationReportDirectory))
+    .map((filePath) => {
+      const payload = readJsonFile<AtlasObservabilityTelemetryRemediationReportPayload>(filePath);
+
+      if (!payload) {
+        return null;
+      }
+
+      try {
+        return mapTelemetryRemediationActionRecord(payload, filePath, statSync(filePath).mtime.toISOString());
+      } catch {
+        return null;
+      }
+    })
+    .filter((item): item is AtlasObservabilityTelemetryRemediationActionRecord => item !== null)
+    .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
+    .slice(0, options.limit ?? 12);
+}
+
 export function getObservabilityAutomationStatus(
   actor: AtlasActorContext,
   options: {
@@ -837,6 +982,7 @@ export function getObservabilityAutomationStatus(
 ) {
   assertObservabilityViewer(actor);
   const recentRuns = listObservabilityAutomationRuns(actor, options);
+  const recentTelemetryRemediationActions = listObservabilityTelemetryRemediationActions(actor, options);
   const latestRun = recentRuns[0] ?? null;
   const now = new Date(options.now ?? new Date().toISOString());
   const workerTelemetry = readPublishedWorkerTelemetry(options.now);
@@ -846,6 +992,14 @@ export function getObservabilityAutomationStatus(
     buildAutomationCadenceOwnershipRecord(now, latestRun)
   ];
   const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation(recentRuns);
+  const telemetryRemediation = buildAtlasObservabilityTelemetryRemediation({
+    telemetryOwnership,
+    latestAutomationRun: latestRun,
+    telemetryRecoveryEscalation,
+    dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+    triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+    minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity
+  });
 
   return {
     scheduleMode: observabilityRuntime.automationScheduleMode,
@@ -853,14 +1007,11 @@ export function getObservabilityAutomationStatus(
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
     telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     telemetryRecoveryEscalation,
-    telemetryRemediation: buildAtlasObservabilityTelemetryRemediation({
-      telemetryOwnership,
-      latestAutomationRun: latestRun,
-      telemetryRecoveryEscalation,
-      dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
-      triggerIncidents: observabilityRuntime.automationTriggerIncidents,
-      minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity
-    }),
+    telemetryRemediation,
+    telemetryRemediationOwnership: buildTelemetryRemediationOwnership(
+      telemetryRemediation,
+      recentTelemetryRemediationActions
+    ),
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
@@ -872,12 +1023,14 @@ export function getObservabilityAutomationStatus(
       snapshotRetentionDays: observabilityRuntime.snapshotRetentionDays,
       dispatchRetentionDays: observabilityRuntime.dispatchRetentionDays,
       incidentRetentionDays: observabilityRuntime.incidentRetentionDays,
+      remediationRetentionDays: observabilityRuntime.remediationRetentionDays,
       automationRetentionDays: observabilityRuntime.automationRetentionDays
     },
     lastRunAt: latestRun?.generatedAt ?? null,
     lastRunStatus: latestRun?.status ?? null,
     lastReportPath: latestRun?.reportPath ?? null,
     telemetryOwnership,
+    recentTelemetryRemediationActions,
     recentRuns
   } satisfies AtlasObservabilityAutomationStatusRecord;
 }
@@ -1105,6 +1258,86 @@ export async function recordObservabilityAutomationFailure(
     activeIncidentCount: artifacts.incidentTriggers?.activeCount ?? activeIncidentTriggerCount,
     escalationErrorMessage: artifacts.escalationErrorMessage
   };
+}
+
+export async function recordObservabilityTelemetryRemediationAction(
+  actor: AtlasActorContext,
+  input: {
+    action: AtlasObservabilityTelemetryRemediationAction;
+    reason: string;
+    now?: string;
+  }
+) {
+  assertObservabilityViewer(actor);
+  const reason = normalizeReason(input.reason);
+  const status = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now: input.now
+  });
+
+  if (input.action === "ACKNOWLEDGED") {
+    if (status.telemetryRemediation.recommendedAction === "none") {
+      throw new AtlasObservabilityOperationsError(
+        "Telemetry ownership is currently healthy, so there is no remediation posture to acknowledge.",
+        "bad_request"
+      );
+    }
+
+    if (status.telemetryRemediationOwnership.status === "acknowledged") {
+      throw new AtlasObservabilityOperationsError(
+        "The current telemetry remediation posture is already acknowledged.",
+        "bad_request"
+      );
+    }
+  }
+
+  if (input.action === "RESOLVED") {
+    if (status.telemetryRemediation.recommendedAction !== "none") {
+      throw new AtlasObservabilityOperationsError(
+        "Telemetry remediation cannot be resolved while ownership signals are still degraded.",
+        "bad_request"
+      );
+    }
+
+    if (status.telemetryRemediationOwnership.status === "resolved") {
+      throw new AtlasObservabilityOperationsError(
+        "The current telemetry remediation posture is already resolved.",
+        "bad_request"
+      );
+    }
+  }
+
+  const generatedAt = input.now ?? new Date().toISOString();
+  const affectedOwnershipKeys =
+    input.action === "RESOLVED"
+      ? (status.recentTelemetryRemediationActions[0]?.affectedOwnershipKeys ?? [])
+      : status.telemetryRemediation.affectedOwnershipKeys;
+  const reportPath = writeTelemetryRemediationReport({
+    version: 1,
+    action: input.action,
+    generatedAt,
+    actorUserEmail: actor.user.email,
+    reason,
+    remediationStatus: status.telemetryRemediation.status,
+    affectedOwnershipKeys,
+    latestAutomationReportPath: status.lastReportPath
+  });
+  await applyObservabilityRetentionPolicy();
+
+  return mapTelemetryRemediationActionRecord(
+    {
+      version: 1,
+      action: input.action,
+      generatedAt,
+      actorUserEmail: actor.user.email,
+      reason,
+      remediationStatus: status.telemetryRemediation.status,
+      affectedOwnershipKeys,
+      latestAutomationReportPath: status.lastReportPath
+    },
+    reportPath,
+    generatedAt
+  );
 }
 
 export async function buildObservabilityAutomationPosture(

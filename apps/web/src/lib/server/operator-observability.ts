@@ -10,7 +10,9 @@ import type {
   AtlasObservabilityAutomationStatusRecord,
   AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
+  AtlasObservabilityTelemetryRemediationActionRecord,
   AtlasObservabilityTelemetryRemediationRecord,
+  AtlasObservabilityTelemetryRemediationOwnershipRecord,
   AtlasObservabilityTelemetryOwnershipRecord,
   AtlasRuntimeTraceRecord,
   AtlasWorkerTelemetryRecord
@@ -329,6 +331,10 @@ export function createOperatorAutomationFacts(
     {
       label: "Automation retention",
       value: `${automation.retention.automationRetentionDays} days`
+    },
+    {
+      label: "Remediation retention",
+      value: `${automation.retention.remediationRetentionDays} days`
     }
   ];
 }
@@ -367,6 +373,47 @@ export function createOperatorTelemetryRemediationFacts(
       value: remediation.latestReportPath ?? "Not recorded"
     }
   ];
+}
+
+export function createOperatorTelemetryRemediationOwnershipFacts(
+  ownership: AtlasObservabilityTelemetryRemediationOwnershipRecord
+): DetailGridItem[] {
+  return [
+    {
+      label: "Owner state",
+      value:
+        ownership.status === "acknowledged"
+          ? "Acknowledged"
+          : ownership.status === "resolved"
+            ? "Resolved"
+            : "Unassigned"
+    },
+    {
+      label: "Owner",
+      value: ownership.actorUserEmail ?? "Not assigned"
+    },
+    {
+      label: "Updated",
+      value: formatDateTime(ownership.updatedAt)
+    },
+    {
+      label: "Latest note",
+      value: ownership.reason ?? "No operator note recorded"
+    }
+  ];
+}
+
+export function createOperatorTelemetryRemediationActionItems(
+  items: AtlasObservabilityTelemetryRemediationActionRecord[]
+): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: `${item.action === "ACKNOWLEDGED" ? "Acknowledged" : "Resolved"} telemetry remediation`,
+    description: item.reason,
+    detail: `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
+    statusLabel: formatDateTime(item.generatedAt),
+    statusTone: item.action === "RESOLVED" ? "success" : "warning"
+  }));
 }
 
 export function createOperatorRouteMetricItems(metrics: AtlasApiRuntimeTelemetryRecord): RecordListPanelItem[] {

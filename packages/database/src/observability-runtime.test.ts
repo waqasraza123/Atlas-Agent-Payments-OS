@@ -45,6 +45,7 @@ const observabilityOperationsMock = vi.hoisted(() => ({
     deletedSnapshotArtifacts: 0,
     deletedDispatchArtifacts: 0,
     deletedIncidentArtifacts: 0,
+    deletedRemediationArtifacts: 0,
     deletedAutomationArtifacts: 0
   })),
   dispatchObservabilityAlerts: vi.fn(async () => ({
@@ -554,6 +555,289 @@ describe("observability runtime", () => {
     expect(result.remainingKeys).toEqual([]);
   });
 
+  it("records telemetry remediation acknowledgement and exposes current ownership", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-ack-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-ack-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-ack-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD", "2");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "FAILED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "failed",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          errorMessage: "Published API runtime snapshot is missing."
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
+      "./observability-runtime"
+    );
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const action = await recordObservabilityTelemetryRemediationAction(actor, {
+      action: "ACKNOWLEDGED",
+      reason: "Taking ownership of the current telemetry remediation issue.",
+      now: "2026-04-13T00:12:00.000Z"
+    });
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T00:12:30.000Z"
+    });
+
+    expect(action).toMatchObject({
+      action: "ACKNOWLEDGED",
+      remediationStatus: "escalated"
+    });
+    expect(status.telemetryRemediationOwnership).toMatchObject({
+      status: "acknowledged",
+      actorUserEmail: "operator-admin@atlas.local"
+    });
+    expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
+      action: "ACKNOWLEDGED",
+      reason: "Taking ownership of the current telemetry remediation issue."
+    });
+  });
+
+  it("requires healthy telemetry ownership before remediation can be resolved", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-resolve-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-resolve-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+
+    const { recordObservabilityTelemetryRemediationAction } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    await expect(
+      recordObservabilityTelemetryRemediationAction(actor, {
+        action: "RESOLVED",
+        reason: "Close telemetry remediation after the latest recovery pass.",
+        now: "2026-04-13T00:12:00.000Z"
+      })
+    ).rejects.toThrowError("Telemetry remediation cannot be resolved while ownership signals are still degraded.");
+  });
+
+  it("records explicit remediation closure after telemetry ownership returns healthy", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-closed-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-closed-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-closed-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    writeFileSync(
+      join(runtimeSandbox, "api.json"),
+      `${JSON.stringify(
+        {
+          service: "api",
+          startedAt: "2026-04-13T00:00:00.000Z",
+          uptimeSeconds: 420,
+          totalRequests: 42,
+          successCount: 38,
+          errorCount: 4,
+          tracedRequestCount: 42,
+          traceCoverageRate: 1,
+          averageDurationMs: 24,
+          maxDurationMs: 120,
+          inFlightRequests: 1,
+          lastReadinessStatus: "ready",
+          lastReadinessAt: "2026-04-13T00:05:00.000Z",
+          routeMetrics: [],
+          recentTraces: [],
+          configurationStatus: "valid",
+          verificationCommand: "pnpm verify:release",
+          revision: "rev-123",
+          deploymentSlot: "blue",
+          recordedAt: "2026-04-13T00:11:00.000Z"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(runtimeSandbox, "worker.json"),
+      `${JSON.stringify(
+        {
+          service: "worker",
+          startedAt: "2026-04-13T00:00:00.000Z",
+          recordedAt: "2026-04-13T00:11:00.000Z",
+          uptimeSeconds: 300,
+          revision: "rev-123",
+          deploymentSlot: "blue",
+          queueCount: 2,
+          readyQueueCount: 2,
+          processedCount: 8,
+          failedCount: 0,
+          traceCount: 8,
+          traceCoverageRate: 1,
+          queues: [],
+          recentTraces: []
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "SUCCEEDED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Run scheduled observability automation for the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "recovered",
+            recoveredKeys: ["automation-cadence"],
+            remainingKeys: []
+          },
+          snapshot: {
+            id: "snapshot-1"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-09-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ACKNOWLEDGED",
+          generatedAt: "2026-04-13T00:09:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Taking ownership of the current telemetry remediation issue.",
+          remediationStatus: "action_required",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus, recordObservabilityTelemetryRemediationAction } = await import(
+      "./observability-runtime"
+    );
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const action = await recordObservabilityTelemetryRemediationAction(actor, {
+      action: "RESOLVED",
+      reason: "Closing telemetry remediation after healthy ownership was restored.",
+      now: "2026-04-13T00:12:00.000Z"
+    });
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T00:12:30.000Z"
+    });
+
+    expect(action).toMatchObject({
+      action: "RESOLVED",
+      remediationStatus: "ready"
+    });
+    expect(status.telemetryRemediationOwnership).toMatchObject({
+      status: "resolved",
+      actorUserEmail: "operator-admin@atlas.local"
+    });
+  });
+
   it("records failure escalation artifacts when recover-mode automation fails before recovery posture is computed", async () => {
     const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-failure-"));
     const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-failure-"));
@@ -682,8 +966,10 @@ describe("observability runtime", () => {
   it("lists automation history and current scheduler posture from stored reports", async () => {
     const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-status-"));
     const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-history-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-history-"));
     vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
     vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
@@ -862,8 +1148,10 @@ describe("observability runtime", () => {
   it("marks telemetry recovery escalation triggered after repeated breached recovery runs", async () => {
     const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-escalation-"));
     const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-escalation-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-escalation-"));
     vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
     vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");

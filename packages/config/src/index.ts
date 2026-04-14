@@ -347,6 +347,10 @@ export const observabilityRuntime = {
     process.env.OBSERVABILITY_INCIDENT_RETENTION_DAYS,
     readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
   ),
+  remediationRetentionDays: readNumber(
+    process.env.OBSERVABILITY_REMEDIATION_RETENTION_DAYS,
+    readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
+  ),
   automationRetentionDays: readNumber(
     process.env.OBSERVABILITY_AUTOMATION_RETENTION_DAYS,
     readNumber(process.env.OBSERVABILITY_TELEMETRY_RETENTION_DAYS, 30)
@@ -372,6 +376,10 @@ export const observabilityRuntime = {
   incidentReportDirectory: readText(
     process.env.OBSERVABILITY_INCIDENT_REPORT_DIR,
     "operations-artifacts/observability/incidents"
+  ),
+  remediationReportDirectory: readText(
+    process.env.OBSERVABILITY_REMEDIATION_REPORT_DIR,
+    "operations-artifacts/observability/remediation"
   ),
   automationDefaultMinimumSeverity: (() => {
     const severity = readText(process.env.OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY, "warning");

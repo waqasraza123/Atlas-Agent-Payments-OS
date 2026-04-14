@@ -78,8 +78,10 @@ describe("atlas config", () => {
     expect(observabilityRuntime.snapshotRetentionDays).toBe(30);
     expect(observabilityRuntime.dispatchRetentionDays).toBe(30);
     expect(observabilityRuntime.incidentRetentionDays).toBe(30);
+    expect(observabilityRuntime.remediationRetentionDays).toBe(30);
     expect(observabilityRuntime.automationRetentionDays).toBe(30);
     expect(observabilityRuntime.incidentReportDirectory).toBe("operations-artifacts/observability/incidents");
+    expect(observabilityRuntime.remediationReportDirectory).toBe("operations-artifacts/observability/remediation");
     expect(observabilityRuntime.incidentMinimumSeverity).toBe("critical");
     expect(observabilityRuntime.automationScheduleMode).toBe("disabled");
     expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(15);
@@ -421,6 +423,7 @@ describe("atlas config", () => {
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_RETENTION_DAYS", "60");
     vi.stubEnv("OBSERVABILITY_DISPATCH_RETENTION_DAYS", "20");
     vi.stubEnv("OBSERVABILITY_INCIDENT_RETENTION_DAYS", "90");
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_RETENTION_DAYS", "21");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_RETENTION_DAYS", "14");
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", "operations-artifacts/observability/snapshots");
     vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", "operations-artifacts/observability/runtime");
@@ -444,6 +447,7 @@ describe("atlas config", () => {
     );
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS", "true");
     vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", "operations-artifacts/observability/incidents");
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", "operations-artifacts/observability/remediation");
     vi.stubEnv("OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY", "warning");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS", "false");
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_WEBHOOK_URL", "https://alerts.atlas.local/webhook");
@@ -525,6 +529,7 @@ describe("atlas config", () => {
     expect(observabilityRuntime.snapshotRetentionDays).toBe(60);
     expect(observabilityRuntime.dispatchRetentionDays).toBe(20);
     expect(observabilityRuntime.incidentRetentionDays).toBe(90);
+    expect(observabilityRuntime.remediationRetentionDays).toBe(21);
     expect(observabilityRuntime.automationRetentionDays).toBe(14);
     expect(observabilityRuntime.runtimeSnapshotDirectory).toBe("operations-artifacts/observability/runtime");
     expect(observabilityRuntime.traceHistoryLimit).toBe(30);
@@ -532,6 +537,7 @@ describe("atlas config", () => {
     expect(observabilityRuntime.alertDispatchMode).toBe("command");
     expect(observabilityRuntime.alertDispatchProvider).toBe("generic-webhook");
     expect(observabilityRuntime.automationReportDirectory).toBe("operations-artifacts/observability/automation");
+    expect(observabilityRuntime.remediationReportDirectory).toBe("operations-artifacts/observability/remediation");
     expect(observabilityRuntime.automationDefaultMinimumSeverity).toBe("critical");
     expect(observabilityRuntime.automationScheduleMode).toBe("interval");
     expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(20);

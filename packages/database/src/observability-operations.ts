@@ -37,6 +37,7 @@ export type AtlasObservabilityRetentionSweepResult = {
   deletedSnapshotArtifacts: number;
   deletedDispatchArtifacts: number;
   deletedIncidentArtifacts: number;
+  deletedRemediationArtifacts: number;
   deletedAutomationArtifacts: number;
 };
 
@@ -375,6 +376,7 @@ export async function applyObservabilityRetentionPolicy(client: DatabaseClient =
   const snapshotRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.snapshotRetentionDays);
   const dispatchRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.dispatchRetentionDays);
   const incidentRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.incidentRetentionDays);
+  const remediationRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.remediationRetentionDays);
   const automationRetentionCutoff = createRetentionCutoffDate(observabilityRuntime.automationRetentionDays);
   const snapshotDeleted =
     "observabilitySnapshot" in client && client.observabilitySnapshot && typeof client.observabilitySnapshot.deleteMany === "function"
@@ -446,6 +448,10 @@ export async function applyObservabilityRetentionPolicy(client: DatabaseClient =
     deletedIncidentArtifacts: pruneArtifactDirectory(
       resolveRepoPath(observabilityRuntime.incidentReportDirectory),
       incidentRetentionCutoff.getTime()
+    ),
+    deletedRemediationArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.remediationReportDirectory),
+      remediationRetentionCutoff.getTime()
     ),
     deletedAutomationArtifacts: pruneArtifactDirectory(
       resolveRepoPath(observabilityRuntime.automationReportDirectory),

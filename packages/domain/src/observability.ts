@@ -142,6 +142,29 @@ export type AtlasObservabilityTelemetryRemediationRecord = {
   runbookPath: string;
 };
 
+export type AtlasObservabilityTelemetryRemediationAction = "ACKNOWLEDGED" | "RESOLVED";
+
+export type AtlasObservabilityTelemetryRemediationActionRecord = {
+  id: string;
+  action: AtlasObservabilityTelemetryRemediationAction;
+  generatedAt: string;
+  actorUserEmail: string;
+  reason: string;
+  remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
+  affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  latestAutomationReportPath: string | null;
+  reportPath: string;
+};
+
+export type AtlasObservabilityTelemetryRemediationOwnershipRecord = {
+  status: "unassigned" | "acknowledged" | "resolved";
+  actorUserEmail: string | null;
+  reason: string | null;
+  updatedAt: string | null;
+  reportPath: string | null;
+  detail: string;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -241,6 +264,7 @@ export type AtlasObservabilityRetentionPolicyRecord = {
   snapshotRetentionDays: number;
   dispatchRetentionDays: number;
   incidentRetentionDays: number;
+  remediationRetentionDays: number;
   automationRetentionDays: number;
 };
 
@@ -251,6 +275,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
   telemetryRemediation: AtlasObservabilityTelemetryRemediationRecord;
+  telemetryRemediationOwnership: AtlasObservabilityTelemetryRemediationOwnershipRecord;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
@@ -263,6 +288,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   lastRunStatus: AtlasObservabilityAutomationRunRecord["status"] | null;
   lastReportPath: string | null;
   telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
+  recentTelemetryRemediationActions: AtlasObservabilityTelemetryRemediationActionRecord[];
   recentRuns: AtlasObservabilityAutomationRunRecord[];
 };
 

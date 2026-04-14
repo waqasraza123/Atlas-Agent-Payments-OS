@@ -12,17 +12,21 @@ import {
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
   createOperatorSnapshotItems,
+  createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
+  createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems,
   createOperatorTraceItems,
   createOperatorWorkerQueueItems,
   loadOperatorObservabilityData
 } from "@/lib/server/operator-observability";
 import {
+  acknowledgeTelemetryRemediationAction,
   captureObservabilitySnapshotAction,
   dispatchObservabilityAlertsAction,
   executeRecommendedTelemetryRemediationAction,
   recoverTelemetryOwnershipAction,
+  resolveTelemetryRemediationAction,
   runObservabilityAutomationAction
 } from "../actions";
 
@@ -264,6 +268,12 @@ export default async function OperatorAlertsPage() {
               description={automation.telemetryRemediation.detail}
               items={createOperatorTelemetryRemediationFacts(automation.telemetryRemediation)}
             />
+            <DetailGrid
+              eyebrow="Remediation ownership"
+              title="Operator owner and closure state"
+              description={automation.telemetryRemediationOwnership.detail}
+              items={createOperatorTelemetryRemediationOwnershipFacts(automation.telemetryRemediationOwnership)}
+            />
             <RecordListPanel
               eyebrow="Telemetry ownership"
               title="Live telemetry freshness"
@@ -295,6 +305,42 @@ export default async function OperatorAlertsPage() {
                       .join(", ")}.`
                   : "Telemetry ownership is currently healthy across the owned signals."}
               </div>
+            </WorkflowFormPanel>
+            <WorkflowFormPanel
+              eyebrow="Ownership handoff"
+              title="Acknowledge telemetry remediation"
+              description="Persist operator ownership of the current remediation posture so handoff and audit review can identify who accepted the current telemetry issue."
+              action={acknowledgeTelemetryRemediationAction}
+              submitLabel="Acknowledge remediation"
+            >
+              <WorkflowFormField label="Reason" hint="Record who is taking ownership and what they intend to do next.">
+                <textarea
+                  name="reason"
+                  rows={4}
+                  minLength={12}
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="Acknowledge current telemetry remediation ownership before the next operator handoff."
+                  required
+                />
+              </WorkflowFormField>
+            </WorkflowFormPanel>
+            <WorkflowFormPanel
+              eyebrow="Closure record"
+              title="Resolve telemetry remediation"
+              description="Persist explicit closure after telemetry ownership returns to healthy so the remediation trail does not rely on inferred automation history alone."
+              action={resolveTelemetryRemediationAction}
+              submitLabel="Resolve remediation"
+            >
+              <WorkflowFormField label="Reason" hint="Record what changed so the remediation posture can be closed cleanly.">
+                <textarea
+                  name="reason"
+                  rows={4}
+                  minLength={12}
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="Resolve telemetry remediation after ownership signals return to healthy."
+                  required
+                />
+              </WorkflowFormField>
             </WorkflowFormPanel>
             <WorkflowFormPanel
               eyebrow="Ownership recovery"
@@ -331,6 +377,14 @@ export default async function OperatorAlertsPage() {
                 />
               </WorkflowFormField>
             </WorkflowFormPanel>
+            <RecordListPanel
+              eyebrow="Closure trail"
+              title="Recent telemetry remediation actions"
+              description="Acknowledgement and resolution actions are retained so operator ownership and closure stay auditable."
+              items={createOperatorTelemetryRemediationActionItems(automation.recentTelemetryRemediationActions)}
+              emptyTitle="No remediation actions"
+              emptyDescription="Telemetry remediation acknowledgements and closures will appear here after the first owned action."
+            />
           </div>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">
