@@ -183,6 +183,16 @@ export type AtlasObservabilityTelemetryRemediationFollowUpRecord = {
   detail: string;
 };
 
+export type AtlasObservabilityTelemetryRemediationFollowThroughRecord = {
+  status: "not_owned" | "pending" | "warning" | "critical" | "acted";
+  ownerUserEmail: string | null;
+  assignedAt: string | null;
+  ageMinutes: number | null;
+  lastOwnerActionAt: string | null;
+  lastOwnerActionType: AtlasObservabilityTelemetryRemediationAction | "AUTOMATION_RUN" | null;
+  detail: string;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -295,6 +305,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   telemetryRemediation: AtlasObservabilityTelemetryRemediationRecord;
   telemetryRemediationOwnership: AtlasObservabilityTelemetryRemediationOwnershipRecord;
   telemetryRemediationFollowUp: AtlasObservabilityTelemetryRemediationFollowUpRecord;
+  telemetryRemediationFollowThrough: AtlasObservabilityTelemetryRemediationFollowThroughRecord;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
@@ -343,6 +354,7 @@ type AtlasObservabilityAlertInput = {
   latestAutomationRun?: AtlasObservabilityAutomationRunRecord | null;
   telemetryRecoveryEscalation?: AtlasObservabilityTelemetryRecoveryEscalationRecord | null;
   telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
+  telemetryRemediationFollowThrough?: AtlasObservabilityTelemetryRemediationFollowThroughRecord | null;
   generatedAt?: string;
 };
 
@@ -744,6 +756,29 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         source: "operator",
         metricLabel: "Telemetry remediation follow-up",
         status: input.telemetryRemediationFollowUp.status === "critical" ? "open" : "monitoring",
+        runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
+  }
+
+  if (
+    input.telemetryRemediationFollowThrough &&
+    (input.telemetryRemediationFollowThrough.status === "warning" ||
+      input.telemetryRemediationFollowThrough.status === "critical")
+  ) {
+    alerts.push(
+      createAlertRecord({
+        id: "telemetry-remediation-owner-follow-through",
+        title:
+          input.telemetryRemediationFollowThrough.status === "critical"
+            ? "Assigned telemetry remediation owner has not acted"
+            : "Assigned telemetry remediation owner follow-through needs review",
+        description: input.telemetryRemediationFollowThrough.detail,
+        severity: input.telemetryRemediationFollowThrough.status === "critical" ? "critical" : "warning",
+        source: "operator",
+        metricLabel: "Telemetry remediation owner follow-through",
+        status: input.telemetryRemediationFollowThrough.status === "critical" ? "open" : "monitoring",
         runbookPath: "docs/runbooks/production-operations-baseline.md",
         updatedAt: generatedAt
       })

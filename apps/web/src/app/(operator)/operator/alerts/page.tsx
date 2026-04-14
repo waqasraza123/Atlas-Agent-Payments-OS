@@ -15,6 +15,7 @@ import {
   createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
   createOperatorTelemetryRemediationFollowUpFacts,
+  createOperatorTelemetryRemediationFollowThroughFacts,
   createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems,
   createOperatorTraceItems,
@@ -282,6 +283,12 @@ export default async function OperatorAlertsPage() {
               title="Acknowledgement follow-up window"
               description={automation.telemetryRemediationFollowUp.detail}
               items={createOperatorTelemetryRemediationFollowUpFacts(automation.telemetryRemediationFollowUp)}
+            />
+            <DetailGrid
+              eyebrow="Owner follow-through"
+              title="Assigned owner action ledger"
+              description={automation.telemetryRemediationFollowThrough.detail}
+              items={createOperatorTelemetryRemediationFollowThroughFacts(automation.telemetryRemediationFollowThrough)}
             />
             <RecordListPanel
               eyebrow="Telemetry ownership"

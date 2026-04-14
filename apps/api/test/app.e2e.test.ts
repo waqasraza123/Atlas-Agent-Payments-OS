@@ -1347,6 +1347,8 @@ const databaseMock = vi.hoisted(() => ({
     telemetryRemediationOwnership: {
       status: "acknowledged",
       actorUserEmail: "operator-admin@atlas.local",
+      assignedByUserEmail: null,
+      handoffAction: "ACKNOWLEDGED",
       reason: "Taking ownership of the current telemetry issue.",
       updatedAt: new Date().toISOString(),
       reportPath: "/tmp/remediation-1.json",
@@ -1357,6 +1359,15 @@ const databaseMock = vi.hoisted(() => ({
       thresholdMinutes: 60,
       ageMinutes: 75,
       detail: "Telemetry remediation follow-up is 15 minutes overdue after 75 minutes since acknowledgement."
+    },
+    telemetryRemediationFollowThrough: {
+      status: "pending",
+      ownerUserEmail: "operator-admin@atlas.local",
+      assignedAt: new Date().toISOString(),
+      ageMinutes: 75,
+      lastOwnerActionAt: null,
+      lastOwnerActionType: null,
+      detail: "operator-admin@atlas.local currently owns telemetry remediation, and Atlas has not yet recorded a follow-through action after the latest acknowledgement."
     },
     recentTelemetryRemediationActions: [
       {
@@ -2790,6 +2801,10 @@ describe("atlas api e2e", () => {
       telemetryRemediationFollowUp: {
         status: "warning",
         thresholdMinutes: 60
+      },
+      telemetryRemediationFollowThrough: {
+        status: "pending",
+        ownerUserEmail: "operator-admin@atlas.local"
       }
     });
     expect(automationRunsResponse.status).toBe(200);

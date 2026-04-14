@@ -5,6 +5,7 @@ import {
   createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
   createOperatorTelemetryRemediationFollowUpFacts,
+  createOperatorTelemetryRemediationFollowThroughFacts,
   createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems
 } from "./operator-observability";
@@ -93,6 +94,8 @@ describe("createOperatorAutomationFacts", () => {
       telemetryRemediationOwnership: {
         status: "acknowledged",
         actorUserEmail: "operator-admin@atlas.local",
+        assignedByUserEmail: null,
+        handoffAction: "ACKNOWLEDGED",
         reason: "Taking ownership of the current telemetry issue.",
         updatedAt: "2026-04-13T00:11:00.000Z",
         reportPath: "/tmp/remediation-1.json",
@@ -103,6 +106,15 @@ describe("createOperatorAutomationFacts", () => {
         thresholdMinutes: 60,
         ageMinutes: 75,
         detail: "Telemetry remediation follow-up is 15 minutes overdue after 75 minutes since acknowledgement."
+      },
+      telemetryRemediationFollowThrough: {
+        status: "pending",
+        ownerUserEmail: "operator-admin@atlas.local",
+        assignedAt: "2026-04-13T00:11:00.000Z",
+        ageMinutes: 75,
+        lastOwnerActionAt: null,
+        lastOwnerActionType: null,
+        detail: "operator-admin@atlas.local currently owns telemetry remediation, and Atlas has not yet recorded a follow-through action after the latest acknowledgement."
       },
       recentTelemetryRemediationActions: [],
       recentRuns: []
@@ -191,6 +203,29 @@ describe("createOperatorTelemetryRemediationFollowUpFacts", () => {
     expect(items).toContainEqual({
       label: "Acknowledgement age",
       value: "75 minutes"
+    });
+  });
+});
+
+describe("createOperatorTelemetryRemediationFollowThroughFacts", () => {
+  it("surfaces owner follow-through timing for operators", () => {
+    const items = createOperatorTelemetryRemediationFollowThroughFacts({
+      status: "warning",
+      ownerUserEmail: "oncall-operator@atlas.local",
+      assignedAt: "2026-04-13T00:11:00.000Z",
+      ageMinutes: 75,
+      lastOwnerActionAt: null,
+      lastOwnerActionType: null,
+      detail: "oncall-operator@atlas.local was assigned telemetry remediation 75 minutes ago, and Atlas has not yet recorded follow-through from that owner."
+    });
+
+    expect(items).toContainEqual({
+      label: "Owner action status",
+      value: "Needs review"
+    });
+    expect(items).toContainEqual({
+      label: "Tracked owner",
+      value: "oncall-operator@atlas.local"
     });
   });
 });

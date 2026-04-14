@@ -111,6 +111,7 @@ export {
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryRemediationOwnershipRecord,
   type AtlasObservabilityTelemetryRemediationFollowUpRecord,
+  type AtlasObservabilityTelemetryRemediationFollowThroughRecord,
   type AtlasObservabilityTelemetryRemediationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,

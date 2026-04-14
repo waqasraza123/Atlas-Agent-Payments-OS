@@ -241,6 +241,50 @@ describe("atlas observability contracts", () => {
     );
   });
 
+  it("raises owner follow-through alerts when an assigned remediation owner has not acted", () => {
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics: createMetricsSnapshot(),
+      overview: {
+        openCaseCount: 0,
+        criticalCaseCount: 0,
+        actionRequiredCount: 0,
+        unreadNotificationCount: 0,
+        delayedCaseCount: 0,
+        failedCaseCount: 0,
+        recentCases: [],
+        recentNotifications: [],
+        recentAuditEvents: []
+      },
+      configurationStatus: "valid",
+      releaseStage: "private-beta",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: null,
+        snapshot: null
+      }),
+      telemetryRemediationFollowThrough: {
+        status: "critical",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        assignedAt: "2026-04-12T00:00:00.000Z",
+        ageMinutes: 130,
+        lastOwnerActionAt: null,
+        lastOwnerActionType: null,
+        detail:
+          "oncall-operator@atlas.local was assigned telemetry remediation 130 minutes ago, and Atlas has not recorded follow-through from that owner before the breach window expired."
+      }
+    });
+
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "telemetry-remediation-owner-follow-through",
+          severity: "critical",
+          source: "operator"
+        })
+      ])
+    );
+  });
+
   it("builds an escalated telemetry remediation plan for failed recover-mode automation", () => {
     const remediation = buildAtlasObservabilityTelemetryRemediation({
       telemetryOwnership: [

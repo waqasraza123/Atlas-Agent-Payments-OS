@@ -786,6 +786,10 @@ describe("observability runtime", () => {
       assignedByUserEmail: "operator-admin@atlas.local",
       handoffAction: "ASSIGNED"
     });
+    expect(status.telemetryRemediationFollowThrough).toMatchObject({
+      status: "pending",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
     expect(status.telemetryRemediationFollowUp).toMatchObject({
       status: "ready",
       ageMinutes: 1
@@ -927,6 +931,10 @@ describe("observability runtime", () => {
       action: "TRANSFERRED",
       ownerUserEmail: "oncall-operator@atlas.local"
     });
+    expect(status.telemetryRemediationFollowThrough).toMatchObject({
+      status: "pending",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
     expect(client.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -1011,6 +1019,169 @@ describe("observability runtime", () => {
       )
     ).rejects.toMatchObject({
       code: "forbidden"
+    });
+  });
+
+  it("marks assigned remediation owner follow-through as overdue when no owner action is recorded", async () => {
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-follow-through-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-follow-through-"));
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES", "60");
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-00-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ASSIGNED",
+          generatedAt: "2026-04-13T00:00:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          ownerUserEmail: "oncall-operator@atlas.local",
+          reason: "Assign remediation to the current operator on call.",
+          remediationStatus: "escalated",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 6,
+      now: "2026-04-13T01:15:00.000Z"
+    });
+
+    expect(status.telemetryRemediationFollowUp).toMatchObject({
+      status: "warning",
+      ageMinutes: 75
+    });
+    expect(status.telemetryRemediationFollowThrough).toMatchObject({
+      status: "warning",
+      ownerUserEmail: "oncall-operator@atlas.local",
+      ageMinutes: 75
+    });
+  });
+
+  it("marks assigned remediation owner follow-through as acted after owner automation runs", async () => {
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-owner-acted-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-owner-acted-"));
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-30-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "SUCCEEDED",
+          trigger: "manual",
+          generatedAt: "2026-04-13T00:30:00.000Z",
+          actorUserEmail: "oncall-operator@atlas.local",
+          reason: "Run recovery after assignment.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "partial",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          alertCount: 2,
+          activeIncidentCount: 1,
+          workerTelemetry: {
+            status: "warning"
+          },
+          snapshot: {
+            id: "snapshot-1"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-00-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ASSIGNED",
+          generatedAt: "2026-04-13T00:00:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          ownerUserEmail: "oncall-operator@atlas.local",
+          reason: "Assign remediation to the current operator on call.",
+          remediationStatus: "escalated",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 6,
+      now: "2026-04-13T00:45:00.000Z"
+    });
+
+    expect(status.telemetryRemediationFollowThrough).toMatchObject({
+      status: "acted",
+      ownerUserEmail: "oncall-operator@atlas.local",
+      lastOwnerActionType: "AUTOMATION_RUN",
+      lastOwnerActionAt: "2026-04-13T00:30:00.000Z"
     });
   });
 

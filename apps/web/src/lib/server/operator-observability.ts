@@ -12,6 +12,7 @@ import type {
   AtlasObservabilitySnapshotRecord,
   AtlasObservabilityTelemetryRemediationActionRecord,
   AtlasObservabilityTelemetryRemediationFollowUpRecord,
+  AtlasObservabilityTelemetryRemediationFollowThroughRecord,
   AtlasObservabilityTelemetryRemediationRecord,
   AtlasObservabilityTelemetryRemediationOwnershipRecord,
   AtlasObservabilityTelemetryOwnershipRecord,
@@ -447,6 +448,45 @@ export function createOperatorTelemetryRemediationFollowUpFacts(
     {
       label: "Detail",
       value: followUp.detail
+    }
+  ];
+}
+
+export function createOperatorTelemetryRemediationFollowThroughFacts(
+  followThrough: AtlasObservabilityTelemetryRemediationFollowThroughRecord
+): DetailGridItem[] {
+  return [
+    {
+      label: "Owner action status",
+      value:
+        followThrough.status === "critical"
+          ? "Overdue"
+          : followThrough.status === "warning"
+            ? "Needs review"
+            : followThrough.status === "acted"
+              ? "Acted"
+              : followThrough.status === "pending"
+                ? "Pending"
+                : "Not active"
+    },
+    {
+      label: "Tracked owner",
+      value: followThrough.ownerUserEmail ?? "Not assigned"
+    },
+    {
+      label: "Owner handoff",
+      value: formatDateTime(followThrough.assignedAt)
+    },
+    {
+      label: "Last owner action",
+      value:
+        followThrough.lastOwnerActionType && followThrough.lastOwnerActionAt
+          ? `${followThrough.lastOwnerActionType} · ${formatDateTime(followThrough.lastOwnerActionAt)}`
+          : "Not recorded"
+    },
+    {
+      label: "Detail",
+      value: followThrough.detail
     }
   ];
 }
