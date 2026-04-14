@@ -256,6 +256,7 @@ type AtlasObservabilityAlertInput = {
   configurationStatus: "valid" | "invalid";
   releaseStage: AtlasObservabilityReleaseStage;
   workerTelemetry?: AtlasWorkerTelemetryRecord | null;
+  telemetryOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   generatedAt?: string;
 };
 
@@ -556,6 +557,26 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         );
       }
     }
+  }
+
+  for (const ownership of input.telemetryOwnership ?? []) {
+    if (ownership.status === "healthy") {
+      continue;
+    }
+
+    alerts.push(
+      createAlertRecord({
+        id: `telemetry-ownership-${ownership.key}`,
+        title: `${ownership.label} ownership needs attention`,
+        description: ownership.detail,
+        severity: ownership.status === "critical" ? "critical" : "warning",
+        source: "runtime",
+        metricLabel: ownership.label,
+        status: ownership.status === "critical" ? "open" : "monitoring",
+        runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
   }
 
   return alerts.sort((left, right) => {

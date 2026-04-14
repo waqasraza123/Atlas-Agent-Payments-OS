@@ -513,12 +513,17 @@ export async function buildObservabilityAutomationPosture(
     },
     client
   );
+  const telemetryOwnership = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now: input.now
+  }).telemetryOwnership;
   const alerts = buildAtlasObservabilityAlerts({
     metrics,
     overview,
     configurationStatus: metrics.configurationStatus,
     releaseStage: appRuntime.releaseStage,
     workerTelemetry,
+    telemetryOwnership,
     generatedAt: input.now
   });
   const incidentReadiness = buildAtlasIncidentReadinessRecord({

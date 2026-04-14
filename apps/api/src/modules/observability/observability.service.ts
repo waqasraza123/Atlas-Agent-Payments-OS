@@ -26,9 +26,14 @@ export class ObservabilityService {
   }
 
   async listAlerts(actor: AtlasActorContext) {
-    const [overview, metrics] = await Promise.all([
+    const [overview, metrics, automation] = await Promise.all([
       getOperatorOverview(actor),
-      Promise.resolve(this.healthService.getMetrics().item)
+      Promise.resolve(this.healthService.getMetrics().item),
+      Promise.resolve(
+        getObservabilityAutomationStatus(actor, {
+          limit: 12
+        })
+      )
     ]);
     const startup = this.healthService.getStartup();
     const workerTelemetry = readPublishedWorkerTelemetry();
@@ -39,7 +44,8 @@ export class ObservabilityService {
         overview,
         configurationStatus: startup.configurationStatus,
         releaseStage: startup.releaseStage,
-        workerTelemetry
+        workerTelemetry,
+        telemetryOwnership: automation.telemetryOwnership
       })
     };
   }

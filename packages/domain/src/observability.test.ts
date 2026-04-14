@@ -86,6 +86,15 @@ describe("atlas observability contracts", () => {
           recentTraces: []
         }
       }),
+      telemetryOwnership: [
+        {
+          key: "automation-cadence",
+          label: "Automation cadence",
+          status: "warning",
+          detail: "Latest automation run completed 55 minutes ago.",
+          lastRecordedAt: "2026-04-11T23:15:00.000Z"
+        }
+      ],
       generatedAt: "2026-04-12T00:10:00.000Z"
     });
 
@@ -98,7 +107,8 @@ describe("atlas observability contracts", () => {
         "operator-critical-cases",
         "worker-queue-failures",
         "worker-queues-not-ready",
-        "worker-trace-coverage-degraded"
+        "worker-trace-coverage-degraded",
+        "telemetry-ownership-automation-cadence"
       ])
     );
     expect(alerts[0]?.severity).toBe("critical");

@@ -16,7 +16,12 @@ import {
   type AtlasIncidentReadinessRecord
 } from "@atlas/domain";
 import { getApiRuntimeTelemetryRecord, recordApiReadinessSnapshot } from "../../lib/runtime-metrics";
-import { getOperatorOverview, listObservabilityIncidentTriggers, readPublishedWorkerTelemetry } from "@atlas/database";
+import {
+  getObservabilityAutomationStatus,
+  getOperatorOverview,
+  listObservabilityIncidentTriggers,
+  readPublishedWorkerTelemetry
+} from "@atlas/database";
 import { prisma } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import type { AtlasActorContext } from "@atlas/auth";
@@ -243,13 +248,19 @@ export class HealthService {
           }
         )
       : [];
+    const telemetryOwnership = actor
+      ? getObservabilityAutomationStatus(actor, {
+          limit: 12
+        }).telemetryOwnership
+      : [];
     const workerTelemetry = readPublishedWorkerTelemetry();
     const alerts = buildAtlasObservabilityAlerts({
       metrics,
       overview,
       configurationStatus: metrics.configurationStatus,
       releaseStage: appRuntime.releaseStage,
-      workerTelemetry
+      workerTelemetry,
+      telemetryOwnership
     });
 
     return buildAtlasIncidentReadinessRecord({
