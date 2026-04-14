@@ -33,6 +33,8 @@ type DatabaseClient = PrismaClient;
 
 type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
 
+type AtlasTelemetryOwnershipRecoveryStatus = "no_action" | "recovered" | "partial" | "unchanged";
+
 type AtlasObservabilityAutomationReportPayload = {
   version: 1;
   status?: "SUCCEEDED" | "FAILED";
@@ -232,6 +234,10 @@ function buildAutomationCadenceOwnershipRecord(
     detail: `Latest automation run completed ${formatAgeLabel(ageMinutes)} ago.`,
     lastRecordedAt: latestRun.generatedAt
   };
+}
+
+function listDegradedTelemetryOwnershipKeys(items: AtlasObservabilityTelemetryOwnershipRecord[]) {
+  return items.filter((item) => item.status !== "healthy").map((item) => item.key);
 }
 
 function mapAutomationRunRecord(
@@ -658,5 +664,69 @@ export async function executeObservabilityAutomation(
     incidentTriggers,
     dispatch,
     workerTelemetry: posture.workerTelemetry
+  };
+}
+
+export async function recoverObservabilityTelemetryOwnership(
+  input: {
+    actorUserEmail: string;
+    reason: string;
+    minimumSeverity?: AtlasObservabilityAlertSeverity;
+    dispatchAlerts?: boolean;
+    now?: string;
+    trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
+  },
+  client: DatabaseClient = prisma
+) {
+  const actor = await resolveAutomationActor(input.actorUserEmail, client);
+  const beforeOwnership = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now: input.now
+  }).telemetryOwnership;
+  const degradedBeforeKeys = listDegradedTelemetryOwnershipKeys(beforeOwnership);
+
+  if (degradedBeforeKeys.length === 0) {
+    return {
+      status: "no_action" as AtlasTelemetryOwnershipRecoveryStatus,
+      beforeOwnership,
+      afterOwnership: beforeOwnership,
+      recoveredKeys: [] as AtlasObservabilityTelemetryOwnershipRecord["key"][],
+      remainingKeys: [] as AtlasObservabilityTelemetryOwnershipRecord["key"][],
+      automation: null
+    };
+  }
+
+  const automation = await executeObservabilityAutomation(
+    {
+      actorUserEmail: input.actorUserEmail,
+      reason: input.reason,
+      minimumSeverity: input.minimumSeverity,
+      dispatchAlerts: input.dispatchAlerts,
+      triggerIncidents: true,
+      now: input.now,
+      trace: input.trace
+    },
+    client
+  );
+  const afterOwnership = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now: input.now
+  }).telemetryOwnership;
+  const degradedAfterKeys = new Set(listDegradedTelemetryOwnershipKeys(afterOwnership));
+  const recoveredKeys = degradedBeforeKeys.filter((key) => !degradedAfterKeys.has(key));
+  const remainingKeys = [...degradedAfterKeys];
+
+  return {
+    status:
+      remainingKeys.length === 0
+        ? ("recovered" as AtlasTelemetryOwnershipRecoveryStatus)
+        : recoveredKeys.length > 0
+          ? ("partial" as AtlasTelemetryOwnershipRecoveryStatus)
+          : ("unchanged" as AtlasTelemetryOwnershipRecoveryStatus),
+    beforeOwnership,
+    afterOwnership,
+    recoveredKeys,
+    remainingKeys,
+    automation
   };
 }

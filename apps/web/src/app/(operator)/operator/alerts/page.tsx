@@ -20,6 +20,7 @@ import {
 import {
   captureObservabilitySnapshotAction,
   dispatchObservabilityAlertsAction,
+  recoverTelemetryOwnershipAction,
   runObservabilityAutomationAction
 } from "../actions";
 
@@ -263,6 +264,41 @@ export default async function OperatorAlertsPage() {
               emptyTitle="No telemetry ownership signals"
               emptyDescription="Telemetry ownership signals will appear once observability status is available."
             />
+            <WorkflowFormPanel
+              eyebrow="Ownership recovery"
+              title="Recover telemetry ownership"
+              description="Run a targeted recovery cycle that captures fresh automation evidence and reports which telemetry-ownership signals were actually recovered."
+              action={recoverTelemetryOwnershipAction}
+              submitLabel="Recover ownership"
+            >
+              <WorkflowFormField label="Minimum severity" hint="Used only when external dispatch is enabled during recovery.">
+                <select
+                  name="minimumSeverity"
+                  defaultValue="warning"
+                  className="w-full rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                >
+                  <option value="critical">Critical only</option>
+                  <option value="warning">Warning and above</option>
+                  <option value="info">Info and above</option>
+                </select>
+              </WorkflowFormField>
+              <WorkflowFormField label="Dispatch externally" hint="When enabled, Atlas will also route the current alert posture through the configured external dispatch adapter.">
+                <label className="flex items-center gap-3 rounded-2xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm text-[var(--atlas-ink)]">
+                  <input type="checkbox" name="dispatchAlerts" className="h-4 w-4 accent-[var(--atlas-accent)]" />
+                  Dispatch current alerts during ownership recovery
+                </label>
+              </WorkflowFormField>
+              <WorkflowFormField label="Reason" hint="Explain what ownership degradation you are trying to recover before the next handoff.">
+                <textarea
+                  name="reason"
+                  rows={4}
+                  minLength={12}
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="Recover stale telemetry ownership before the next operator handoff."
+                  required
+                />
+              </WorkflowFormField>
+            </WorkflowFormPanel>
           </div>
         </section>
         <section className="grid gap-6 xl:grid-cols-2">

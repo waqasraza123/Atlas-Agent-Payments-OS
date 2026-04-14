@@ -18,6 +18,7 @@ import {
   executeAtlasSecretRotation,
   findLatestAtlasRestoreDrillReport,
   findLatestAtlasSecretRotationExecutionReport,
+  recoverObservabilityTelemetryOwnership,
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
   parseAtlasEnvFile,
@@ -261,6 +262,53 @@ export async function runObservabilityAutomationAction(formData: FormData) {
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Observability automation failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function recoverTelemetryOwnershipAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+  const minimumSeverity = toTextValue(formData.get("minimumSeverity"));
+
+  try {
+    const result = await recoverObservabilityTelemetryOwnership({
+      actorUserEmail: actor.user.email,
+      reason: toTextValue(formData.get("reason")),
+      minimumSeverity:
+        minimumSeverity === "critical" || minimumSeverity === "warning" ? minimumSeverity : "info",
+      dispatchAlerts: toBooleanValue(formData.get("dispatchAlerts")),
+      trace: createAtlasStandaloneTraceContext("web")
+    });
+    revalidatePath("/operator/alerts");
+    revalidatePath("/operator/rollout");
+
+    if (result.status === "no_action") {
+      redirectWithFeedback(
+        "/operator/alerts",
+        "Telemetry ownership already healthy",
+        "Atlas did not need to run a recovery cycle because the current ownership signals are already healthy."
+      );
+    }
+
+    const remainingLabels = result.afterOwnership
+      .filter((item) => result.remainingKeys.includes(item.key))
+      .map((item) => item.label);
+
+    redirectWithFeedback(
+      "/operator/alerts",
+      result.status === "recovered"
+        ? "Telemetry ownership recovered"
+        : result.status === "partial"
+          ? "Telemetry ownership partially recovered"
+          : "Telemetry ownership still degraded",
+      result.status === "recovered"
+        ? `Atlas recovered ${result.recoveredKeys.length} ownership signal${result.recoveredKeys.length === 1 ? "" : "s"} and captured a fresh automation run.`
+        : result.status === "partial"
+          ? `Atlas recovered ${result.recoveredKeys.length} ownership signal${result.recoveredKeys.length === 1 ? "" : "s"}, but ${remainingLabels.join(", ")} still need attention.`
+          : `Atlas ran a recovery cycle, but ${remainingLabels.join(", ")} still need attention.`,
+      result.status === "recovered" ? "default" : "warning"
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry ownership recovery failed", normalizeActionError(error), "error");
   }
 }
 
