@@ -34,6 +34,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - explicit critical operator alerts when telemetry auto-recovery breaches the configured threshold across consecutive runs
 - recover-mode automation now raises same-cycle incident and optional paging posture from the post-recovery alert set when ownership remains degraded
 - recover-mode automation failure handling now synthesizes same-cycle snapshot, incident-trigger, and optional paging posture from the failure state when recovery aborts before post-recovery status can be computed
+- `/operator/alerts` now exposes a guided telemetry-remediation plan plus a one-click recommended response so operators can run the owned recovery path directly from the current remediation posture
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`

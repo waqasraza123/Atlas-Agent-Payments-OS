@@ -18,6 +18,7 @@ import {
   executeAtlasSecretRotation,
   findLatestAtlasRestoreDrillReport,
   findLatestAtlasSecretRotationExecutionReport,
+  getObservabilityAutomationStatus,
   recoverObservabilityTelemetryOwnership,
   activateSupportAccessGrant,
   createSupportAccessReviewCampaign,
@@ -309,6 +310,56 @@ export async function recoverTelemetryOwnershipAction(formData: FormData) {
     );
   } catch (error) {
     redirectWithFeedback("/operator/alerts", "Telemetry ownership recovery failed", normalizeActionError(error), "error");
+  }
+}
+
+export async function executeRecommendedTelemetryRemediationAction(_formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    const automation = getObservabilityAutomationStatus(actor, {
+      limit: 12
+    });
+    const remediation = automation.telemetryRemediation;
+
+    if (remediation.recommendedAction === "none") {
+      redirectWithFeedback(
+        "/operator/alerts",
+        "No telemetry remediation required",
+        "Atlas did not identify a telemetry-ownership recovery step that needs to run right now."
+      );
+    }
+
+    const result = await recoverObservabilityTelemetryOwnership({
+      actorUserEmail: actor.user.email,
+      reason: remediation.reason,
+      minimumSeverity: remediation.minimumSeverity,
+      dispatchAlerts: remediation.dispatchAlerts,
+      triggerIncidents: remediation.triggerIncidents,
+      trace: createAtlasStandaloneTraceContext("web")
+    });
+
+    revalidatePath("/operator/alerts");
+    revalidatePath("/operator/rollout");
+
+    const remainingLabels = result.afterOwnership
+      .filter((item) => result.remainingKeys.includes(item.key))
+      .map((item) => item.label);
+
+    redirectWithFeedback(
+      "/operator/alerts",
+      remediation.status === "escalated" ? "Guided telemetry escalation executed" : "Guided telemetry recovery executed",
+      result.status === "recovered"
+        ? `Atlas completed the recommended remediation and recovered ${result.recoveredKeys.length} ownership signal${result.recoveredKeys.length === 1 ? "" : "s"}.`
+        : result.status === "partial"
+          ? `Atlas executed the recommended remediation, but ${remainingLabels.join(", ")} still need attention.`
+          : result.status === "unchanged"
+            ? `Atlas executed the recommended remediation, but ${remainingLabels.join(", ")} still remain degraded.`
+            : "Atlas executed the recommended remediation and recorded the result.",
+      result.status === "recovered" ? "default" : "warning"
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Guided telemetry remediation failed", normalizeActionError(error), "error");
   }
 }
 

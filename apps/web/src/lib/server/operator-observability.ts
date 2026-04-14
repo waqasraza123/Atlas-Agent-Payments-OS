@@ -10,6 +10,7 @@ import type {
   AtlasObservabilityAutomationStatusRecord,
   AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
+  AtlasObservabilityTelemetryRemediationRecord,
   AtlasObservabilityTelemetryOwnershipRecord,
   AtlasRuntimeTraceRecord,
   AtlasWorkerTelemetryRecord
@@ -328,6 +329,42 @@ export function createOperatorAutomationFacts(
     {
       label: "Automation retention",
       value: `${automation.retention.automationRetentionDays} days`
+    }
+  ];
+}
+
+export function createOperatorTelemetryRemediationFacts(
+  remediation: AtlasObservabilityTelemetryRemediationRecord
+): DetailGridItem[] {
+  return [
+    {
+      label: "Remediation status",
+      value:
+        remediation.status === "ready"
+          ? "Ready"
+          : remediation.status === "escalated"
+            ? "Escalated"
+            : "Action required"
+    },
+    {
+      label: "Recommended action",
+      value: remediation.recommendedActionLabel
+    },
+    {
+      label: "Minimum severity",
+      value: remediation.minimumSeverity
+    },
+    {
+      label: "Dispatch externally",
+      value: remediation.dispatchAlerts ? "Recommended" : "Not required"
+    },
+    {
+      label: "Sync incidents",
+      value: remediation.triggerIncidents ? "Enabled" : "Disabled"
+    },
+    {
+      label: "Latest report",
+      value: remediation.latestReportPath ?? "Not recorded"
     }
   ];
 }

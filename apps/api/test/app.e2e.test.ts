@@ -1304,6 +1304,20 @@ const databaseMock = vi.hoisted(() => ({
       threshold: 2,
       detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs."
     },
+    telemetryRemediation: {
+      status: "escalated",
+      title: "Telemetry ownership is breaching recovery policy",
+      detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs. Worker runtime telemetry still require intervention.",
+      recommendedAction: "run-recovery-and-dispatch",
+      recommendedActionLabel: "Run escalated recovery",
+      reason: "Run guided telemetry remediation after repeated recovery-policy breaches.",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      affectedOwnershipKeys: ["worker-runtime"],
+      latestReportPath: "/tmp/observability-automation.json",
+      runbookPath: "docs/runbooks/production-operations-baseline.md"
+    },
     actorUserEmail: "operator-admin@atlas.local",
     minimumSeverity: "warning",
     dispatchAlerts: false,
@@ -1320,7 +1334,15 @@ const databaseMock = vi.hoisted(() => ({
     lastRunAt: new Date().toISOString(),
     lastRunStatus: "SUCCEEDED",
     lastReportPath: "/tmp/observability-automation.json",
-    telemetryOwnership: [],
+    telemetryOwnership: [
+      {
+        key: "worker-runtime",
+        label: "Worker runtime telemetry",
+        status: "warning",
+        detail: "Shared worker telemetry is available, but one or more queue-level warning signals need review.",
+        lastRecordedAt: new Date().toISOString()
+      }
+    ],
     recentRuns: [
       {
         id: "/tmp/observability-automation.json",
@@ -2726,7 +2748,11 @@ describe("atlas api e2e", () => {
       intervalMinutes: 20,
       dispatchProvider: "generic-webhook",
       dispatchDeliveryKind: "alert-dispatch",
-      lastRunStatus: "SUCCEEDED"
+      lastRunStatus: "SUCCEEDED",
+      telemetryRemediation: {
+        status: "escalated",
+        recommendedAction: "run-recovery-and-dispatch"
+      }
     });
     expect(automationRunsResponse.status).toBe(200);
     expect(automationRunsResponse.body.items).toEqual([

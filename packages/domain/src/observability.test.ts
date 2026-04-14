@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAtlasObservabilityTelemetryRemediation,
   buildAtlasWorkerTelemetryRecord,
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
@@ -198,6 +199,59 @@ describe("atlas observability contracts", () => {
         })
       ])
     );
+  });
+
+  it("builds an escalated telemetry remediation plan for failed recover-mode automation", () => {
+    const remediation = buildAtlasObservabilityTelemetryRemediation({
+      telemetryOwnership: [
+        {
+          key: "api-runtime",
+          label: "API runtime telemetry",
+          status: "critical",
+          detail: "No published API runtime snapshot is available for operators.",
+          lastRecordedAt: null
+        }
+      ],
+      latestAutomationRun: {
+        id: "run-2",
+        status: "FAILED",
+        trigger: "scheduled",
+        generatedAt: "2026-04-12T00:12:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Recover degraded telemetry ownership during the current release slot.",
+        minimumSeverity: "warning",
+        dispatchAlerts: false,
+        triggerIncidents: true,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "failed",
+        recoveredOwnershipCount: 0,
+        remainingOwnershipCount: 1,
+        alertCount: 3,
+        activeIncidentCount: 1,
+        snapshotId: "snapshot-1",
+        dispatchId: null,
+        workerTelemetryStatus: "healthy",
+        reportPath: "/tmp/run-2.json",
+        errorMessage: "Published API runtime snapshot is missing."
+      },
+      telemetryRecoveryEscalation: {
+        status: "idle",
+        consecutiveBreachedRuns: 1,
+        threshold: 2,
+        detail: "Telemetry auto-recovery has breached its target for 1 consecutive run, below the escalation threshold of 2."
+      },
+      dispatchAlerts: false,
+      triggerIncidents: true,
+      minimumSeverity: "warning"
+    });
+
+    expect(remediation).toMatchObject({
+      status: "escalated",
+      recommendedAction: "run-recovery-and-dispatch",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      affectedOwnershipKeys: ["api-runtime"]
+    });
   });
 
   it("classifies worker telemetry freshness and queue health", () => {

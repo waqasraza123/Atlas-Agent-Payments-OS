@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createOperatorAutomationFacts,
   createOperatorAutomationRunItems,
+  createOperatorTelemetryRemediationFacts,
   createOperatorTelemetryOwnershipItems
 } from "./operator-observability";
 
@@ -54,6 +55,20 @@ describe("createOperatorAutomationFacts", () => {
         threshold: 2,
         detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs."
       },
+      telemetryRemediation: {
+        status: "escalated",
+        title: "Telemetry ownership is breaching recovery policy",
+        detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs.",
+        recommendedAction: "run-recovery-and-dispatch",
+        recommendedActionLabel: "Run escalated recovery",
+        reason: "Run guided telemetry remediation after repeated recovery-policy breaches.",
+        minimumSeverity: "critical",
+        dispatchAlerts: true,
+        triggerIncidents: true,
+        affectedOwnershipKeys: ["worker-runtime"],
+        latestReportPath: "/tmp/observability-automation.json",
+        runbookPath: "docs/runbooks/production-operations-baseline.md"
+      },
       actorUserEmail: "operator-admin@atlas.local",
       minimumSeverity: "warning",
       dispatchAlerts: false,
@@ -81,6 +96,34 @@ describe("createOperatorAutomationFacts", () => {
     expect(items).toContainEqual({
       label: "Recovery escalation",
       value: "3 run streak"
+    });
+  });
+});
+
+describe("createOperatorTelemetryRemediationFacts", () => {
+  it("surfaces guided remediation details for operators", () => {
+    const items = createOperatorTelemetryRemediationFacts({
+      status: "escalated",
+      title: "Telemetry ownership is breaching recovery policy",
+      detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs.",
+      recommendedAction: "run-recovery-and-dispatch",
+      recommendedActionLabel: "Run escalated recovery",
+      reason: "Run guided telemetry remediation after repeated recovery-policy breaches.",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      affectedOwnershipKeys: ["worker-runtime"],
+      latestReportPath: "/tmp/observability-automation.json",
+      runbookPath: "docs/runbooks/production-operations-baseline.md"
+    });
+
+    expect(items).toContainEqual({
+      label: "Remediation status",
+      value: "Escalated"
+    });
+    expect(items).toContainEqual({
+      label: "Recommended action",
+      value: "Run escalated recovery"
     });
   });
 });

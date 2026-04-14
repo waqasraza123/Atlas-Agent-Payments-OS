@@ -81,6 +81,7 @@ export {
   type AtlasOperatorOverviewRecord
 } from "./operator-workflow";
 export {
+  buildAtlasObservabilityTelemetryRemediation,
   buildAtlasWorkerTelemetryRecord,
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
@@ -106,6 +107,7 @@ export {
   type AtlasObservabilityReleaseStage,
   type AtlasObservabilitySnapshotRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
+  type AtlasObservabilityTelemetryRemediationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,
   type AtlasObservabilityTelemetryOwnershipRecord,

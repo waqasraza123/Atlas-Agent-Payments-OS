@@ -830,6 +830,11 @@ describe("observability runtime", () => {
         threshold: 2,
         detail: "Telemetry auto-recovery has breached its target for 1 consecutive run, below the escalation threshold of 2."
       },
+      telemetryRemediation: {
+        status: "ready",
+        recommendedAction: "none",
+        affectedOwnershipKeys: []
+      },
       actorUserEmail: "operator-admin@atlas.local",
       dispatchProvider: "generic-webhook",
       dispatchDeliveryKind: "alert-dispatch",
@@ -953,6 +958,11 @@ describe("observability runtime", () => {
       consecutiveBreachedRuns: 2,
       threshold: 2,
       detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs."
+    });
+    expect(status.telemetryRemediation).toMatchObject({
+      status: "escalated",
+      recommendedAction: "run-recovery-and-dispatch",
+      minimumSeverity: "critical"
     });
   });
 });

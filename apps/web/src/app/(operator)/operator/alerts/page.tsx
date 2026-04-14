@@ -12,6 +12,7 @@ import {
   createOperatorMetricsFacts,
   createOperatorRouteMetricItems,
   createOperatorSnapshotItems,
+  createOperatorTelemetryRemediationFacts,
   createOperatorTelemetryOwnershipItems,
   createOperatorTraceItems,
   createOperatorWorkerQueueItems,
@@ -20,6 +21,7 @@ import {
 import {
   captureObservabilitySnapshotAction,
   dispatchObservabilityAlertsAction,
+  executeRecommendedTelemetryRemediationAction,
   recoverTelemetryOwnershipAction,
   runObservabilityAutomationAction
 } from "../actions";
@@ -256,6 +258,12 @@ export default async function OperatorAlertsPage() {
               description="Retention windows and scheduler defaults remain explicit so observability ownership can be audited instead of implied."
               items={createOperatorAutomationFacts(automation)}
             />
+            <DetailGrid
+              eyebrow="Guided remediation"
+              title={automation.telemetryRemediation.title}
+              description={automation.telemetryRemediation.detail}
+              items={createOperatorTelemetryRemediationFacts(automation.telemetryRemediation)}
+            />
             <RecordListPanel
               eyebrow="Telemetry ownership"
               title="Live telemetry freshness"
@@ -264,6 +272,30 @@ export default async function OperatorAlertsPage() {
               emptyTitle="No telemetry ownership signals"
               emptyDescription="Telemetry ownership signals will appear once observability status is available."
             />
+            <WorkflowFormPanel
+              eyebrow="Recommended response"
+              title={automation.telemetryRemediation.recommendedActionLabel}
+              description={
+                automation.telemetryRemediation.recommendedAction === "none"
+                  ? "Atlas has not identified a telemetry-ownership remediation step that needs to run right now."
+                  : `Execute the current recommended telemetry response from Atlas using the owned ${automation.telemetryRemediation.runbookPath} baseline.`
+              }
+              action={executeRecommendedTelemetryRemediationAction}
+              submitLabel={
+                automation.telemetryRemediation.recommendedAction === "none"
+                  ? "No action required"
+                  : automation.telemetryRemediation.recommendedActionLabel
+              }
+            >
+              <div className="rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-7 text-[var(--atlas-muted)]">
+                {automation.telemetryRemediation.affectedOwnershipKeys.length > 0
+                  ? `Affected signals: ${automation.telemetryOwnership
+                      .filter((item) => automation.telemetryRemediation.affectedOwnershipKeys.includes(item.key))
+                      .map((item) => item.label)
+                      .join(", ")}.`
+                  : "Telemetry ownership is currently healthy across the owned signals."}
+              </div>
+            </WorkflowFormPanel>
             <WorkflowFormPanel
               eyebrow="Ownership recovery"
               title="Recover telemetry ownership"

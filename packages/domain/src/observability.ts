@@ -127,6 +127,21 @@ export type AtlasObservabilityTelemetryRecoveryEscalationRecord = {
   detail: string;
 };
 
+export type AtlasObservabilityTelemetryRemediationRecord = {
+  status: "ready" | "action_required" | "escalated";
+  title: string;
+  detail: string;
+  recommendedAction: "none" | "run-recovery" | "run-recovery-and-dispatch";
+  recommendedActionLabel: string;
+  reason: string;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  latestReportPath: string | null;
+  runbookPath: string;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -235,6 +250,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   startupDelaySeconds: number;
   telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
+  telemetryRemediation: AtlasObservabilityTelemetryRemediationRecord;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
@@ -286,6 +302,10 @@ type AtlasObservabilityAlertInput = {
 
 function createSeverityRank(severity: AtlasObservabilityAlertSeverity) {
   return severity === "critical" ? 0 : severity === "warning" ? 1 : 2;
+}
+
+function listDegradedOwnershipKeys(items: AtlasObservabilityTelemetryOwnershipRecord[]) {
+  return items.filter((item) => item.status !== "healthy").map((item) => item.key);
 }
 
 function roundMetric(value: number) {
@@ -695,6 +715,95 @@ export function countAtlasObservabilityAlertsBySeverity(alerts: AtlasObservabili
       info: 0
     }
   );
+}
+
+export function buildAtlasObservabilityTelemetryRemediation(input: {
+  telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
+  latestAutomationRun: AtlasObservabilityAutomationRunRecord | null;
+  telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
+  dispatchAlerts: boolean;
+  triggerIncidents: boolean;
+  minimumSeverity: AtlasObservabilityAlertSeverity;
+}): AtlasObservabilityTelemetryRemediationRecord {
+  const degradedOwnership = input.telemetryOwnership.filter((item) => item.status !== "healthy");
+  const affectedOwnershipKeys = listDegradedOwnershipKeys(input.telemetryOwnership);
+  const hasCriticalOwnership = degradedOwnership.some((item) => item.status === "critical");
+  const affectedLabels = degradedOwnership.map((item) => item.label);
+  const affectedLabelSummary = affectedLabels.length > 0 ? affectedLabels.join(", ") : "Current telemetry ownership";
+  const latestRun = input.latestAutomationRun;
+  const latestReportPath = latestRun?.reportPath ?? null;
+  const runbookPath = "docs/runbooks/production-operations-baseline.md";
+
+  if (latestRun?.telemetryPolicy === "recover" && latestRun.status === "FAILED") {
+    return {
+      status: "escalated",
+      title: "Recover-mode automation failed before ownership was restored",
+      detail:
+        latestRun.errorMessage ??
+        `Atlas could not complete the latest telemetry recovery run, and ${affectedLabelSummary} still require operator follow-up.`,
+      recommendedAction: "run-recovery-and-dispatch",
+      recommendedActionLabel: "Run guided recovery with dispatch",
+      reason: "Run guided telemetry remediation after a failed recover-mode automation cycle.",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      affectedOwnershipKeys,
+      latestReportPath,
+      runbookPath
+    };
+  }
+
+  if (input.telemetryRecoveryEscalation.status === "triggered") {
+    return {
+      status: "escalated",
+      title: "Telemetry ownership is breaching recovery policy",
+      detail:
+        affectedOwnershipKeys.length > 0
+          ? `${input.telemetryRecoveryEscalation.detail} ${affectedLabelSummary} still require intervention.`
+          : input.telemetryRecoveryEscalation.detail,
+      recommendedAction: "run-recovery-and-dispatch",
+      recommendedActionLabel: "Run escalated recovery",
+      reason: "Run guided telemetry remediation after repeated recovery-policy breaches.",
+      minimumSeverity: "critical",
+      dispatchAlerts: true,
+      triggerIncidents: true,
+      affectedOwnershipKeys,
+      latestReportPath,
+      runbookPath
+    };
+  }
+
+  if (affectedOwnershipKeys.length > 0) {
+    return {
+      status: "action_required",
+      title: "Telemetry ownership needs guided recovery",
+      detail: `${affectedLabelSummary} currently need operator recovery before the next handoff.`,
+      recommendedAction: "run-recovery",
+      recommendedActionLabel: "Run guided recovery",
+      reason: "Run guided telemetry remediation for the current degraded ownership signals.",
+      minimumSeverity: hasCriticalOwnership ? "critical" : "warning",
+      dispatchAlerts: false,
+      triggerIncidents: input.triggerIncidents,
+      affectedOwnershipKeys,
+      latestReportPath,
+      runbookPath
+    };
+  }
+
+  return {
+    status: "ready",
+    title: "Telemetry ownership is currently healthy",
+    detail: "API runtime telemetry, worker runtime telemetry, and automation cadence are currently within the owned baseline.",
+    recommendedAction: "none",
+    recommendedActionLabel: "No remediation required",
+    reason: "Telemetry ownership is currently healthy.",
+    minimumSeverity: input.minimumSeverity,
+    dispatchAlerts: false,
+    triggerIncidents: input.triggerIncidents,
+    affectedOwnershipKeys: [],
+    latestReportPath,
+    runbookPath
+  };
 }
 
 export function buildAtlasIncidentReadinessRecord(input: {

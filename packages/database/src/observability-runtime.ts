@@ -5,6 +5,7 @@ import { appRuntime, observabilityRuntime } from "@atlas/config";
 import {
   buildAtlasIncidentReadinessRecord,
   buildAtlasObservabilityAlerts,
+  buildAtlasObservabilityTelemetryRemediation,
   getAtlasObservabilityDeliveryKind,
   isAtlasPagingProvider,
   buildAtlasWorkerTelemetryRecord,
@@ -839,13 +840,27 @@ export function getObservabilityAutomationStatus(
   const latestRun = recentRuns[0] ?? null;
   const now = new Date(options.now ?? new Date().toISOString());
   const workerTelemetry = readPublishedWorkerTelemetry(options.now);
+  const telemetryOwnership = [
+    buildApiTelemetryOwnershipRecord(now),
+    buildWorkerTelemetryOwnershipRecord(workerTelemetry),
+    buildAutomationCadenceOwnershipRecord(now, latestRun)
+  ];
+  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation(recentRuns);
 
   return {
     scheduleMode: observabilityRuntime.automationScheduleMode,
     intervalMinutes: observabilityRuntime.automationScheduleIntervalMinutes,
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
     telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
-    telemetryRecoveryEscalation: buildTelemetryRecoveryEscalation(recentRuns),
+    telemetryRecoveryEscalation,
+    telemetryRemediation: buildAtlasObservabilityTelemetryRemediation({
+      telemetryOwnership,
+      latestAutomationRun: latestRun,
+      telemetryRecoveryEscalation,
+      dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+      triggerIncidents: observabilityRuntime.automationTriggerIncidents,
+      minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity
+    }),
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
@@ -862,11 +877,7 @@ export function getObservabilityAutomationStatus(
     lastRunAt: latestRun?.generatedAt ?? null,
     lastRunStatus: latestRun?.status ?? null,
     lastReportPath: latestRun?.reportPath ?? null,
-    telemetryOwnership: [
-      buildApiTelemetryOwnershipRecord(now),
-      buildWorkerTelemetryOwnershipRecord(workerTelemetry),
-      buildAutomationCadenceOwnershipRecord(now, latestRun)
-    ],
+    telemetryOwnership,
     recentRuns
   } satisfies AtlasObservabilityAutomationStatusRecord;
 }
