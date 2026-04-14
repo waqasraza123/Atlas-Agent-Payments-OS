@@ -843,10 +843,11 @@ describe("observability runtime", () => {
       `${JSON.stringify(
         {
           version: 1,
-          action: "ACKNOWLEDGED",
+          action: "TRANSFERRED",
           generatedAt: "2026-04-13T00:11:00.000Z",
-          actorUserEmail: "initial-owner@atlas.local",
-          reason: "Taking ownership before the next operator handoff.",
+          actorUserEmail: "operator-admin@atlas.local",
+          ownerUserEmail: "initial-owner@atlas.local",
+          reason: "Transfer telemetry remediation to the current operator on call.",
           remediationStatus: "escalated",
           affectedOwnershipKeys: ["automation-cadence"],
           latestAutomationReportPath: "/tmp/observability-automation.json"
@@ -919,7 +920,12 @@ describe("observability runtime", () => {
 
     expect(action).toMatchObject({
       action: "TRANSFERRED",
-      ownerUserEmail: "oncall-operator@atlas.local"
+      ownerUserEmail: "oncall-operator@atlas.local",
+      ownerAccountability: {
+        outcome: "unmet",
+        ownerUserEmail: "initial-owner@atlas.local",
+        evaluationTrigger: "TRANSFERRED"
+      }
     });
     expect(status.telemetryRemediationOwnership).toMatchObject({
       status: "acknowledged",
@@ -929,12 +935,28 @@ describe("observability runtime", () => {
     });
     expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
       action: "TRANSFERRED",
-      ownerUserEmail: "oncall-operator@atlas.local"
+      ownerUserEmail: "oncall-operator@atlas.local",
+      ownerAccountability: {
+        outcome: "unmet",
+        ownerUserEmail: "initial-owner@atlas.local",
+        evaluationTrigger: "TRANSFERRED"
+      }
     });
     expect(status.telemetryRemediationFollowThrough).toMatchObject({
       status: "pending",
       ownerUserEmail: "oncall-operator@atlas.local"
     });
+    expect(client.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          metadata: expect.objectContaining({
+            latestAccountabilityOutcome: "unmet",
+            latestAccountabilityOwnerUserEmail: "initial-owner@atlas.local",
+            latestAccountabilityTrigger: "TRANSFERRED"
+          })
+        })
+      })
+    );
     expect(client.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -942,6 +964,115 @@ describe("observability runtime", () => {
         })
       })
     );
+  });
+
+  it("persists met accountability when an assigned owner is transferred after acting", async () => {
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-transfer-met-"));
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-11-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ASSIGNED",
+          generatedAt: "2026-04-13T00:11:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          ownerUserEmail: "initial-owner@atlas.local",
+          reason: "Assign telemetry remediation to the current operator on call.",
+          remediationStatus: "escalated",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-20-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "REACKNOWLEDGED",
+          generatedAt: "2026-04-13T00:20:00.000Z",
+          actorUserEmail: "initial-owner@atlas.local",
+          reason: "Confirming owner follow-through before handoff.",
+          remediationStatus: "escalated",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { recordObservabilityTelemetryRemediationAction } = await import("./observability-runtime");
+    const client = {
+      membership: {
+        findFirst: vi.fn(async () => ({
+          id: "membership-oncall",
+          role: "OPERATOR",
+          user: {
+            id: "user-oncall",
+            email: "oncall-operator@atlas.local",
+            name: "Oncall Operator"
+          }
+        }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const action = await recordObservabilityTelemetryRemediationAction(
+      actor,
+      {
+        action: "TRANSFERRED",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        reason: "Transfer telemetry remediation to the active operator on call after owner action.",
+        now: "2026-04-13T00:25:00.000Z"
+      },
+      client as never
+    );
+
+    expect(action).toMatchObject({
+      action: "TRANSFERRED",
+      ownerAccountability: {
+        outcome: "met",
+        ownerUserEmail: "initial-owner@atlas.local",
+        evaluationTrigger: "TRANSFERRED",
+        lastOwnerActionType: "REACKNOWLEDGED",
+        lastOwnerActionAt: "2026-04-13T00:20:00.000Z"
+      }
+    });
   });
 
   it("rejects telemetry remediation assignment to a non-operator identity", async () => {
@@ -1200,10 +1331,11 @@ describe("observability runtime", () => {
       `${JSON.stringify(
         {
           version: 1,
-          action: "ACKNOWLEDGED",
+          action: "TRANSFERRED",
           generatedAt: "2026-04-13T00:00:00.000Z",
           actorUserEmail: "operator-admin@atlas.local",
-          reason: "Taking ownership of the current telemetry remediation issue.",
+          ownerUserEmail: "oncall-operator@atlas.local",
+          reason: "Transfer telemetry remediation to the current operator on call.",
           remediationStatus: "action_required",
           affectedOwnershipKeys: ["automation-cadence"],
           latestAutomationReportPath: "/tmp/observability-automation.json"

@@ -513,8 +513,8 @@ export function createOperatorTelemetryRemediationActionItems(
       item.action === "RESOLVED"
         ? `${item.remediationStatus} posture · resolved ${item.resolvedIncidentTriggerCount} incident triggers · ${item.activeIncidentTriggerCount} active remain · ${item.reportPath}`
         : item.action === "TRANSFERRED" || item.action === "ASSIGNED"
-          ? `${item.remediationStatus} posture · owner ${item.ownerUserEmail ?? "not recorded"} · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`
-        : `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
+          ? `${item.remediationStatus} posture · owner ${item.ownerUserEmail ?? "not recorded"} · ${item.affectedOwnershipKeys.length} ownership signals${item.ownerAccountability ? ` · accountability ${item.ownerAccountability.outcome}` : ""} · ${item.reportPath}`
+          : `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals${item.ownerAccountability ? ` · accountability ${item.ownerAccountability.outcome}` : ""} · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone:
       item.action === "RESOLVED"

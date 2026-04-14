@@ -156,6 +156,7 @@ export type AtlasObservabilityTelemetryRemediationActionRecord = {
   generatedAt: string;
   actorUserEmail: string;
   ownerUserEmail?: string | null;
+  ownerAccountability?: AtlasObservabilityTelemetryRemediationAccountabilityRecord | null;
   reason: string;
   remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
   affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
@@ -188,6 +189,16 @@ export type AtlasObservabilityTelemetryRemediationFollowThroughRecord = {
   ownerUserEmail: string | null;
   assignedAt: string | null;
   ageMinutes: number | null;
+  lastOwnerActionAt: string | null;
+  lastOwnerActionType: AtlasObservabilityTelemetryRemediationAction | "AUTOMATION_RUN" | null;
+  detail: string;
+};
+
+export type AtlasObservabilityTelemetryRemediationAccountabilityRecord = {
+  outcome: "met" | "unmet";
+  ownerUserEmail: string;
+  evaluatedAt: string;
+  evaluationTrigger: AtlasObservabilityTelemetryRemediationAction;
   lastOwnerActionAt: string | null;
   lastOwnerActionType: AtlasObservabilityTelemetryRemediationAction | "AUTOMATION_RUN" | null;
   detail: string;
@@ -355,6 +366,7 @@ type AtlasObservabilityAlertInput = {
   telemetryRecoveryEscalation?: AtlasObservabilityTelemetryRecoveryEscalationRecord | null;
   telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
   telemetryRemediationFollowThrough?: AtlasObservabilityTelemetryRemediationFollowThroughRecord | null;
+  latestTelemetryRemediationAccountability?: AtlasObservabilityTelemetryRemediationAccountabilityRecord | null;
   generatedAt?: string;
 };
 
@@ -779,6 +791,25 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         source: "operator",
         metricLabel: "Telemetry remediation owner follow-through",
         status: input.telemetryRemediationFollowThrough.status === "critical" ? "open" : "monitoring",
+        runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
+  }
+
+  if (input.latestTelemetryRemediationAccountability?.outcome === "unmet") {
+    alerts.push(
+      createAlertRecord({
+        id: "telemetry-remediation-owner-accountability",
+        title:
+          input.latestTelemetryRemediationAccountability.evaluationTrigger === "ESCALATED"
+            ? "Assigned telemetry remediation owner breached without action"
+            : "Assigned telemetry remediation owner was reassigned without action",
+        description: input.latestTelemetryRemediationAccountability.detail,
+        severity: input.latestTelemetryRemediationAccountability.evaluationTrigger === "ESCALATED" ? "critical" : "warning",
+        source: "operator",
+        metricLabel: "Telemetry remediation owner accountability",
+        status: input.latestTelemetryRemediationAccountability.evaluationTrigger === "ESCALATED" ? "open" : "monitoring",
         runbookPath: "docs/runbooks/production-operations-baseline.md",
         updatedAt: generatedAt
       })

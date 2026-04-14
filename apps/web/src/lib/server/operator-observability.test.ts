@@ -290,6 +290,15 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
         generatedAt: "2026-04-13T00:18:00.000Z",
         actorUserEmail: "operator-admin@atlas.local",
         ownerUserEmail: "oncall-operator@atlas.local",
+        ownerAccountability: {
+          outcome: "unmet",
+          ownerUserEmail: "initial-owner@atlas.local",
+          evaluatedAt: "2026-04-13T00:18:00.000Z",
+          evaluationTrigger: "TRANSFERRED",
+          lastOwnerActionAt: null,
+          lastOwnerActionType: null,
+          detail: "initial-owner@atlas.local was reassigned off telemetry remediation without recorded owner follow-through."
+        },
         reason: "Transfer remediation ownership to the current operator on call.",
         remediationStatus: "escalated",
         affectedOwnershipKeys: ["automation-cadence"],
@@ -330,7 +339,7 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
       expect.objectContaining({
         title: "Transferred telemetry remediation",
         statusTone: "critical",
-        detail: expect.stringContaining("owner oncall-operator@atlas.local")
+        detail: expect.stringContaining("accountability unmet")
       }),
       expect.objectContaining({
         title: "Escalated telemetry remediation",

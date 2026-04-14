@@ -285,6 +285,49 @@ describe("atlas observability contracts", () => {
     );
   });
 
+  it("raises accountability alerts when an assigned owner is reassigned without action", () => {
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics: createMetricsSnapshot(),
+      overview: {
+        openCaseCount: 0,
+        criticalCaseCount: 0,
+        actionRequiredCount: 0,
+        unreadNotificationCount: 0,
+        delayedCaseCount: 0,
+        failedCaseCount: 0,
+        recentCases: [],
+        recentNotifications: [],
+        recentAuditEvents: []
+      },
+      configurationStatus: "valid",
+      releaseStage: "private-beta",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: null,
+        snapshot: null
+      }),
+      latestTelemetryRemediationAccountability: {
+        outcome: "unmet",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        evaluatedAt: "2026-04-12T02:00:00.000Z",
+        evaluationTrigger: "TRANSFERRED",
+        lastOwnerActionAt: null,
+        lastOwnerActionType: null,
+        detail: "oncall-operator@atlas.local was reassigned off telemetry remediation without recorded owner follow-through."
+      }
+    });
+
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "telemetry-remediation-owner-accountability",
+          severity: "warning",
+          source: "operator"
+        })
+      ])
+    );
+  });
+
   it("builds an escalated telemetry remediation plan for failed recover-mode automation", () => {
     const remediation = buildAtlasObservabilityTelemetryRemediation({
       telemetryOwnership: [

@@ -16,6 +16,7 @@ import {
   type AtlasObservabilityAutomationRunRecord,
   type AtlasObservabilityAutomationStatusRecord,
   type AtlasObservabilityTelemetryRemediationAction,
+  type AtlasObservabilityTelemetryRemediationAccountabilityRecord,
   type AtlasObservabilityTelemetryRemediationActionRecord,
   type AtlasObservabilityTelemetryRemediationFollowUpRecord,
   type AtlasObservabilityTelemetryRemediationFollowThroughRecord,
@@ -88,6 +89,7 @@ type AtlasObservabilityTelemetryRemediationReportPayload = {
   generatedAt: string;
   actorUserEmail: string;
   ownerUserEmail?: string | null;
+  ownerAccountability?: AtlasObservabilityTelemetryRemediationAccountabilityRecord | null;
   reason: string;
   remediationStatus: "ready" | "action_required" | "escalated";
   affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
@@ -416,6 +418,7 @@ function mapTelemetryRemediationActionRecord(
     generatedAt: payload.generatedAt ?? generatedAtFallback,
     actorUserEmail: payload.actorUserEmail,
     ownerUserEmail: payload.ownerUserEmail ?? null,
+    ownerAccountability: payload.ownerAccountability ?? null,
     reason: payload.reason,
     remediationStatus:
       payload.remediationStatus === "ready" ||
@@ -437,6 +440,18 @@ function findLatestTelemetryRemediationAction(
   allowedActions: AtlasObservabilityTelemetryRemediationAction[]
 ) {
   return actions.find((action) => allowedActions.includes(action.action)) ?? null;
+}
+
+function findLatestAssignedTelemetryRemediationAction(
+  ownerUserEmail: string,
+  actions: AtlasObservabilityTelemetryRemediationActionRecord[]
+) {
+  return (
+    actions.find(
+      (action) =>
+        (action.action === "ASSIGNED" || action.action === "TRANSFERRED") && action.ownerUserEmail === ownerUserEmail
+    ) ?? null
+  );
 }
 
 function writeTelemetryRemediationReport(payload: AtlasObservabilityTelemetryRemediationReportPayload) {
@@ -702,7 +717,91 @@ function buildTelemetryRemediationFollowThrough(
   };
 }
 
+function buildTelemetryRemediationAccountability(
+  ownerUserEmail: string | null,
+  recentActions: AtlasObservabilityTelemetryRemediationActionRecord[],
+  recentRuns: AtlasObservabilityAutomationRunRecord[],
+  evaluationTrigger: AtlasObservabilityTelemetryRemediationAction,
+  evaluatedAt: string
+): AtlasObservabilityTelemetryRemediationAccountabilityRecord | null {
+  if (!ownerUserEmail) {
+    return null;
+  }
+
+  const latestAssignment = findLatestAssignedTelemetryRemediationAction(ownerUserEmail, recentActions);
+
+  if (!latestAssignment) {
+    return null;
+  }
+
+  const assignmentTimestamp = new Date(latestAssignment.generatedAt).getTime();
+  const evaluationTimestamp = new Date(evaluatedAt).getTime();
+  const lastOwnerAction = [
+    ...recentActions
+      .filter((action) => {
+        const actionTimestamp = new Date(action.generatedAt).getTime();
+
+        return (
+          actionTimestamp > assignmentTimestamp &&
+          actionTimestamp <= evaluationTimestamp &&
+          action.action !== "ESCALATED" &&
+          (action.ownerUserEmail ?? action.actorUserEmail) === ownerUserEmail
+        );
+      })
+      .map((action) => ({
+        generatedAt: action.generatedAt,
+        actionType: action.action as AtlasObservabilityTelemetryRemediationAction | "AUTOMATION_RUN"
+      })),
+    ...recentRuns
+      .filter((run) => {
+        const runTimestamp = new Date(run.generatedAt).getTime();
+
+        return runTimestamp > assignmentTimestamp && runTimestamp <= evaluationTimestamp && run.actorUserEmail === ownerUserEmail;
+      })
+      .map((run) => ({
+        generatedAt: run.generatedAt,
+        actionType: "AUTOMATION_RUN" as const
+      }))
+  ].sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())[0] ?? null;
+
+  if (lastOwnerAction) {
+    return {
+      outcome: "met",
+      ownerUserEmail,
+      evaluatedAt,
+      evaluationTrigger,
+      lastOwnerActionAt: lastOwnerAction.generatedAt,
+      lastOwnerActionType: lastOwnerAction.actionType,
+      detail:
+        evaluationTrigger === "ESCALATED"
+          ? `${ownerUserEmail} recorded owner follow-through before Atlas escalated telemetry remediation.`
+          : `${ownerUserEmail} recorded owner follow-through before telemetry remediation was reassigned.`
+    };
+  }
+
+  return {
+    outcome: "unmet",
+    ownerUserEmail,
+    evaluatedAt,
+    evaluationTrigger,
+    lastOwnerActionAt: null,
+    lastOwnerActionType: null,
+    detail:
+      evaluationTrigger === "ESCALATED"
+        ? `${ownerUserEmail} did not record owner follow-through before Atlas escalated telemetry remediation.`
+        : `${ownerUserEmail} was reassigned off telemetry remediation without recorded owner follow-through.`
+  };
+}
+
+function findLatestTelemetryRemediationAccountability(
+  actions: AtlasObservabilityTelemetryRemediationActionRecord[]
+) {
+  return actions.find((action) => action.ownerAccountability) ?? null;
+}
+
 function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityAutomationStatusRecord) {
+  const latestAccountabilityAction = findLatestTelemetryRemediationAccountability(status.recentTelemetryRemediationActions);
+  const latestAccountability = latestAccountabilityAction?.ownerAccountability ?? null;
   const isActive = status.telemetryRemediation.recommendedAction !== "none";
   const isEscalated = status.telemetryRemediation.status === "escalated";
   const isAcknowledged = status.telemetryRemediationOwnership.status === "acknowledged";
@@ -729,6 +828,8 @@ function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityA
     ? status.telemetryRemediationFollowUp.detail
     : hasOwnerFollowThroughGap
       ? status.telemetryRemediationFollowThrough.detail
+    : latestAccountability?.outcome === "unmet"
+      ? latestAccountability.detail
     : isEscalated
     ? isAcknowledged && status.telemetryRemediationOwnership.actorUserEmail
       ? `${status.telemetryRemediationOwnership.detail} Atlas is keeping the escalation surfaced until ownership is restored or explicitly closed.`
@@ -763,6 +864,10 @@ function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityA
       followThroughAgeMinutes: status.telemetryRemediationFollowThrough.ageMinutes,
       followThroughLastOwnerActionAt: status.telemetryRemediationFollowThrough.lastOwnerActionAt,
       followThroughLastOwnerActionType: status.telemetryRemediationFollowThrough.lastOwnerActionType,
+      latestAccountabilityOutcome: latestAccountability?.outcome ?? null,
+      latestAccountabilityOwnerUserEmail: latestAccountability?.ownerUserEmail ?? null,
+      latestAccountabilityEvaluatedAt: latestAccountability?.evaluatedAt ?? null,
+      latestAccountabilityTrigger: latestAccountability?.evaluationTrigger ?? null,
       recommendedAction: status.telemetryRemediation.recommendedAction,
       affectedOwnershipKeys: status.telemetryRemediation.affectedOwnershipKeys,
       latestAutomationReportPath: status.telemetryRemediation.latestReportPath,
@@ -885,6 +990,7 @@ async function createTelemetryRemediationAuditEvent(
       payload: {
         action: action.action,
         ownerUserEmail: action.ownerUserEmail,
+        ownerAccountability: action.ownerAccountability,
         reason: action.reason,
         remediationStatus: action.remediationStatus,
         affectedOwnershipKeys: action.affectedOwnershipKeys,
@@ -902,6 +1008,7 @@ async function persistTelemetryRemediationAction(
   input: {
     action: AtlasObservabilityTelemetryRemediationAction;
     ownerUserEmail?: string | null;
+    ownerAccountability?: AtlasObservabilityTelemetryRemediationAccountabilityRecord | null;
     reason: string;
     remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
     affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
@@ -918,6 +1025,7 @@ async function persistTelemetryRemediationAction(
     generatedAt: input.generatedAt,
     actorUserEmail: actor.user.email,
     ownerUserEmail: input.ownerUserEmail ?? actor.user.email,
+    ownerAccountability: input.ownerAccountability ?? null,
     reason: input.reason,
     remediationStatus: input.remediationStatus,
     affectedOwnershipKeys: input.affectedOwnershipKeys,
@@ -933,6 +1041,7 @@ async function persistTelemetryRemediationAction(
       generatedAt: input.generatedAt,
       actorUserEmail: actor.user.email,
       ownerUserEmail: input.ownerUserEmail ?? actor.user.email,
+      ownerAccountability: input.ownerAccountability ?? null,
       reason: input.reason,
       remediationStatus: input.remediationStatus,
       affectedOwnershipKeys: input.affectedOwnershipKeys,
@@ -976,6 +1085,19 @@ async function persistTelemetryRemediationEscalationIfNeeded(
     {
       action: "ESCALATED",
       ownerUserEmail: status.telemetryRemediationOwnership.actorUserEmail,
+      ownerAccountability:
+        findLatestTelemetryRemediationAction(status.recentTelemetryRemediationActions, ["ASSIGNED", "TRANSFERRED"])
+          ? buildTelemetryRemediationAccountability(
+              status.telemetryRemediationOwnership.actorUserEmail ??
+                findLatestTelemetryRemediationAction(status.recentTelemetryRemediationActions, ["ASSIGNED", "TRANSFERRED"])
+                  ?.ownerUserEmail ??
+                null,
+              status.recentTelemetryRemediationActions,
+              status.recentRuns,
+              "ESCALATED",
+              generatedAt ?? new Date().toISOString()
+            )
+          : null,
       reason: `Atlas escalated telemetry remediation after the ${status.telemetryRemediationFollowUp.thresholdMinutes}-minute follow-up window was materially breached.`,
       remediationStatus: status.telemetryRemediation.status,
       affectedOwnershipKeys: status.telemetryRemediation.affectedOwnershipKeys,
@@ -1031,6 +1153,8 @@ async function syncTelemetryRemediationIncidentPosture(
     telemetryRecoveryEscalation: automationStatus.telemetryRecoveryEscalation,
     telemetryRemediationFollowUp: automationStatus.telemetryRemediationFollowUp,
     telemetryRemediationFollowThrough: automationStatus.telemetryRemediationFollowThrough,
+    latestTelemetryRemediationAccountability:
+      findLatestTelemetryRemediationAccountability(automationStatus.recentTelemetryRemediationActions)?.ownerAccountability ?? null,
     activeIncidentTriggerCount: activeIncidentTriggers.length,
     now
   });
@@ -1166,6 +1290,7 @@ function buildObservabilityAutomationAlertState(input: {
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
   telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
   telemetryRemediationFollowThrough?: AtlasObservabilityTelemetryRemediationFollowThroughRecord | null;
+  latestTelemetryRemediationAccountability?: AtlasObservabilityTelemetryRemediationAccountabilityRecord | null;
   activeIncidentTriggerCount: number;
   now?: string;
 }) {
@@ -1180,6 +1305,7 @@ function buildObservabilityAutomationAlertState(input: {
     telemetryRecoveryEscalation: input.telemetryRecoveryEscalation,
     telemetryRemediationFollowUp: input.telemetryRemediationFollowUp,
     telemetryRemediationFollowThrough: input.telemetryRemediationFollowThrough,
+    latestTelemetryRemediationAccountability: input.latestTelemetryRemediationAccountability,
     generatedAt: input.now
   });
   const incidentReadiness = buildAtlasIncidentReadinessRecord({
@@ -1861,6 +1987,8 @@ export async function recordObservabilityAutomationFailure(
     telemetryRecoveryEscalation,
     telemetryRemediationFollowUp: currentStatus.telemetryRemediationFollowUp,
     telemetryRemediationFollowThrough: currentStatus.telemetryRemediationFollowThrough,
+    latestTelemetryRemediationAccountability:
+      findLatestTelemetryRemediationAccountability(currentStatus.recentTelemetryRemediationActions)?.ownerAccountability ?? null,
     activeIncidentTriggerCount,
     now: generatedAt
   });
@@ -2034,6 +2162,20 @@ export async function recordObservabilityTelemetryRemediationAction(
   }
 
   const generatedAt = input.now ?? new Date().toISOString();
+  const ownerAccountability =
+    input.action === "TRANSFERRED" &&
+    findLatestAssignedTelemetryRemediationAction(
+      status.telemetryRemediationOwnership.actorUserEmail ?? "",
+      status.recentTelemetryRemediationActions
+    )
+      ? buildTelemetryRemediationAccountability(
+          status.telemetryRemediationOwnership.actorUserEmail,
+          status.recentTelemetryRemediationActions,
+          status.recentRuns,
+          "TRANSFERRED",
+          generatedAt
+        )
+      : null;
   const affectedOwnershipKeys =
     input.action === "RESOLVED"
       ? (status.recentTelemetryRemediationActions[0]?.affectedOwnershipKeys ?? [])
@@ -2052,6 +2194,7 @@ export async function recordObservabilityTelemetryRemediationAction(
     {
       action: input.action,
       ownerUserEmail,
+      ownerAccountability,
       reason,
       remediationStatus: status.telemetryRemediation.status,
       affectedOwnershipKeys,
@@ -2117,6 +2260,8 @@ export async function buildObservabilityAutomationPosture(
     telemetryRecoveryEscalation: automationStatus.telemetryRecoveryEscalation,
     telemetryRemediationFollowUp: automationStatus.telemetryRemediationFollowUp,
     telemetryRemediationFollowThrough: automationStatus.telemetryRemediationFollowThrough,
+    latestTelemetryRemediationAccountability:
+      findLatestTelemetryRemediationAccountability(automationStatus.recentTelemetryRemediationActions)?.ownerAccountability ?? null,
     activeIncidentTriggerCount: activeIncidentTriggers.length,
     now: input.now
   });
@@ -2387,6 +2532,8 @@ export async function recoverObservabilityTelemetryOwnership(
       afterTelemetryRemediationFollowUp,
       new Date(generatedAt)
     ),
+    latestTelemetryRemediationAccountability:
+      findLatestTelemetryRemediationAccountability(currentStatus.recentTelemetryRemediationActions)?.ownerAccountability ?? null,
     activeIncidentTriggerCount: posture.activeIncidentTriggers.length,
     now: generatedAt
   });

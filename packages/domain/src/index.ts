@@ -107,6 +107,7 @@ export {
   type AtlasObservabilityReleaseStage,
   type AtlasObservabilitySnapshotRecord,
   type AtlasObservabilityTelemetryRemediationAction,
+  type AtlasObservabilityTelemetryRemediationAccountabilityRecord,
   type AtlasObservabilityTelemetryRemediationActionRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryRemediationOwnershipRecord,
