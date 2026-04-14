@@ -1298,6 +1298,12 @@ const databaseMock = vi.hoisted(() => ({
     intervalMinutes: 20,
     startupDelaySeconds: 45,
     telemetryPolicy: "recover",
+    telemetryRecoveryEscalation: {
+      status: "triggered",
+      consecutiveBreachedRuns: 2,
+      threshold: 2,
+      detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs."
+    },
     actorUserEmail: "operator-admin@atlas.local",
     minimumSeverity: "warning",
     dispatchAlerts: false,

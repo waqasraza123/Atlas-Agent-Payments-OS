@@ -117,6 +117,12 @@ describe("atlas observability contracts", () => {
         reportPath: "/tmp/run-1.json",
         errorMessage: null
       },
+      telemetryRecoveryEscalation: {
+        status: "triggered",
+        consecutiveBreachedRuns: 2,
+        threshold: 2,
+        detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs."
+      },
       generatedAt: "2026-04-12T00:10:00.000Z"
     });
 
@@ -131,7 +137,8 @@ describe("atlas observability contracts", () => {
         "worker-queues-not-ready",
         "worker-trace-coverage-degraded",
         "telemetry-ownership-automation-cadence",
-        "telemetry-recovery-incomplete"
+        "telemetry-recovery-incomplete",
+        "telemetry-recovery-repeating"
       ])
     );
     expect(alerts[0]?.severity).toBe("critical");

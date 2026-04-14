@@ -262,7 +262,8 @@ export class HealthService {
       releaseStage: appRuntime.releaseStage,
       workerTelemetry,
       telemetryOwnership,
-      latestAutomationRun: automationStatus?.recentRuns?.[0] ?? null
+      latestAutomationRun: automationStatus?.recentRuns?.[0] ?? null,
+      telemetryRecoveryEscalation: automationStatus?.telemetryRecoveryEscalation ?? null
     });
 
     return buildAtlasIncidentReadinessRecord({

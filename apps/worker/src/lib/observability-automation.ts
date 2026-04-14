@@ -84,6 +84,8 @@ export async function runWorkerObservabilityAutomationCycle(
       dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
       triggerIncidents: observabilityRuntime.automationTriggerIncidents,
       telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
+      telemetryRecoveryStatus:
+        observabilityRuntime.automationTelemetryOwnershipPolicy === "recover" ? "failed" : "not_requested",
       generatedAt,
       errorMessage
     });

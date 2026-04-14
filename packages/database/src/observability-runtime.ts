@@ -12,6 +12,7 @@ import {
   type AtlasObservabilityAlertSeverity,
   type AtlasObservabilityAutomationRunRecord,
   type AtlasObservabilityAutomationStatusRecord,
+  type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,
   type AtlasObservabilityTelemetryOwnershipRecord,
@@ -257,9 +258,56 @@ function normalizeTelemetryOwnershipPolicy(
 function normalizeTelemetryRecoveryStatus(
   value: AtlasObservabilityTelemetryRecoveryStatus | string | null | undefined
 ): AtlasObservabilityTelemetryRecoveryStatus {
-  return value === "no_action" || value === "recovered" || value === "partial" || value === "unchanged"
+  return value === "no_action" ||
+    value === "failed" ||
+    value === "recovered" ||
+    value === "partial" ||
+    value === "unchanged"
     ? value
     : "not_requested";
+}
+
+function isTelemetryRecoveryBreach(run: Pick<
+  AtlasObservabilityAutomationRunRecord,
+  "status" | "telemetryPolicy" | "telemetryRecoveryStatus"
+>) {
+  if (run.telemetryPolicy !== "recover") {
+    return false;
+  }
+
+  return (
+    run.status === "FAILED" ||
+    run.telemetryRecoveryStatus === "failed" ||
+    run.telemetryRecoveryStatus === "partial" ||
+    run.telemetryRecoveryStatus === "unchanged"
+  );
+}
+
+function buildTelemetryRecoveryEscalation(
+  recentRuns: AtlasObservabilityAutomationRunRecord[]
+): AtlasObservabilityTelemetryRecoveryEscalationRecord {
+  const threshold = Math.max(1, observabilityRuntime.automationTelemetryEscalationThreshold);
+  let consecutiveBreachedRuns = 0;
+
+  for (const run of recentRuns) {
+    if (!isTelemetryRecoveryBreach(run)) {
+      break;
+    }
+
+    consecutiveBreachedRuns += 1;
+  }
+
+  return {
+    status: consecutiveBreachedRuns >= threshold ? "triggered" : "idle",
+    consecutiveBreachedRuns,
+    threshold,
+    detail:
+      consecutiveBreachedRuns >= threshold
+        ? `Telemetry auto-recovery has breached its target for ${consecutiveBreachedRuns} consecutive run${consecutiveBreachedRuns === 1 ? "" : "s"}.`
+        : consecutiveBreachedRuns === 0
+          ? "Recent telemetry auto-recovery runs are not currently breaching the escalation threshold."
+          : `Telemetry auto-recovery has breached its target for ${consecutiveBreachedRuns} consecutive run${consecutiveBreachedRuns === 1 ? "" : "s"}, below the escalation threshold of ${threshold}.`
+  };
 }
 
 function mapAutomationRunRecord(
@@ -519,6 +567,7 @@ export function getObservabilityAutomationStatus(
     intervalMinutes: observabilityRuntime.automationScheduleIntervalMinutes,
     startupDelaySeconds: observabilityRuntime.automationScheduleStartupDelaySeconds,
     telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
+    telemetryRecoveryEscalation: buildTelemetryRecoveryEscalation(recentRuns),
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
@@ -630,6 +679,7 @@ export async function buildObservabilityAutomationPosture(
     workerTelemetry,
     telemetryOwnership,
     latestAutomationRun: automationStatus.recentRuns?.[0] ?? null,
+    telemetryRecoveryEscalation: automationStatus.telemetryRecoveryEscalation,
     generatedAt: input.now
   });
   const incidentReadiness = buildAtlasIncidentReadinessRecord({

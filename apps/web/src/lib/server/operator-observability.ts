@@ -279,6 +279,17 @@ export function createOperatorAutomationFacts(
       value: automation.telemetryPolicy === "recover" ? "Recover degraded ownership" : "Monitor only"
     },
     {
+      label: "Recovery escalation",
+      value:
+        automation.telemetryRecoveryEscalation.status === "triggered"
+          ? `${automation.telemetryRecoveryEscalation.consecutiveBreachedRuns} run streak`
+          : "Idle"
+    },
+    {
+      label: "Escalation threshold",
+      value: `${automation.telemetryRecoveryEscalation.threshold} runs`
+    },
+    {
       label: "Automation actor",
       value: automation.actorUserEmail ?? "Not configured"
     },

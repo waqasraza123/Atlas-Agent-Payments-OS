@@ -122,6 +122,7 @@ describe("worker observability automation", () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REASON", "Run scheduled observability automation for the current release slot.");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "critical");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
     const executeAutomation = vi.fn(async () => {
       throw new Error("Published API runtime snapshot is missing.");
     });
@@ -150,7 +151,8 @@ describe("worker observability automation", () => {
       expect.objectContaining({
         trigger: "scheduled",
         minimumSeverity: "critical",
-        telemetryPolicy: "monitor",
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "failed",
         errorMessage: "Published API runtime snapshot is missing."
       })
     );

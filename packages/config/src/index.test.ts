@@ -85,6 +85,7 @@ describe("atlas config", () => {
     expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(15);
     expect(observabilityRuntime.automationScheduleStartupDelaySeconds).toBe(30);
     expect(observabilityRuntime.automationTelemetryOwnershipPolicy).toBe("monitor");
+    expect(observabilityRuntime.automationTelemetryEscalationThreshold).toBe(2);
     expect(observabilityRuntime.automationActorUserEmail).toBeNull();
     expect(observabilityRuntime.automationReason).toBeNull();
     expect(observabilityRuntime.automationDispatchAlerts).toBe(false);
@@ -435,6 +436,7 @@ describe("atlas config", () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS", "45");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD", "3");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
     vi.stubEnv(
       "OBSERVABILITY_AUTOMATION_REASON",
@@ -535,6 +537,7 @@ describe("atlas config", () => {
     expect(observabilityRuntime.automationScheduleIntervalMinutes).toBe(20);
     expect(observabilityRuntime.automationScheduleStartupDelaySeconds).toBe(45);
     expect(observabilityRuntime.automationTelemetryOwnershipPolicy).toBe("recover");
+    expect(observabilityRuntime.automationTelemetryEscalationThreshold).toBe(3);
     expect(observabilityRuntime.automationActorUserEmail).toBe("operator-admin@atlas.local");
     expect(observabilityRuntime.automationReason).toBe(
       "Run scheduled observability automation for the current release slot."
@@ -899,6 +902,35 @@ describe("atlas config", () => {
     expect(result.issues).toContainEqual(
       expect.objectContaining({
         variable: "OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY"
+      })
+    );
+  });
+
+  it("rejects invalid telemetry recovery escalation thresholds", async () => {
+    const { validateAtlasRuntimeConfiguration } = await import("./index");
+
+    const result = validateAtlasRuntimeConfiguration("worker", {
+      APP_ENV: "staging",
+      LOG_LEVEL: "info",
+      RELEASE_STAGE: "private-beta",
+      DATABASE_URL: "postgresql://atlas:atlas@127.0.0.1:5432/atlas",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      APP_REVISION: "rev-1",
+      DEPLOYMENT_SLOT: "green",
+      RELEASE_ARTIFACT_ID: "atlas-staging-build",
+      RELEASE_ARTIFACT_SHA256: "a".repeat(64),
+      OBSERVABILITY_AUTOMATION_SCHEDULE_MODE: "interval",
+      OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES: "15",
+      OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS: "30",
+      OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY: "recover",
+      OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD: "0",
+      OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL: "operator-admin@atlas.local",
+      OBSERVABILITY_AUTOMATION_REASON: "Run scheduled observability automation for the current release slot."
+    });
+
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        variable: "OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD"
       })
     );
   });

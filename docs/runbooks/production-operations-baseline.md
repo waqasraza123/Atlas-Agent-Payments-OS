@@ -27,9 +27,11 @@ This runbook defines the repo-level operational baseline that now exists after t
 - repo-owned observability automation through `pnpm observability:automation`
 - worker-scheduled observability automation through `OBSERVABILITY_AUTOMATION_SCHEDULE_MODE=interval`
 - explicit telemetry-ownership policy through `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY=monitor|recover`
+- explicit repeated-breach escalation through `OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD`
 - durable incident-trigger sync plus incident report artifact generation through observability automation
 - durable telemetry-ownership recovery reports and policy-aware automation history through the worker scheduler and `/operator/alerts`
 - explicit operator alerts when telemetry auto-recovery fails or still leaves ownership degraded
+- explicit critical operator alerts when telemetry auto-recovery breaches the configured threshold across consecutive runs
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
@@ -62,6 +64,7 @@ With the API running:
 - `OBSERVABILITY_TRACE_HISTORY_LIMIT`
 - `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
 - `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY`
+- `OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD`
 - `OBSERVABILITY_INCIDENT_REPORT_DIR`
 - `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
 - `OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=pagerduty-events`

@@ -48,6 +48,12 @@ describe("createOperatorAutomationFacts", () => {
       intervalMinutes: 15,
       startupDelaySeconds: 30,
       telemetryPolicy: "recover",
+      telemetryRecoveryEscalation: {
+        status: "triggered",
+        consecutiveBreachedRuns: 3,
+        threshold: 2,
+        detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs."
+      },
       actorUserEmail: "operator-admin@atlas.local",
       minimumSeverity: "warning",
       dispatchAlerts: false,
@@ -71,6 +77,10 @@ describe("createOperatorAutomationFacts", () => {
     expect(items).toContainEqual({
       label: "Telemetry policy",
       value: "Recover degraded ownership"
+    });
+    expect(items).toContainEqual({
+      label: "Recovery escalation",
+      value: "3 run streak"
     });
   });
 });

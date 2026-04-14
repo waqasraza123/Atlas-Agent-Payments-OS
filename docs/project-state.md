@@ -52,6 +52,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Operator observability now includes a dedicated telemetry-ownership recovery workflow that runs a targeted automation cycle, compares before-and-after ownership posture, and reports recovered versus unresolved ownership signals
 - Worker-scheduled observability automation now enforces an explicit telemetry-ownership policy, can auto-recover degraded ownership on schedule, and leaves durable policy-aware recovery reports plus operator-visible policy posture
 - Shared observability alert compilation now escalates failed or incomplete telemetry auto-recovery runs so policy breaches become first-class operator alerts and incident-readiness inputs
+- Telemetry auto-recovery now tracks consecutive breached runs against an explicit escalation threshold, exposes that escalation posture to operators, and raises a critical repeated-breach alert once the threshold is crossed
 - Direct identity-provider lifecycle governance now exists through persisted provider links with suspend, reactivate, and revoke controls plus provider-session revocation from the operator support surface
 - Direct external identity provisioning and deprovisioning baseline now exists through persisted external identity assignments, operator-managed lifecycle controls, assignment-backed external OIDC exchange enforcement, a dedicated operator identity-access surface, persisted upstream provider subjects and sync state, and vendor-native Okta/Auth0 lifecycle synchronization
 - Rollout execution visibility now exists through an operator rollout surface, restore-drill execution reports, secret-rotation execution reports, promotion execution reports, upstream identity execution reports, a persisted operational integration registry with active and verified execution gating, a durable rollout execution ledger with integrity-tracked proof artifacts, and owned S3-compatible remote proof storage metadata on stored operational artifacts
@@ -173,7 +174,7 @@ Atlas Agent Payments OS is a premium B2B platform for controlled AI agent spendi
 - Receipt artifact generation beyond JSON-backed receipt truth
 - Configurable analytics and broader reporting automation
 - Full release-engineering implementation for multi-environment deployment execution, environment promotion, and rollback discipline
-- Broader continuous telemetry ownership beyond the current scheduler-enforced policy and retained repo artifacts
+- Broader continuous telemetry ownership beyond the current scheduler-enforced policy, repeated-breach escalation, and retained repo artifacts
 - Broader auth maturity, SSO, formal organization-switching governance, and deeper tenant-isolation hardening beyond the current signed-session, stage-aware operator-governance, and lifecycle-governance baseline
 - Production-ready Stripe webhook ingestion and settlement confirmation lifecycle
 - Broader support tooling, compliance workstreams, and enterprise deployment controls

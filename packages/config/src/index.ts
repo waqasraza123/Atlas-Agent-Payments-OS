@@ -384,6 +384,10 @@ export const observabilityRuntime = {
   automationTelemetryOwnershipPolicy: readTelemetryOwnershipPolicy(
     process.env.OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY
   ),
+  automationTelemetryEscalationThreshold: readNumber(
+    process.env.OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD,
+    2
+  ),
   automationActorUserEmail: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL),
   automationReason: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_REASON),
   automationDispatchAlerts: readBoolean(process.env.OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS, false),
@@ -1056,15 +1060,21 @@ export function validateAtlasRuntimeConfiguration(
   );
 
   if (service === "worker" && automationScheduleMode === "interval") {
-    requirePositiveRuntimeVariable(
-      issues,
-      env,
-      "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
-      "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES must be a positive number of minutes."
-    );
-    requirePositiveRuntimeVariable(
-      issues,
-      env,
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES",
+    "OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES must be a positive number of minutes."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD",
+    "OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD must be a positive number of runs."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
       "OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS",
       "OBSERVABILITY_AUTOMATION_STARTUP_DELAY_SECONDS must be zero or a positive number of seconds.",
       true

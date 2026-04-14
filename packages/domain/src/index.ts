@@ -105,6 +105,7 @@ export {
   type AtlasObservabilityRetentionPolicyRecord,
   type AtlasObservabilityReleaseStage,
   type AtlasObservabilitySnapshotRecord,
+  type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,
   type AtlasObservabilityTelemetryOwnershipRecord,

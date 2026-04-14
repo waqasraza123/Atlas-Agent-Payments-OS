@@ -115,9 +115,17 @@ export type AtlasObservabilityTelemetryOwnershipPolicy = "monitor" | "recover";
 export type AtlasObservabilityTelemetryRecoveryStatus =
   | "not_requested"
   | "no_action"
+  | "failed"
   | "recovered"
   | "partial"
   | "unchanged";
+
+export type AtlasObservabilityTelemetryRecoveryEscalationRecord = {
+  status: "idle" | "triggered";
+  consecutiveBreachedRuns: number;
+  threshold: number;
+  detail: string;
+};
 
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
@@ -226,6 +234,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   intervalMinutes: number;
   startupDelaySeconds: number;
   telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
+  telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
@@ -271,6 +280,7 @@ type AtlasObservabilityAlertInput = {
   workerTelemetry?: AtlasWorkerTelemetryRecord | null;
   telemetryOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   latestAutomationRun?: AtlasObservabilityAutomationRunRecord | null;
+  telemetryRecoveryEscalation?: AtlasObservabilityTelemetryRecoveryEscalationRecord | null;
   generatedAt?: string;
 };
 
@@ -634,6 +644,22 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         })
       );
     }
+  }
+
+  if (input.telemetryRecoveryEscalation?.status === "triggered") {
+    alerts.push(
+      createAlertRecord({
+        id: "telemetry-recovery-repeating",
+        title: "Telemetry auto-recovery is repeatedly breaching policy",
+        description: input.telemetryRecoveryEscalation.detail,
+        severity: "critical",
+        source: "runtime",
+        metricLabel: "Telemetry auto-recovery",
+        status: "open",
+        runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
   }
 
   return alerts.sort((left, right) => {

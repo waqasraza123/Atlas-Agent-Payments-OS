@@ -579,6 +579,12 @@ describe("observability runtime", () => {
       scheduleMode: "interval",
       intervalMinutes: 20,
       telemetryPolicy: "recover",
+      telemetryRecoveryEscalation: {
+        status: "idle",
+        consecutiveBreachedRuns: 1,
+        threshold: 2,
+        detail: "Telemetry auto-recovery has breached its target for 1 consecutive run, below the escalation threshold of 2."
+      },
       actorUserEmail: "operator-admin@atlas.local",
       dispatchProvider: "generic-webhook",
       dispatchDeliveryKind: "alert-dispatch",
@@ -601,5 +607,107 @@ describe("observability runtime", () => {
         lastRecordedAt: "2026-04-13T00:10:00.000Z"
       })
     ]);
+  });
+
+  it("marks telemetry recovery escalation triggered after repeated breached recovery runs", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-escalation-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-escalation-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD", "2");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-10-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "FAILED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:10:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "failed",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          errorMessage: "Published API runtime snapshot is missing."
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    writeFileSync(
+      join(automationSandbox, "2026-04-13T00-05-00-000Z-observability-automation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "SUCCEEDED",
+          trigger: "scheduled",
+          generatedAt: "2026-04-13T00:05:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Recover degraded telemetry ownership during the current release slot.",
+          minimumSeverity: "warning",
+          dispatchAlerts: false,
+          triggerIncidents: true,
+          telemetryPolicy: "recover",
+          telemetryRecovery: {
+            status: "unchanged",
+            recoveredKeys: [],
+            remainingKeys: ["automation-cadence"]
+          },
+          snapshot: {
+            id: "snapshot-2"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const { getObservabilityAutomationStatus } = await import("./observability-runtime");
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T00:12:00.000Z"
+    });
+
+    expect(status.telemetryRecoveryEscalation).toEqual({
+      status: "triggered",
+      consecutiveBreachedRuns: 2,
+      threshold: 2,
+      detail: "Telemetry auto-recovery has breached its target for 2 consecutive runs."
+    });
   });
 });
