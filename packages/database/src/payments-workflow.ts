@@ -58,6 +58,92 @@ type PaymentExecutionResolution = {
   errorMessage: string | null;
 };
 
+function createPaymentIntentWhere(actor: AtlasActorContext, paymentId: string): Prisma.PaymentWhereInput {
+  if (actor.workspace === "BUYER") {
+    return {
+      OR: [
+        {
+          id: paymentId
+        },
+        {
+          requestId: paymentId
+        }
+      ],
+      organizationId: actor.organization.id
+    };
+  }
+
+  if (actor.workspace === "SELLER") {
+    return {
+      OR: [
+        {
+          id: paymentId
+        },
+        {
+          requestId: paymentId
+        }
+      ],
+      sellerOrganizationId: actor.organization.id
+    };
+  }
+
+  return {
+    OR: [
+      {
+        id: paymentId
+      },
+      {
+        requestId: paymentId
+      }
+    ]
+  };
+}
+
+function createReceiptRecordWhere(actor: AtlasActorContext, receiptId: string): Prisma.ReceiptWhereInput {
+  if (actor.workspace === "BUYER") {
+    return {
+      OR: [
+        {
+          id: receiptId
+        },
+        {
+          requestId: receiptId
+        }
+      ],
+      organizationId: actor.organization.id
+    };
+  }
+
+  if (actor.workspace === "SELLER") {
+    return {
+      OR: [
+        {
+          id: receiptId
+        },
+        {
+          requestId: receiptId
+        }
+      ],
+      request: {
+        is: {
+          sellerOrganizationId: actor.organization.id
+        }
+      }
+    };
+  }
+
+  return {
+    OR: [
+      {
+        id: receiptId
+      },
+      {
+        requestId: receiptId
+      }
+    ]
+  };
+}
+
 let atlasStripeClient: Stripe | null | undefined;
 
 function normalizeValidationError(error: unknown): never {
@@ -597,87 +683,41 @@ export async function listPaymentIntents(actor: AtlasActorContext, client: Datab
 }
 
 export async function getPaymentIntent(actor: AtlasActorContext, paymentId: string, client: DatabaseClient = prisma) {
-  const payment =
-    (await client.payment.findUnique({
-      where: {
-        id: paymentId
-      },
-      include: {
-        request: {
-          select: {
-            status: true,
-            metadata: true,
-            receipt: {
-              select: {
-                status: true
-              }
+  const payment = await client.payment.findFirst({
+    where: createPaymentIntentWhere(actor, paymentId),
+    include: {
+      request: {
+        select: {
+          status: true,
+          metadata: true,
+          receipt: {
+            select: {
+              status: true
             }
           }
-        },
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        sellerOrganization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        attempts: {
-          orderBy: {
-            attemptNumber: "desc"
-          }
         }
-      }
-    })) ??
-    (await client.payment.findUnique({
-      where: {
-        requestId: paymentId
       },
-      include: {
-        request: {
-          select: {
-            status: true,
-            metadata: true,
-            receipt: {
-              select: {
-                status: true
-              }
-            }
-          }
-        },
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        sellerOrganization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        attempts: {
-          orderBy: {
-            attemptNumber: "desc"
-          }
+      organization: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      sellerOrganization: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      attempts: {
+        orderBy: {
+          attemptNumber: "desc"
         }
       }
-    }));
+    }
+  });
 
   if (!payment) {
-    return null;
-  }
-
-  if (actor.workspace === "BUYER" && payment.organizationId !== actor.organization.id) {
-    return null;
-  }
-
-  if (actor.workspace === "SELLER" && payment.sellerOrganizationId !== actor.organization.id) {
     return null;
   }
 
@@ -751,115 +791,55 @@ export async function listReceiptRecords(actor: AtlasActorContext, client: Datab
 }
 
 export async function getReceiptRecord(actor: AtlasActorContext, receiptId: string, client: DatabaseClient = prisma) {
-  const receipt =
-    (await client.receipt.findUnique({
-      where: {
-        id: receiptId
+  const receipt = await client.receipt.findFirst({
+    where: createReceiptRecordWhere(actor, receiptId),
+    include: {
+      organization: {
+        select: {
+          id: true,
+          name: true
+        }
       },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        request: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            serviceCategory: true,
-            amountMinor: true,
-            currency: true,
-            metadata: true,
-            sellerOrganizationId: true,
-            sellerOrganization: {
-              select: {
-                id: true,
-                name: true
-              }
-            },
-            payment: {
-              select: {
-                status: true,
-                rail: true,
-                reference: true,
-                amountMinor: true,
-                currency: true,
-                metadata: true,
-                attempts: {
-                  orderBy: {
-                    attemptNumber: "desc"
-                  },
-                  select: {
-                    evidence: true
-                  }
+      request: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          serviceCategory: true,
+          amountMinor: true,
+          currency: true,
+          metadata: true,
+          sellerOrganizationId: true,
+          sellerOrganization: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          payment: {
+            select: {
+              status: true,
+              rail: true,
+              reference: true,
+              amountMinor: true,
+              currency: true,
+              metadata: true,
+              attempts: {
+                orderBy: {
+                  attemptNumber: "desc"
+                },
+                select: {
+                  evidence: true
                 }
               }
             }
           }
         }
       }
-    })) ??
-    (await client.receipt.findUnique({
-      where: {
-        requestId: receiptId
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        request: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            serviceCategory: true,
-            amountMinor: true,
-            currency: true,
-            metadata: true,
-            sellerOrganizationId: true,
-            sellerOrganization: {
-              select: {
-                id: true,
-                name: true
-              }
-            },
-            payment: {
-              select: {
-                status: true,
-                rail: true,
-                reference: true,
-                amountMinor: true,
-                currency: true,
-                metadata: true,
-                attempts: {
-                  orderBy: {
-                    attemptNumber: "desc"
-                  },
-                  select: {
-                    evidence: true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }));
+    }
+  });
 
   if (!receipt) {
-    return null;
-  }
-
-  if (actor.workspace === "BUYER" && receipt.organizationId !== actor.organization.id) {
-    return null;
-  }
-
-  if (actor.workspace === "SELLER" && receipt.request?.sellerOrganizationId !== actor.organization.id) {
     return null;
   }
 
