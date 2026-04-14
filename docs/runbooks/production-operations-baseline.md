@@ -37,6 +37,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - `/operator/alerts` now exposes a guided telemetry-remediation plan plus a one-click recommended response so operators can run the owned recovery path directly from the current remediation posture
 - telemetry remediation acknowledgement and resolution actions now persist retention-aware remediation artifacts plus derived owner and closure state on `/operator/alerts`
 - telemetry remediation posture now also stays mirrored into the operator notification queue and links back to `/operator/alerts`, while acknowledgement and resolution actions emit audit events for durable handoff review
+- acknowledged telemetry remediation now also has an explicit follow-up window through `OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES`, with overdue alerts and notification resurfacing when the handoff ages out
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
@@ -70,6 +71,7 @@ With the API running:
 - `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
 - `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY`
 - `OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD`
+- `OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES`
 - `OBSERVABILITY_INCIDENT_REPORT_DIR`
 - `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
 - `OBSERVABILITY_ALERT_DISPATCH_PAGERDUTY_ROUTING_KEY` when `OBSERVABILITY_ALERT_DISPATCH_PROVIDER=pagerduty-events`

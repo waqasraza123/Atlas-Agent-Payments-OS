@@ -165,6 +165,13 @@ export type AtlasObservabilityTelemetryRemediationOwnershipRecord = {
   detail: string;
 };
 
+export type AtlasObservabilityTelemetryRemediationFollowUpRecord = {
+  status: "ready" | "warning" | "critical";
+  thresholdMinutes: number;
+  ageMinutes: number | null;
+  detail: string;
+};
+
 export type AtlasObservabilityAlertSeverity = "info" | "warning" | "critical";
 export type AtlasObservabilityDeliveryKind = "alert-dispatch" | "paging";
 
@@ -276,6 +283,7 @@ export type AtlasObservabilityAutomationStatusRecord = {
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
   telemetryRemediation: AtlasObservabilityTelemetryRemediationRecord;
   telemetryRemediationOwnership: AtlasObservabilityTelemetryRemediationOwnershipRecord;
+  telemetryRemediationFollowUp: AtlasObservabilityTelemetryRemediationFollowUpRecord;
   actorUserEmail: string | null;
   minimumSeverity: AtlasObservabilityAlertSeverity;
   dispatchAlerts: boolean;
@@ -323,6 +331,7 @@ type AtlasObservabilityAlertInput = {
   telemetryOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   latestAutomationRun?: AtlasObservabilityAutomationRunRecord | null;
   telemetryRecoveryEscalation?: AtlasObservabilityTelemetryRecoveryEscalationRecord | null;
+  telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
   generatedAt?: string;
 };
 
@@ -702,6 +711,28 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         source: "runtime",
         metricLabel: "Telemetry auto-recovery",
         status: "open",
+        runbookPath: "docs/runbooks/production-operations-baseline.md",
+        updatedAt: generatedAt
+      })
+    );
+  }
+
+  if (
+    input.telemetryRemediationFollowUp &&
+    (input.telemetryRemediationFollowUp.status === "warning" || input.telemetryRemediationFollowUp.status === "critical")
+  ) {
+    alerts.push(
+      createAlertRecord({
+        id: "telemetry-remediation-follow-up",
+        title:
+          input.telemetryRemediationFollowUp.status === "critical"
+            ? "Telemetry remediation follow-up is overdue"
+            : "Telemetry remediation follow-up is approaching breach",
+        description: input.telemetryRemediationFollowUp.detail,
+        severity: input.telemetryRemediationFollowUp.status === "critical" ? "critical" : "warning",
+        source: "operator",
+        metricLabel: "Telemetry remediation follow-up",
+        status: input.telemetryRemediationFollowUp.status === "critical" ? "open" : "monitoring",
         runbookPath: "docs/runbooks/production-operations-baseline.md",
         updatedAt: generatedAt
       })

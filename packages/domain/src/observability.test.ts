@@ -201,6 +201,46 @@ describe("atlas observability contracts", () => {
     );
   });
 
+  it("raises follow-up alerts when acknowledged telemetry remediation is aging out", () => {
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics: createMetricsSnapshot(),
+      overview: {
+        openCaseCount: 0,
+        criticalCaseCount: 0,
+        actionRequiredCount: 0,
+        unreadNotificationCount: 0,
+        delayedCaseCount: 0,
+        failedCaseCount: 0,
+        recentCases: [],
+        recentNotifications: [],
+        recentAuditEvents: []
+      },
+      configurationStatus: "valid",
+      releaseStage: "private-beta",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: null,
+        snapshot: null
+      }),
+      telemetryRemediationFollowUp: {
+        status: "critical",
+        thresholdMinutes: 60,
+        ageMinutes: 130,
+        detail: "Telemetry remediation follow-up is materially overdue after 130 minutes since acknowledgement."
+      }
+    });
+
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "telemetry-remediation-follow-up",
+          severity: "critical",
+          source: "operator"
+        })
+      ])
+    );
+  });
+
   it("builds an escalated telemetry remediation plan for failed recover-mode automation", () => {
     const remediation = buildAtlasObservabilityTelemetryRemediation({
       telemetryOwnership: [

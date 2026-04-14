@@ -11,6 +11,7 @@ import type {
   AtlasObservabilityIncidentTriggerRecord,
   AtlasObservabilitySnapshotRecord,
   AtlasObservabilityTelemetryRemediationActionRecord,
+  AtlasObservabilityTelemetryRemediationFollowUpRecord,
   AtlasObservabilityTelemetryRemediationRecord,
   AtlasObservabilityTelemetryRemediationOwnershipRecord,
   AtlasObservabilityTelemetryOwnershipRecord,
@@ -399,6 +400,34 @@ export function createOperatorTelemetryRemediationOwnershipFacts(
     {
       label: "Latest note",
       value: ownership.reason ?? "No operator note recorded"
+    }
+  ];
+}
+
+export function createOperatorTelemetryRemediationFollowUpFacts(
+  followUp: AtlasObservabilityTelemetryRemediationFollowUpRecord
+): DetailGridItem[] {
+  return [
+    {
+      label: "Follow-up posture",
+      value:
+        followUp.status === "critical"
+          ? "Overdue"
+          : followUp.status === "warning"
+            ? "Approaching breach"
+            : "Within window"
+    },
+    {
+      label: "Follow-up window",
+      value: `${followUp.thresholdMinutes} minutes`
+    },
+    {
+      label: "Acknowledgement age",
+      value: followUp.ageMinutes === null ? "Not active" : `${followUp.ageMinutes} minutes`
+    },
+    {
+      label: "Detail",
+      value: followUp.detail
     }
   ];
 }

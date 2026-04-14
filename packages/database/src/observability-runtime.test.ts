@@ -645,6 +645,11 @@ describe("observability runtime", () => {
       status: "acknowledged",
       actorUserEmail: "operator-admin@atlas.local"
     });
+    expect(status.telemetryRemediationFollowUp).toMatchObject({
+      status: "ready",
+      thresholdMinutes: 60,
+      ageMinutes: 1
+    });
     expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
       action: "ACKNOWLEDGED",
       reason: "Taking ownership of the current telemetry remediation issue."
@@ -666,6 +671,115 @@ describe("observability runtime", () => {
         data: expect.objectContaining({
           eventType: "observability.telemetry_remediation_acknowledged",
           targetType: "ObservabilityRemediation"
+        })
+      })
+    );
+  });
+
+  it("resurfaces overdue acknowledged telemetry remediation follow-up", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-remediation-follow-up-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-remediation-follow-up-"));
+    const remediationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-remediation-follow-up-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES", "60");
+    writeFileSync(
+      join(remediationSandbox, "2026-04-13T00-00-00-000Z-telemetry-remediation.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          action: "ACKNOWLEDGED",
+          generatedAt: "2026-04-13T00:00:00.000Z",
+          actorUserEmail: "operator-admin@atlas.local",
+          reason: "Taking ownership of the current telemetry remediation issue.",
+          remediationStatus: "action_required",
+          affectedOwnershipKeys: ["automation-cadence"],
+          latestAutomationReportPath: "/tmp/observability-automation.json"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const client = {
+      membership: {
+        findFirst: vi.fn(async () => ({
+          id: "membership-operator",
+          role: "ADMIN",
+          user: {
+            id: "user-operator",
+            email: "operator-admin@atlas.local",
+            name: "Operator Admin"
+          },
+          organization: {
+            id: "org-operator",
+            slug: "atlas-demo-operator",
+            name: "Atlas Demo Operator",
+            kind: "OPERATOR"
+          }
+        }))
+      },
+      notification: {
+        upsert: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const { getObservabilityAutomationStatus, recordObservabilityAutomationFailure } = await import("./observability-runtime");
+    await recordObservabilityAutomationFailure(
+      {
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Recover degraded telemetry ownership during the current release slot.",
+        dispatchAlerts: false,
+        triggerIncidents: false,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "failed",
+        trigger: "scheduled",
+        generatedAt: "2026-04-13T01:15:00.000Z",
+        errorMessage: "Published API runtime snapshot is missing."
+      },
+      client as never
+    );
+    const actor = {
+      user: {
+        id: "user-operator",
+        email: "operator-admin@atlas.local",
+        name: "Operator Admin"
+      },
+      organization: {
+        id: "org-operator",
+        slug: "atlas-demo-operator",
+        name: "Atlas Demo Operator",
+        kind: "OPERATOR"
+      },
+      membership: {
+        id: "membership-operator",
+        role: "ADMIN"
+      },
+      workspace: "OPERATOR",
+      agentId: null,
+      source: "identity-provider",
+      providerMode: "external-oidc",
+      sessionId: "session-1"
+    } as const;
+    const status = getObservabilityAutomationStatus(actor, {
+      limit: 5,
+      now: "2026-04-13T01:15:00.000Z"
+    });
+
+    expect(status.telemetryRemediationFollowUp).toMatchObject({
+      status: "warning",
+      thresholdMinutes: 60,
+      ageMinutes: 75
+    });
+    expect(client.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          title: "Telemetry remediation follow-up needs review",
+          status: "UNREAD"
         })
       })
     );

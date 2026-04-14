@@ -1352,6 +1352,12 @@ const databaseMock = vi.hoisted(() => ({
       reportPath: "/tmp/remediation-1.json",
       detail: "Telemetry remediation is currently acknowledged by operator-admin@atlas.local."
     },
+    telemetryRemediationFollowUp: {
+      status: "warning",
+      thresholdMinutes: 60,
+      ageMinutes: 75,
+      detail: "Telemetry remediation follow-up is 15 minutes overdue after 75 minutes since acknowledgement."
+    },
     recentTelemetryRemediationActions: [
       {
         id: "/tmp/remediation-1.json",
@@ -2778,6 +2784,10 @@ describe("atlas api e2e", () => {
       telemetryRemediationOwnership: {
         status: "acknowledged",
         actorUserEmail: "operator-admin@atlas.local"
+      },
+      telemetryRemediationFollowUp: {
+        status: "warning",
+        thresholdMinutes: 60
       }
     });
     expect(automationRunsResponse.status).toBe(200);

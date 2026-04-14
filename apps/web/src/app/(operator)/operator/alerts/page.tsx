@@ -14,6 +14,7 @@ import {
   createOperatorSnapshotItems,
   createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
+  createOperatorTelemetryRemediationFollowUpFacts,
   createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems,
   createOperatorTraceItems,
@@ -273,6 +274,12 @@ export default async function OperatorAlertsPage() {
               title="Operator owner and closure state"
               description={automation.telemetryRemediationOwnership.detail}
               items={createOperatorTelemetryRemediationOwnershipFacts(automation.telemetryRemediationOwnership)}
+            />
+            <DetailGrid
+              eyebrow="Follow-up discipline"
+              title="Acknowledgement follow-up window"
+              description={automation.telemetryRemediationFollowUp.detail}
+              items={createOperatorTelemetryRemediationFollowUpFacts(automation.telemetryRemediationFollowUp)}
             />
             <RecordListPanel
               eyebrow="Telemetry ownership"

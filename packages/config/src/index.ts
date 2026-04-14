@@ -396,6 +396,10 @@ export const observabilityRuntime = {
     process.env.OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD,
     2
   ),
+  automationRemediationFollowUpMinutes: readNumber(
+    process.env.OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES,
+    60
+  ),
   automationActorUserEmail: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL),
   automationReason: readOptionalText(process.env.OBSERVABILITY_AUTOMATION_REASON),
   automationDispatchAlerts: readBoolean(process.env.OBSERVABILITY_AUTOMATION_DISPATCH_ALERTS, false),
@@ -1079,6 +1083,12 @@ export function validateAtlasRuntimeConfiguration(
     env,
     "OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD",
     "OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD must be a positive number of runs."
+  );
+  requirePositiveRuntimeVariable(
+    issues,
+    env,
+    "OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES",
+    "OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES must be a positive number of minutes."
   );
   requirePositiveRuntimeVariable(
     issues,

@@ -17,6 +17,7 @@ import {
   type AtlasObservabilityAutomationStatusRecord,
   type AtlasObservabilityTelemetryRemediationAction,
   type AtlasObservabilityTelemetryRemediationActionRecord,
+  type AtlasObservabilityTelemetryRemediationFollowUpRecord,
   type AtlasObservabilityTelemetryRemediationOwnershipRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
@@ -481,16 +482,78 @@ function buildTelemetryRemediationOwnership(
   };
 }
 
+function buildTelemetryRemediationFollowUp(
+  remediation: AtlasObservabilityAutomationStatusRecord["telemetryRemediation"],
+  ownership: AtlasObservabilityTelemetryRemediationOwnershipRecord,
+  now: Date
+): AtlasObservabilityTelemetryRemediationFollowUpRecord {
+  const thresholdMinutes = Math.max(1, observabilityRuntime.automationRemediationFollowUpMinutes);
+
+  if (remediation.recommendedAction === "none") {
+    return {
+      status: "ready",
+      thresholdMinutes,
+      ageMinutes: null,
+      detail: "Telemetry remediation is currently healthy and no follow-up timer is active."
+    };
+  }
+
+  if (ownership.status !== "acknowledged" || !ownership.updatedAt) {
+    return {
+      status: "ready",
+      thresholdMinutes,
+      ageMinutes: null,
+      detail: "Telemetry remediation has not been acknowledged yet, so Atlas is waiting for an active owner before follow-up timing begins."
+    };
+  }
+
+  const ageMinutes = Math.max(0, Math.round((now.getTime() - new Date(ownership.updatedAt).getTime()) / 60000));
+
+  if (ageMinutes <= thresholdMinutes) {
+    return {
+      status: "ready",
+      thresholdMinutes,
+      ageMinutes,
+      detail: `Telemetry remediation was acknowledged ${formatAgeLabel(ageMinutes)} ago and remains inside the ${thresholdMinutes}-minute follow-up window.`
+    };
+  }
+
+  if (ageMinutes <= thresholdMinutes * 2) {
+    return {
+      status: "warning",
+      thresholdMinutes,
+      ageMinutes,
+      detail: `Telemetry remediation follow-up is ${formatAgeLabel(ageMinutes - thresholdMinutes)} overdue after ${formatAgeLabel(ageMinutes)} since acknowledgement.`
+    };
+  }
+
+  return {
+    status: "critical",
+    thresholdMinutes,
+    ageMinutes,
+    detail: `Telemetry remediation follow-up is materially overdue after ${formatAgeLabel(ageMinutes)} since acknowledgement.`
+  };
+}
+
 function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityAutomationStatusRecord) {
   const isActive = status.telemetryRemediation.recommendedAction !== "none";
   const isEscalated = status.telemetryRemediation.status === "escalated";
   const isAcknowledged = status.telemetryRemediationOwnership.status === "acknowledged";
-  const title = isEscalated
+  const hasOverdueFollowUp =
+    status.telemetryRemediationFollowUp.status === "warning" ||
+    status.telemetryRemediationFollowUp.status === "critical";
+  const title = hasOverdueFollowUp
+    ? status.telemetryRemediationFollowUp.status === "critical"
+      ? "Telemetry remediation follow-up is overdue"
+      : "Telemetry remediation follow-up needs review"
+    : isEscalated
     ? "Telemetry remediation requires escalation"
     : isActive
       ? "Telemetry remediation requires operator follow-up"
       : "Telemetry remediation resolved";
-  const description = isEscalated
+  const description = hasOverdueFollowUp
+    ? status.telemetryRemediationFollowUp.detail
+    : isEscalated
     ? isAcknowledged && status.telemetryRemediationOwnership.actorUserEmail
       ? `${status.telemetryRemediationOwnership.actorUserEmail} acknowledged the current telemetry remediation posture, but Atlas is keeping the escalation surfaced until ownership is restored or explicitly closed.`
       : `${status.telemetryRemediation.detail} Atlas is keeping this issue surfaced until ownership is restored or explicitly closed.`
@@ -508,10 +571,13 @@ function buildTelemetryRemediationNotificationRecord(status: AtlasObservabilityA
     dedupeKey: `observability-remediation:${appRuntime.appEnv}`,
     title,
     description,
-    status: isActive && (isEscalated || !isAcknowledged) ? "UNREAD" : "READ",
+    status: isActive && (isEscalated || !isAcknowledged || hasOverdueFollowUp) ? "UNREAD" : "READ",
     metadata: {
       remediationStatus: status.telemetryRemediation.status,
       ownershipStatus: status.telemetryRemediationOwnership.status,
+      followUpStatus: status.telemetryRemediationFollowUp.status,
+      followUpThresholdMinutes: status.telemetryRemediationFollowUp.thresholdMinutes,
+      followUpAgeMinutes: status.telemetryRemediationFollowUp.ageMinutes,
       recommendedAction: status.telemetryRemediation.recommendedAction,
       affectedOwnershipKeys: status.telemetryRemediation.affectedOwnershipKeys,
       latestAutomationReportPath: status.telemetryRemediation.latestReportPath,
@@ -716,6 +782,7 @@ function buildObservabilityAutomationAlertState(input: {
   telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
   latestAutomationRun: AtlasObservabilityAutomationRunRecord | null;
   telemetryRecoveryEscalation: AtlasObservabilityTelemetryRecoveryEscalationRecord;
+  telemetryRemediationFollowUp?: AtlasObservabilityTelemetryRemediationFollowUpRecord | null;
   activeIncidentTriggerCount: number;
   now?: string;
 }) {
@@ -728,6 +795,7 @@ function buildObservabilityAutomationAlertState(input: {
     telemetryOwnership: input.telemetryOwnership,
     latestAutomationRun: input.latestAutomationRun,
     telemetryRecoveryEscalation: input.telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp: input.telemetryRemediationFollowUp,
     generatedAt: input.now
   });
   const incidentReadiness = buildAtlasIncidentReadinessRecord({
@@ -1154,6 +1222,15 @@ export function getObservabilityAutomationStatus(
     triggerIncidents: observabilityRuntime.automationTriggerIncidents,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity
   });
+  const telemetryRemediationOwnership = buildTelemetryRemediationOwnership(
+    telemetryRemediation,
+    recentTelemetryRemediationActions
+  );
+  const telemetryRemediationFollowUp = buildTelemetryRemediationFollowUp(
+    telemetryRemediation,
+    telemetryRemediationOwnership,
+    now
+  );
 
   return {
     scheduleMode: observabilityRuntime.automationScheduleMode,
@@ -1162,10 +1239,8 @@ export function getObservabilityAutomationStatus(
     telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
     telemetryRecoveryEscalation,
     telemetryRemediation,
-    telemetryRemediationOwnership: buildTelemetryRemediationOwnership(
-      telemetryRemediation,
-      recentTelemetryRemediationActions
-    ),
+    telemetryRemediationOwnership,
+    telemetryRemediationFollowUp,
     actorUserEmail: observabilityRuntime.automationActorUserEmail,
     minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
@@ -1380,6 +1455,7 @@ export async function recordObservabilityAutomationFailure(
       remainingOwnershipCount: remainingKeys.length
     },
     telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp: currentStatus.telemetryRemediationFollowUp,
     activeIncidentTriggerCount,
     now: generatedAt
   });
@@ -1567,6 +1643,7 @@ export async function buildObservabilityAutomationPosture(
     telemetryOwnership,
     latestAutomationRun: automationStatus.recentRuns?.[0] ?? null,
     telemetryRecoveryEscalation: automationStatus.telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp: automationStatus.telemetryRemediationFollowUp,
     activeIncidentTriggerCount: activeIncidentTriggers.length,
     now: input.now
   });
@@ -1805,6 +1882,23 @@ export async function recoverObservabilityTelemetryOwnership(
     remainingOwnershipCount: remainingKeys.length
   } satisfies AtlasObservabilityAutomationRunRecord;
   const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation([afterRunRecord, ...currentStatus.recentRuns]);
+  const afterTelemetryRemediation = buildAtlasObservabilityTelemetryRemediation({
+    telemetryOwnership: afterOwnership,
+    latestAutomationRun: afterRunRecord,
+    telemetryRecoveryEscalation,
+    dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
+    triggerIncidents,
+    minimumSeverity
+  });
+  const afterTelemetryRemediationOwnership = buildTelemetryRemediationOwnership(
+    afterTelemetryRemediation,
+    currentStatus.recentTelemetryRemediationActions
+  );
+  const afterTelemetryRemediationFollowUp = buildTelemetryRemediationFollowUp(
+    afterTelemetryRemediation,
+    afterTelemetryRemediationOwnership,
+    new Date(generatedAt)
+  );
   const afterState = buildObservabilityAutomationAlertState({
     metrics: posture.metrics,
     overview: posture.overview,
@@ -1812,6 +1906,7 @@ export async function recoverObservabilityTelemetryOwnership(
     telemetryOwnership: afterOwnership,
     latestAutomationRun: afterRunRecord,
     telemetryRecoveryEscalation,
+    telemetryRemediationFollowUp: afterTelemetryRemediationFollowUp,
     activeIncidentTriggerCount: posture.activeIncidentTriggers.length,
     now: generatedAt
   });

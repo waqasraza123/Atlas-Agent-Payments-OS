@@ -110,6 +110,7 @@ export {
   type AtlasObservabilityTelemetryRemediationActionRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryRemediationOwnershipRecord,
+  type AtlasObservabilityTelemetryRemediationFollowUpRecord,
   type AtlasObservabilityTelemetryRemediationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
   type AtlasObservabilityTelemetryRecoveryStatus,

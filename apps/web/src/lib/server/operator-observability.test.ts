@@ -4,6 +4,7 @@ import {
   createOperatorAutomationRunItems,
   createOperatorTelemetryRemediationActionItems,
   createOperatorTelemetryRemediationFacts,
+  createOperatorTelemetryRemediationFollowUpFacts,
   createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems
 } from "./operator-observability";
@@ -97,6 +98,12 @@ describe("createOperatorAutomationFacts", () => {
         reportPath: "/tmp/remediation-1.json",
         detail: "Telemetry remediation is currently acknowledged by operator-admin@atlas.local."
       },
+      telemetryRemediationFollowUp: {
+        status: "warning",
+        thresholdMinutes: 60,
+        ageMinutes: 75,
+        detail: "Telemetry remediation follow-up is 15 minutes overdue after 75 minutes since acknowledgement."
+      },
       recentTelemetryRemediationActions: [],
       recentRuns: []
     });
@@ -158,6 +165,26 @@ describe("createOperatorTelemetryRemediationOwnershipFacts", () => {
     expect(items).toContainEqual({
       label: "Owner",
       value: "operator-admin@atlas.local"
+    });
+  });
+});
+
+describe("createOperatorTelemetryRemediationFollowUpFacts", () => {
+  it("surfaces remediation follow-up timing for operators", () => {
+    const items = createOperatorTelemetryRemediationFollowUpFacts({
+      status: "warning",
+      thresholdMinutes: 60,
+      ageMinutes: 75,
+      detail: "Telemetry remediation follow-up is 15 minutes overdue after 75 minutes since acknowledgement."
+    });
+
+    expect(items).toContainEqual({
+      label: "Follow-up posture",
+      value: "Approaching breach"
+    });
+    expect(items).toContainEqual({
+      label: "Acknowledgement age",
+      value: "75 minutes"
     });
   });
 });
