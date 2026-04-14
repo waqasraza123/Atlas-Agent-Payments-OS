@@ -142,7 +142,11 @@ export type AtlasObservabilityTelemetryRemediationRecord = {
   runbookPath: string;
 };
 
-export type AtlasObservabilityTelemetryRemediationAction = "ACKNOWLEDGED" | "RESOLVED";
+export type AtlasObservabilityTelemetryRemediationAction =
+  | "ACKNOWLEDGED"
+  | "REACKNOWLEDGED"
+  | "ESCALATED"
+  | "RESOLVED";
 
 export type AtlasObservabilityTelemetryRemediationActionRecord = {
   id: string;

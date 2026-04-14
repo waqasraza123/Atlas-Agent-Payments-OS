@@ -26,6 +26,7 @@ import {
   captureObservabilitySnapshotAction,
   dispatchObservabilityAlertsAction,
   executeRecommendedTelemetryRemediationAction,
+  reacknowledgeTelemetryRemediationAction,
   recoverTelemetryOwnershipAction,
   resolveTelemetryRemediationAction,
   runObservabilityAutomationAction
@@ -327,6 +328,24 @@ export default async function OperatorAlertsPage() {
                   minLength={12}
                   className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
                   placeholder="Acknowledge current telemetry remediation ownership before the next operator handoff."
+                  required
+                />
+              </WorkflowFormField>
+            </WorkflowFormPanel>
+            <WorkflowFormPanel
+              eyebrow="Escalation handoff"
+              title="Re-acknowledge escalated remediation"
+              description="Renew operator ownership after Atlas escalates an aged remediation handoff so the next escalation cycle has a named owner."
+              action={reacknowledgeTelemetryRemediationAction}
+              submitLabel="Re-acknowledge remediation"
+            >
+              <WorkflowFormField label="Reason" hint="Record the renewed owner and the next escalation step.">
+                <textarea
+                  name="reason"
+                  rows={4}
+                  minLength={12}
+                  className="w-full rounded-3xl border border-[var(--atlas-line)] bg-[rgba(7,10,18,0.72)] px-4 py-3 text-sm leading-6 text-[var(--atlas-ink)] outline-none transition focus:border-[var(--atlas-accent)]"
+                  placeholder="Renew telemetry remediation ownership after the escalation window was breached."
                   required
                 />
               </WorkflowFormField>

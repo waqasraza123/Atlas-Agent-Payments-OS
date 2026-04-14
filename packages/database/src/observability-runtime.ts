@@ -18,6 +18,7 @@ import {
   type AtlasObservabilityTelemetryRemediationAction,
   type AtlasObservabilityTelemetryRemediationActionRecord,
   type AtlasObservabilityTelemetryRemediationFollowUpRecord,
+  type AtlasObservabilityTelemetryRemediationRecord,
   type AtlasObservabilityTelemetryRemediationOwnershipRecord,
   type AtlasObservabilityTelemetryRecoveryEscalationRecord,
   type AtlasObservabilityTelemetryOwnershipPolicy,
@@ -398,7 +399,14 @@ function mapTelemetryRemediationActionRecord(
 ): AtlasObservabilityTelemetryRemediationActionRecord {
   return {
     id: reportPath,
-    action: payload.action === "RESOLVED" ? "RESOLVED" : "ACKNOWLEDGED",
+    action:
+      payload.action === "RESOLVED"
+        ? "RESOLVED"
+        : payload.action === "REACKNOWLEDGED"
+          ? "REACKNOWLEDGED"
+          : payload.action === "ESCALATED"
+            ? "ESCALATED"
+            : "ACKNOWLEDGED",
     generatedAt: payload.generatedAt ?? generatedAtFallback,
     actorUserEmail: payload.actorUserEmail,
     reason: payload.reason,
@@ -417,6 +425,13 @@ function mapTelemetryRemediationActionRecord(
   };
 }
 
+function findLatestTelemetryRemediationAction(
+  actions: AtlasObservabilityTelemetryRemediationActionRecord[],
+  allowedActions: AtlasObservabilityTelemetryRemediationAction[]
+) {
+  return actions.find((action) => allowedActions.includes(action.action)) ?? null;
+}
+
 function writeTelemetryRemediationReport(payload: AtlasObservabilityTelemetryRemediationReportPayload) {
   const reportPath = resolveRemediationReportPath();
 
@@ -432,9 +447,13 @@ function buildTelemetryRemediationOwnership(
   remediation: AtlasObservabilityAutomationStatusRecord["telemetryRemediation"],
   recentActions: AtlasObservabilityTelemetryRemediationActionRecord[]
 ): AtlasObservabilityTelemetryRemediationOwnershipRecord {
-  const latestAction = recentActions[0] ?? null;
+  const latestAcknowledgement = findLatestTelemetryRemediationAction(recentActions, [
+    "ACKNOWLEDGED",
+    "REACKNOWLEDGED"
+  ]);
+  const latestResolution = findLatestTelemetryRemediationAction(recentActions, ["RESOLVED"]);
 
-  if (!latestAction) {
+  if (!latestAcknowledgement && !latestResolution) {
     return {
       status: "unassigned",
       actorUserEmail: null,
@@ -448,29 +467,29 @@ function buildTelemetryRemediationOwnership(
     };
   }
 
-  if (remediation.status === "ready" && latestAction.action === "RESOLVED") {
+  if (remediation.status === "ready" && latestResolution) {
     return {
       status: "resolved",
-      actorUserEmail: latestAction.actorUserEmail,
-      reason: latestAction.reason,
-      updatedAt: latestAction.generatedAt,
-      reportPath: latestAction.reportPath,
-      detail: `Telemetry remediation was resolved by ${latestAction.actorUserEmail}.`
+      actorUserEmail: latestResolution.actorUserEmail,
+      reason: latestResolution.reason,
+      updatedAt: latestResolution.generatedAt,
+      reportPath: latestResolution.reportPath,
+      detail: `Telemetry remediation was resolved by ${latestResolution.actorUserEmail}.`
     };
   }
 
   if (
     remediation.status !== "ready" &&
-    latestAction.action === "ACKNOWLEDGED" &&
-    latestAction.affectedOwnershipKeys.some((key) => remediation.affectedOwnershipKeys.includes(key))
+    latestAcknowledgement &&
+    latestAcknowledgement.affectedOwnershipKeys.some((key) => remediation.affectedOwnershipKeys.includes(key))
   ) {
     return {
       status: "acknowledged",
-      actorUserEmail: latestAction.actorUserEmail,
-      reason: latestAction.reason,
-      updatedAt: latestAction.generatedAt,
-      reportPath: latestAction.reportPath,
-      detail: `Telemetry remediation is currently acknowledged by ${latestAction.actorUserEmail}.`
+      actorUserEmail: latestAcknowledgement.actorUserEmail,
+      reason: latestAcknowledgement.reason,
+      updatedAt: latestAcknowledgement.generatedAt,
+      reportPath: latestAcknowledgement.reportPath,
+      detail: `Telemetry remediation is currently acknowledged by ${latestAcknowledgement.actorUserEmail}.`
     };
   }
 
@@ -690,7 +709,11 @@ async function createTelemetryRemediationAuditEvent(
       eventType:
         action.action === "RESOLVED"
           ? "observability.telemetry_remediation_resolved"
-          : "observability.telemetry_remediation_acknowledged",
+          : action.action === "REACKNOWLEDGED"
+            ? "observability.telemetry_remediation_reacknowledged"
+            : action.action === "ESCALATED"
+              ? "observability.telemetry_remediation_escalated"
+              : "observability.telemetry_remediation_acknowledged",
       targetType: "ObservabilityRemediation",
       targetId: action.reportPath,
       requestId: null,
@@ -706,6 +729,94 @@ async function createTelemetryRemediationAuditEvent(
       } satisfies Prisma.InputJsonObject
     }
   });
+}
+
+async function persistTelemetryRemediationAction(
+  actor: AtlasActorContext,
+  input: {
+    action: AtlasObservabilityTelemetryRemediationAction;
+    reason: string;
+    remediationStatus: AtlasObservabilityTelemetryRemediationRecord["status"];
+    affectedOwnershipKeys: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+    latestAutomationReportPath: string | null;
+    resolvedIncidentTriggerCount?: number;
+    activeIncidentTriggerCount?: number;
+    generatedAt: string;
+  },
+  client: DatabaseClient
+) {
+  const reportPath = writeTelemetryRemediationReport({
+    version: 1,
+    action: input.action,
+    generatedAt: input.generatedAt,
+    actorUserEmail: actor.user.email,
+    reason: input.reason,
+    remediationStatus: input.remediationStatus,
+    affectedOwnershipKeys: input.affectedOwnershipKeys,
+    latestAutomationReportPath: input.latestAutomationReportPath,
+    resolvedIncidentTriggerCount: input.resolvedIncidentTriggerCount,
+    activeIncidentTriggerCount: input.activeIncidentTriggerCount
+  });
+
+  return mapTelemetryRemediationActionRecord(
+    {
+      version: 1,
+      action: input.action,
+      generatedAt: input.generatedAt,
+      actorUserEmail: actor.user.email,
+      reason: input.reason,
+      remediationStatus: input.remediationStatus,
+      affectedOwnershipKeys: input.affectedOwnershipKeys,
+      latestAutomationReportPath: input.latestAutomationReportPath,
+      resolvedIncidentTriggerCount: input.resolvedIncidentTriggerCount,
+      activeIncidentTriggerCount: input.activeIncidentTriggerCount
+    },
+    reportPath,
+    input.generatedAt
+  );
+}
+
+async function persistTelemetryRemediationEscalationIfNeeded(
+  actor: AtlasActorContext,
+  status: AtlasObservabilityAutomationStatusRecord,
+  generatedAt: string | undefined,
+  client: DatabaseClient
+) {
+  if (status.telemetryRemediationFollowUp.status !== "critical") {
+    return null;
+  }
+
+  const latestEscalation = findLatestTelemetryRemediationAction(status.recentTelemetryRemediationActions, ["ESCALATED"]);
+  const latestAcknowledgement = findLatestTelemetryRemediationAction(status.recentTelemetryRemediationActions, [
+    "ACKNOWLEDGED",
+    "REACKNOWLEDGED"
+  ]);
+
+  if (
+    latestEscalation &&
+    latestAcknowledgement &&
+    new Date(latestEscalation.generatedAt).getTime() >= new Date(latestAcknowledgement.generatedAt).getTime()
+  ) {
+    return null;
+  }
+
+  const action = await persistTelemetryRemediationAction(
+    actor,
+    {
+      action: "ESCALATED",
+      reason: `Atlas escalated telemetry remediation after the ${status.telemetryRemediationFollowUp.thresholdMinutes}-minute follow-up window was materially breached.`,
+      remediationStatus: status.telemetryRemediation.status,
+      affectedOwnershipKeys: status.telemetryRemediation.affectedOwnershipKeys,
+      latestAutomationReportPath: status.lastReportPath,
+      resolvedIncidentTriggerCount: 0,
+      activeIncidentTriggerCount: 0,
+      generatedAt: generatedAt ?? new Date().toISOString()
+    },
+    client
+  );
+  await createTelemetryRemediationAuditEvent(actor, action, client);
+
+  return action;
 }
 
 async function syncTelemetryRemediationIncidentPosture(
@@ -1345,11 +1456,14 @@ async function syncTelemetryRemediationNotificationFromCurrentStatus(
   },
   client: DatabaseClient
 ) {
-  await syncObservabilityTelemetryRemediationNotification(
-    actor,
-    getObservabilityAutomationStatus(actor, input),
-    client
-  );
+  let status = getObservabilityAutomationStatus(actor, input);
+  const escalationAction = await persistTelemetryRemediationEscalationIfNeeded(actor, status, input.now, client);
+
+  if (escalationAction) {
+    status = getObservabilityAutomationStatus(actor, input);
+  }
+
+  await syncObservabilityTelemetryRemediationNotification(actor, status, client);
 }
 
 export function writeObservabilityAutomationFailureReport(input: {
@@ -1618,6 +1732,29 @@ export async function recordObservabilityTelemetryRemediationAction(
     }
   }
 
+  if (input.action === "REACKNOWLEDGED") {
+    if (status.telemetryRemediation.recommendedAction === "none") {
+      throw new AtlasObservabilityOperationsError(
+        "Telemetry ownership is currently healthy, so there is no remediation posture to re-acknowledge.",
+        "bad_request"
+      );
+    }
+
+    if (status.telemetryRemediationOwnership.status !== "acknowledged") {
+      throw new AtlasObservabilityOperationsError(
+        "Telemetry remediation must be acknowledged before it can be re-acknowledged.",
+        "bad_request"
+      );
+    }
+
+    if (status.telemetryRemediationFollowUp.status === "ready") {
+      throw new AtlasObservabilityOperationsError(
+        "The current telemetry remediation posture does not yet require re-acknowledgement.",
+        "bad_request"
+      );
+    }
+  }
+
   if (input.action === "RESOLVED") {
     if (status.telemetryRemediation.recommendedAction !== "none") {
       throw new AtlasObservabilityOperationsError(
@@ -1648,35 +1785,21 @@ export async function recordObservabilityTelemetryRemediationAction(
           resolvedCount: 0,
           activeCount: 0
         };
-  const reportPath = writeTelemetryRemediationReport({
-    version: 1,
-    action: input.action,
-    generatedAt,
-    actorUserEmail: actor.user.email,
-    reason,
-    remediationStatus: status.telemetryRemediation.status,
-    affectedOwnershipKeys,
-    latestAutomationReportPath: status.lastReportPath,
-    resolvedIncidentTriggerCount: incidentTriggerSync.resolvedCount,
-    activeIncidentTriggerCount: incidentTriggerSync.activeCount
-  });
-  await applyObservabilityRetentionPolicy();
-  const action = mapTelemetryRemediationActionRecord(
+  const action = await persistTelemetryRemediationAction(
+    actor,
     {
-      version: 1,
       action: input.action,
-      generatedAt,
-      actorUserEmail: actor.user.email,
       reason,
       remediationStatus: status.telemetryRemediation.status,
       affectedOwnershipKeys,
       latestAutomationReportPath: status.lastReportPath,
       resolvedIncidentTriggerCount: incidentTriggerSync.resolvedCount,
-      activeIncidentTriggerCount: incidentTriggerSync.activeCount
+      activeIncidentTriggerCount: incidentTriggerSync.activeCount,
+      generatedAt
     },
-    reportPath,
-    generatedAt
+    client
   );
+  await applyObservabilityRetentionPolicy();
   await syncTelemetryRemediationNotificationFromCurrentStatus(
     actor,
     {

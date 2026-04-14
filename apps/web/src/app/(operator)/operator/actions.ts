@@ -383,6 +383,25 @@ export async function acknowledgeTelemetryRemediationAction(formData: FormData) 
   }
 }
 
+export async function reacknowledgeTelemetryRemediationAction(formData: FormData) {
+  const actor = await requireOperatorActor();
+
+  try {
+    await recordObservabilityTelemetryRemediationAction(actor, {
+      action: "REACKNOWLEDGED",
+      reason: toTextValue(formData.get("reason"))
+    });
+    revalidatePath("/operator/alerts");
+    redirectWithFeedback(
+      "/operator/alerts",
+      "Telemetry remediation re-acknowledged",
+      "Atlas recorded renewed operator ownership for the aged telemetry remediation posture."
+    );
+  } catch (error) {
+    redirectWithFeedback("/operator/alerts", "Telemetry remediation re-acknowledgement failed", normalizeActionError(error), "error");
+  }
+}
+
 export async function resolveTelemetryRemediationAction(formData: FormData) {
   const actor = await requireOperatorActor();
 

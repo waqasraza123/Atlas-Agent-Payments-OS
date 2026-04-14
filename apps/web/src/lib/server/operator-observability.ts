@@ -437,14 +437,26 @@ export function createOperatorTelemetryRemediationActionItems(
 ): RecordListPanelItem[] {
   return items.map((item) => ({
     id: item.id,
-    title: `${item.action === "ACKNOWLEDGED" ? "Acknowledged" : "Resolved"} telemetry remediation`,
+    title:
+      item.action === "RESOLVED"
+        ? "Resolved telemetry remediation"
+        : item.action === "REACKNOWLEDGED"
+          ? "Re-acknowledged telemetry remediation"
+          : item.action === "ESCALATED"
+            ? "Escalated telemetry remediation"
+            : "Acknowledged telemetry remediation",
     description: item.reason,
     detail:
       item.action === "RESOLVED"
         ? `${item.remediationStatus} posture · resolved ${item.resolvedIncidentTriggerCount} incident triggers · ${item.activeIncidentTriggerCount} active remain · ${item.reportPath}`
         : `${item.remediationStatus} posture · ${item.affectedOwnershipKeys.length} ownership signals · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
-    statusTone: item.action === "RESOLVED" ? "success" : "warning"
+    statusTone:
+      item.action === "RESOLVED"
+        ? "success"
+        : item.action === "ESCALATED"
+          ? "critical"
+          : "warning"
   }));
 }
 

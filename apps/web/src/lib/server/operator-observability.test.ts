@@ -240,6 +240,48 @@ describe("createOperatorTelemetryRemediationActionItems", () => {
       })
     ]);
   });
+
+  it("renders escalation and re-acknowledgement history distinctly", () => {
+    const items = createOperatorTelemetryRemediationActionItems([
+      {
+        id: "/tmp/remediation-3.json",
+        action: "ESCALATED",
+        generatedAt: "2026-04-13T00:20:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Atlas escalated telemetry remediation after the 60-minute follow-up window was materially breached.",
+        remediationStatus: "escalated",
+        affectedOwnershipKeys: ["automation-cadence"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 0,
+        activeIncidentTriggerCount: 0,
+        reportPath: "/tmp/remediation-3.json"
+      },
+      {
+        id: "/tmp/remediation-4.json",
+        action: "REACKNOWLEDGED",
+        generatedAt: "2026-04-13T00:25:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Renewing telemetry remediation ownership after the escalation handoff aged out.",
+        remediationStatus: "action_required",
+        affectedOwnershipKeys: ["automation-cadence"],
+        latestAutomationReportPath: "/tmp/observability-automation.json",
+        resolvedIncidentTriggerCount: 0,
+        activeIncidentTriggerCount: 0,
+        reportPath: "/tmp/remediation-4.json"
+      }
+    ]);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        title: "Escalated telemetry remediation",
+        statusTone: "critical"
+      }),
+      expect.objectContaining({
+        title: "Re-acknowledged telemetry remediation",
+        statusTone: "warning"
+      })
+    ]);
+  });
 });
 
 describe("createOperatorAutomationRunItems", () => {
