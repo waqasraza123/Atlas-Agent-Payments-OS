@@ -1,6 +1,6 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import {
-  getSellerAnalytics,
+  getSellerAnalyticsForActor,
   getSellerProfileForActor,
   listSellerRequestsForActor,
   listSellerTeamMembersForActor,
@@ -30,7 +30,7 @@ export class SellersService {
 
   async analytics(actor: AtlasActorContext) {
     return {
-      item: await getSellerAnalytics(actor.organization.id)
+      item: await getSellerAnalyticsForActor(actor)
     };
   }
 

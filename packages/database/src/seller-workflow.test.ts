@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getSellerAnalyticsForActor,
   getSellerProfileForActor,
+  getSellerServiceForActor,
   listSellerRequestsForActor,
   listSellerServicesForActor,
   listSellerTeamMembersForActor
@@ -162,6 +163,53 @@ describe("seller workflow actor-aware reads", () => {
           completedRequestCount: 0,
           failedRequestCount: 0,
           unmatchedRequestCount: 0,
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session seller service detail inspection", async () => {
+    const actor = createSupportSellerActor();
+    const client = {
+      service: {
+        findFirst: vi.fn(async () => ({
+          id: "service-1",
+          organizationId: actor.organization.id,
+          key: "service-key",
+          name: "Service 1",
+          description: "Description",
+          category: "api-access",
+          status: "PUBLISHED",
+          visibility: "PRIVATE",
+          pricingModel: "FIXED",
+          priceMinor: 2400,
+          currency: "USD"
+        }))
+      },
+      spendRequest: {
+        count: vi.fn(async () => 3)
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getSellerServiceForActor(actor, "service-1", client as never);
+
+    expect(item).toMatchObject({
+      id: "service-1",
+      linkedRequestCount: 3
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.seller_service_inspected",
+        targetType: "seller_service",
+        targetId: "service-1",
+        payload: expect.objectContaining({
+          status: "PUBLISHED",
+          linkedRequestCount: 3,
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

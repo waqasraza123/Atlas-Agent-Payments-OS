@@ -15,6 +15,7 @@ import {
 
 const databaseMock = vi.hoisted(() => ({
   listBuyerAgents: vi.fn(async () => []),
+  listBuyerAgentsForActor: vi.fn(async () => []),
   createBuyerAgent: vi.fn(async (_actor: unknown, input: Record<string, unknown>) => ({
     id: "agent-created",
     name: String(input.name ?? "Created Agent"),
@@ -36,6 +37,7 @@ const databaseMock = vi.hoisted(() => ({
     requestCount: 1
   })),
   listBuyerPolicies: vi.fn(async () => []),
+  listBuyerPoliciesForActor: vi.fn(async () => []),
   createBuyerPolicy: vi.fn(async () => ({
     id: "policy-created",
     name: "Created Policy",
@@ -71,6 +73,7 @@ const databaseMock = vi.hoisted(() => ({
     requestCount: 1
   })),
   listBuyerRequests: vi.fn(async () => []),
+  listBuyerRequestsForActor: vi.fn(async () => []),
   createBuyerRequest: vi.fn(async () => ({
     id: "request-created",
     agentId: "agent-1",
@@ -90,6 +93,7 @@ const databaseMock = vi.hoisted(() => ({
     createdAt: new Date().toISOString()
   })),
   listBuyerApprovals: vi.fn(async () => []),
+  listBuyerApprovalsForActor: vi.fn(async () => []),
   decideBuyerApproval: vi.fn(async () => ({
     id: "approval-1",
     requestId: "request-created",
@@ -108,6 +112,15 @@ const databaseMock = vi.hoisted(() => ({
     organizationName: "Atlas Demo Seller",
     serviceCount: 3,
     publishedServiceCount: 2,
+      requestCount: 4,
+      activeBuyerCount: 2
+  })),
+  getSellerProfileForActor: vi.fn(async () => ({
+    organizationId: "org-seller",
+    organizationSlug: "atlas-demo-seller",
+    organizationName: "Atlas Demo Seller",
+    serviceCount: 3,
+    publishedServiceCount: 2,
     requestCount: 4,
     activeBuyerCount: 2
   })),
@@ -120,7 +133,35 @@ const databaseMock = vi.hoisted(() => ({
       role: "ADMIN"
     }
   ]),
+  listSellerTeamMembersForActor: vi.fn(async () => [
+    {
+      membershipId: "membership-seller",
+      userId: "user-seller",
+      userEmail: "seller@atlas.local",
+      userName: "Seller Admin",
+      role: "ADMIN"
+    }
+  ]),
   listSellerRequests: vi.fn(async () => [
+    {
+      id: "seller-request-1",
+      buyerOrganizationId: "buyer-1",
+      buyerOrganizationName: "Atlas Demo Buyer",
+      title: "Premium dataset unlock",
+      purpose: "Unlock a premium dataset.",
+      amountMinor: 8900,
+      currency: "USD",
+      serviceCategory: "digital-service",
+      serviceKey: "global-dataset-access",
+      matchedServiceId: "service-1",
+      matchedServiceName: "Global Dataset Access",
+      status: "SUBMITTED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fulfillment: null
+    }
+  ]),
+  listSellerRequestsForActor: vi.fn(async () => [
     {
       id: "seller-request-1",
       buyerOrganizationId: "buyer-1",
@@ -164,6 +205,31 @@ const databaseMock = vi.hoisted(() => ({
       }
     ]
   })),
+  getSellerAnalyticsForActor: vi.fn(async () => ({
+    pendingFulfillmentCount: 2,
+    completedRequestCount: 3,
+    failedRequestCount: 1,
+    unmatchedRequestCount: 1,
+    topServices: [
+      {
+        serviceId: "service-1",
+        serviceKey: "global-dataset-access",
+        serviceName: "Global Dataset Access",
+        requestCount: 2,
+        completedRequestCount: 1,
+        failedRequestCount: 0
+      }
+    ],
+    topBuyers: [
+      {
+        buyerOrganizationId: "buyer-1",
+        buyerOrganizationName: "Atlas Demo Buyer",
+        requestCount: 3,
+        completedRequestCount: 1,
+        failedRequestCount: 1
+      }
+    ]
+  })),
   listSellerServices: vi.fn(async () => [
     {
       id: "service-1",
@@ -180,7 +246,37 @@ const databaseMock = vi.hoisted(() => ({
       linkedRequestCount: 2
     }
   ]),
+  listSellerServicesForActor: vi.fn(async () => [
+    {
+      id: "service-1",
+      organizationId: "org-seller",
+      key: "global-dataset-access",
+      name: "Global Dataset Access",
+      description: "Premium dataset service.",
+      category: "digital-service",
+      status: "PUBLISHED",
+      visibility: "TRUSTED_BUYERS",
+      pricingModel: "FIXED",
+      priceMinor: 8900,
+      currency: "USD",
+      linkedRequestCount: 2
+    }
+  ]),
   getSellerService: vi.fn(async () => ({
+    id: "service-1",
+    organizationId: "org-seller",
+    key: "global-dataset-access",
+    name: "Global Dataset Access",
+    description: "Premium dataset service.",
+    category: "digital-service",
+    status: "PUBLISHED",
+    visibility: "TRUSTED_BUYERS",
+    pricingModel: "FIXED",
+    priceMinor: 8900,
+    currency: "USD",
+    linkedRequestCount: 2
+  })),
+  getSellerServiceForActor: vi.fn(async () => ({
     id: "service-1",
     organizationId: "org-seller",
     key: "global-dataset-access",
@@ -1319,22 +1415,32 @@ vi.mock("@atlas/database", async () => {
   return {
     ...actual,
     listBuyerAgents: databaseMock.listBuyerAgents,
+    listBuyerAgentsForActor: databaseMock.listBuyerAgentsForActor,
     createBuyerAgent: databaseMock.createBuyerAgent,
     updateBuyerAgent: databaseMock.updateBuyerAgent,
     listBuyerPolicies: databaseMock.listBuyerPolicies,
+    listBuyerPoliciesForActor: databaseMock.listBuyerPoliciesForActor,
     createBuyerPolicy: databaseMock.createBuyerPolicy,
     updateBuyerPolicy: databaseMock.updateBuyerPolicy,
     listBuyerRequests: databaseMock.listBuyerRequests,
+    listBuyerRequestsForActor: databaseMock.listBuyerRequestsForActor,
     createBuyerRequest: databaseMock.createBuyerRequest,
     listBuyerApprovals: databaseMock.listBuyerApprovals,
+    listBuyerApprovalsForActor: databaseMock.listBuyerApprovalsForActor,
     decideBuyerApproval: databaseMock.decideBuyerApproval,
     getBuyerApprovalRoleGuard: databaseMock.getBuyerApprovalRoleGuard,
     getSellerProfile: databaseMock.getSellerProfile,
+    getSellerProfileForActor: databaseMock.getSellerProfileForActor,
     listSellerTeamMembers: databaseMock.listSellerTeamMembers,
+    listSellerTeamMembersForActor: databaseMock.listSellerTeamMembersForActor,
     listSellerRequests: databaseMock.listSellerRequests,
+    listSellerRequestsForActor: databaseMock.listSellerRequestsForActor,
     getSellerAnalytics: databaseMock.getSellerAnalytics,
+    getSellerAnalyticsForActor: databaseMock.getSellerAnalyticsForActor,
     listSellerServices: databaseMock.listSellerServices,
+    listSellerServicesForActor: databaseMock.listSellerServicesForActor,
     getSellerService: databaseMock.getSellerService,
+    getSellerServiceForActor: databaseMock.getSellerServiceForActor,
     createSellerService: databaseMock.createSellerService,
     updateSellerService: databaseMock.updateSellerService,
     recordSellerRequestFulfillment: databaseMock.recordSellerRequestFulfillment,
@@ -2726,7 +2832,7 @@ describe("atlas api e2e", () => {
       },
       actor: createActor("BUYER", "ADMIN")
     });
-    databaseMock.listBuyerAgents.mockResolvedValueOnce([
+    databaseMock.listBuyerAgentsForActor.mockResolvedValueOnce([
       {
         id: "agent-1",
         name: "Procurement Agent",
@@ -2877,6 +2983,7 @@ describe("atlas api e2e", () => {
       organizationSlug: "atlas-demo-seller",
       publishedServiceCount: 2
     });
+    expect(databaseMock.getSellerProfileForActor).toHaveBeenCalledWith(expect.objectContaining({ workspace: "SELLER" }));
     expect(teamResponse.status).toBe(200);
     expect(teamResponse.body.items).toEqual([
       expect.objectContaining({
@@ -2884,6 +2991,7 @@ describe("atlas api e2e", () => {
         role: "ADMIN"
       })
     ]);
+    expect(databaseMock.listSellerTeamMembersForActor).toHaveBeenCalledWith(expect.objectContaining({ workspace: "SELLER" }));
   });
 
   it("lists and creates seller services through protected seller routes", async () => {
@@ -2900,7 +3008,10 @@ describe("atlas api e2e", () => {
       actor: createActor("SELLER", "ADMIN")
     });
 
-    const listResponse = await request(app.getHttpServer()).get("/services").set("x-atlas-local-session", "local-token");
+    const [listResponse, detailResponse] = await Promise.all([
+      request(app.getHttpServer()).get("/services").set("x-atlas-local-session", "local-token"),
+      request(app.getHttpServer()).get("/services/service-1").set("x-atlas-local-session", "local-token")
+    ]);
     const createResponse = await request(app.getHttpServer())
       .post("/services")
       .set("x-atlas-local-session", "local-token")
@@ -2923,6 +3034,16 @@ describe("atlas api e2e", () => {
         key: "global-dataset-access"
       })
     ]);
+    expect(databaseMock.listSellerServicesForActor).toHaveBeenCalledWith(expect.objectContaining({ workspace: "SELLER" }));
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.item).toMatchObject({
+      id: "service-1",
+      key: "global-dataset-access"
+    });
+    expect(databaseMock.getSellerServiceForActor).toHaveBeenCalledWith(
+      expect.objectContaining({ workspace: "SELLER" }),
+      "service-1"
+    );
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.item).toMatchObject({
       id: "service-created",
@@ -2955,6 +3076,7 @@ describe("atlas api e2e", () => {
         matchedServiceName: "Global Dataset Access"
       })
     ]);
+    expect(databaseMock.listSellerRequestsForActor).toHaveBeenCalledWith(expect.objectContaining({ workspace: "SELLER" }));
   });
 
   it("serves seller analytics and fulfillment actions through protected seller routes", async () => {
@@ -2991,6 +3113,7 @@ describe("atlas api e2e", () => {
         })
       ]
     });
+    expect(databaseMock.getSellerAnalyticsForActor).toHaveBeenCalledWith(expect.objectContaining({ workspace: "SELLER" }));
     expect(fulfillmentResponse.status).toBe(201);
     expect(fulfillmentResponse.body.item).toMatchObject({
       id: "seller-request-1",

@@ -694,6 +694,29 @@ export async function getSellerService(
   });
 }
 
+export async function getSellerServiceForActor(
+  actor: AtlasActorContext,
+  serviceId: string,
+  client: DatabaseClient = prisma
+) {
+  assertSellerReadActor(actor);
+  const item = await getSellerService(actor.organization.id, serviceId, client);
+
+  if (item && shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_service_inspected",
+      targetType: "seller_service",
+      targetId: item.id,
+      payload: {
+        status: item.status,
+        linkedRequestCount: item.linkedRequestCount
+      }
+    });
+  }
+
+  return item;
+}
+
 export async function listSellerRequests(
   organizationId: string,
   client: DatabaseClient = prisma

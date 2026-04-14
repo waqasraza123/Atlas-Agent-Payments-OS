@@ -2,7 +2,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import {
   AtlasSellerWorkflowError,
   createSellerService,
-  getSellerService,
+  getSellerServiceForActor,
   listSellerServicesForActor,
   updateSellerService
 } from "@atlas/database";
@@ -24,7 +24,7 @@ export class ServicesService {
 
   async get(actor: AtlasActorContext, serviceId: string) {
     try {
-      const item = await getSellerService(actor.organization.id, serviceId);
+      const item = await getSellerServiceForActor(actor, serviceId);
 
       if (!item) {
         throw new AtlasSellerWorkflowError("The selected seller service is not available in this organization.", "not_found");
