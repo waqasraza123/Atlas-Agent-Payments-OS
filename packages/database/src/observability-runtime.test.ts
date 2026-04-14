@@ -554,6 +554,131 @@ describe("observability runtime", () => {
     expect(result.remainingKeys).toEqual([]);
   });
 
+  it("records failure escalation artifacts when recover-mode automation fails before recovery posture is computed", async () => {
+    const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-failure-"));
+    const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-failure-"));
+    vi.stubEnv("OBSERVABILITY_RUNTIME_SNAPSHOT_DIR", runtimeSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationSandbox);
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_SCHEDULE_MODE", "interval");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES", "20");
+    vi.stubEnv("OBSERVABILITY_WORKER_STALE_AFTER_MINUTES", "10");
+    writeFileSync(
+      join(runtimeSandbox, "worker.json"),
+      `${JSON.stringify(
+        {
+          service: "worker",
+          startedAt: "2026-04-13T00:00:00.000Z",
+          recordedAt: "2026-04-13T00:11:00.000Z",
+          uptimeSeconds: 300,
+          revision: "rev-123",
+          deploymentSlot: "blue",
+          queueCount: 2,
+          readyQueueCount: 2,
+          processedCount: 8,
+          failedCount: 0,
+          traceCount: 8,
+          traceCoverageRate: 1,
+          queues: [],
+          recentTraces: []
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const client = {
+      membership: {
+        findFirst: vi.fn(async () => ({
+          id: "membership-operator",
+          role: "ADMIN",
+          user: {
+            id: "user-operator",
+            email: "operator-admin@atlas.local",
+            name: "Operator Admin"
+          },
+          organization: {
+            id: "org-operator",
+            slug: "atlas-demo-operator",
+            name: "Atlas Demo Operator",
+            kind: "OPERATOR"
+          }
+        }))
+      }
+    } as const;
+
+    const { recordObservabilityAutomationFailure } = await import("./observability-runtime");
+    const result = await recordObservabilityAutomationFailure(
+      {
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Recover degraded telemetry ownership during the current release slot.",
+        dispatchAlerts: true,
+        triggerIncidents: true,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "failed",
+        trigger: "scheduled",
+        generatedAt: "2026-04-13T00:12:00.000Z",
+        errorMessage: "Published API runtime snapshot is missing."
+      },
+      client as never
+    );
+
+    expect(result.reportPath).toContain("observability-automation");
+    expect(result.snapshotId).toBe("snapshot-automation-1");
+    expect(result.dispatchId).toBe("dispatch-automation-1");
+    expect(result.activeIncidentCount).toBe(1);
+    expect(observabilityOperationsMock.persistObservabilitySnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alerts: expect.arrayContaining([
+          expect.objectContaining({
+            id: "telemetry-recovery-failed"
+          }),
+          expect.objectContaining({
+            id: "telemetry-ownership-api-runtime"
+          })
+        ]),
+        metrics: expect.objectContaining({
+          lastReadinessStatus: "unknown",
+          totalRequests: 0
+        })
+      }),
+      client
+    );
+    expect(observabilityOperationsMock.syncObservabilityIncidentTriggers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alerts: expect.arrayContaining([
+          expect.objectContaining({
+            id: "telemetry-recovery-failed"
+          })
+        ])
+      }),
+      client
+    );
+    expect(observabilityOperationsMock.dispatchObservabilityAlerts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alerts: expect.arrayContaining([
+          expect.objectContaining({
+            id: "telemetry-recovery-failed"
+          })
+        ])
+      }),
+      client
+    );
+    expect(
+      JSON.parse(readFileSync(result.reportPath, "utf8")) as {
+        telemetryRecovery?: {
+          status?: string;
+          remainingKeys?: string[];
+        };
+      }
+    ).toMatchObject({
+      telemetryRecovery: {
+        status: "failed",
+        remainingKeys: ["api-runtime", "automation-cadence"]
+      }
+    });
+  });
+
   it("lists automation history and current scheduler posture from stored reports", async () => {
     const runtimeSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-runtime-status-"));
     const automationSandbox = mkdtempSync(join(tmpdir(), "atlas-observability-automation-history-"));

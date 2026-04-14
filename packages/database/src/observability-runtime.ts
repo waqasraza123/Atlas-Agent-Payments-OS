@@ -503,6 +503,14 @@ type AtlasPerformedObservabilityAutomation = {
   workerTelemetry: AtlasWorkerTelemetryRecord;
 };
 
+type AtlasRecordedObservabilityAutomationFailure = {
+  reportPath: string;
+  snapshotId: string | null;
+  dispatchId: string | null;
+  activeIncidentCount: number;
+  escalationErrorMessage: string | null;
+};
+
 type AtlasObservabilityAutomationPolicyExecutionResult = {
   reportPath: string;
   telemetryPolicy: AtlasObservabilityTelemetryOwnershipPolicy;
@@ -528,6 +536,11 @@ function createObservabilityAutomationReportPayload(input: {
   afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  alertCount?: number | null;
+  workerTelemetryStatus?: AtlasWorkerTelemetryRecord["status"] | null;
+  snapshotId?: string | null;
+  activeIncidentCount?: number | null;
+  dispatchId?: string | null;
   automation?: AtlasPerformedObservabilityAutomation | null;
   errorMessage?: string | null;
 }): AtlasObservabilityAutomationReportPayload {
@@ -551,12 +564,73 @@ function createObservabilityAutomationReportPayload(input: {
       recoveredKeys: input.recoveredKeys ?? [],
       remainingKeys: input.remainingKeys ?? []
     },
-    alertCount: input.automation?.alertCount ?? null,
-    workerTelemetry: input.automation?.workerTelemetry ?? null,
-    snapshot: input.automation?.snapshot ?? null,
-    incidentTriggers: input.automation?.incidentTriggers ?? null,
-    dispatch: input.automation?.dispatch ?? null,
+    alertCount: input.alertCount ?? input.automation?.alertCount ?? null,
+    workerTelemetry:
+      input.workerTelemetryStatus === undefined
+        ? (input.automation?.workerTelemetry ?? null)
+        : input.workerTelemetryStatus === null
+          ? null
+        : {
+            status: input.workerTelemetryStatus
+          },
+    snapshot:
+      input.snapshotId === undefined
+        ? (input.automation?.snapshot ?? null)
+        : {
+            id: input.snapshotId
+          },
+    incidentTriggers:
+      input.activeIncidentCount === undefined
+        ? (input.automation?.incidentTriggers ?? null)
+        : {
+            activeCount: input.activeIncidentCount
+          },
+    dispatch:
+      input.dispatchId === undefined
+        ? (input.automation?.dispatch ?? null)
+        : {
+            id: input.dispatchId
+          },
     errorMessage: input.errorMessage ?? null
+  };
+}
+
+function createEmptyOperatorOverview(): Awaited<ReturnType<typeof getOperatorOverview>> {
+  return {
+    openCaseCount: 0,
+    criticalCaseCount: 0,
+    actionRequiredCount: 0,
+    unreadNotificationCount: 0,
+    delayedCaseCount: 0,
+    failedCaseCount: 0,
+    recentCases: [],
+    recentNotifications: [],
+    recentAuditEvents: []
+  };
+}
+
+function createFallbackApiRuntimeTelemetryRecord(generatedAt: string): AtlasApiRuntimeTelemetryRecord {
+  return {
+    service: "api",
+    startedAt: generatedAt,
+    uptimeSeconds: 0,
+    totalRequests: 0,
+    successCount: 0,
+    errorCount: 0,
+    tracedRequestCount: 0,
+    traceCoverageRate: 1,
+    averageDurationMs: 0,
+    maxDurationMs: 0,
+    inFlightRequests: 0,
+    lastReadinessStatus: "unknown",
+    lastReadinessAt: null,
+    routeMetrics: [],
+    recentTraces: [],
+    configurationStatus: "valid",
+    verificationCommand: "pnpm verify:release",
+    revision: "unknown",
+    deploymentSlot: appRuntime.appEnv,
+    recordedAt: generatedAt
   };
 }
 
@@ -620,6 +694,93 @@ async function executeObservabilityAutomationArtifacts(
     snapshot,
     incidentTriggers,
     dispatch
+  };
+}
+
+async function executeObservabilityAutomationArtifactsBestEffort(
+  input: {
+    actor: AtlasActorContext;
+    reason: string;
+    minimumSeverity: AtlasObservabilityAlertSeverity;
+    dispatchAlerts: boolean;
+    triggerIncidents: boolean;
+    trace: ReturnType<typeof createOwnedExecutionTraceContext>;
+    metrics: AtlasApiRuntimeTelemetryRecord;
+    workerTelemetry: AtlasWorkerTelemetryRecord;
+    alerts: AtlasObservabilityAlertRecord[];
+    incidentReadiness: AtlasIncidentReadinessRecord;
+  },
+  client: DatabaseClient
+) {
+  let snapshot: Awaited<ReturnType<typeof persistObservabilitySnapshot>> | null = null;
+  let incidentTriggers: Awaited<ReturnType<typeof syncObservabilityIncidentTriggers>> | null = null;
+  let dispatch: Awaited<ReturnType<typeof dispatchObservabilityAlerts>> | null = null;
+  const errors: string[] = [];
+
+  try {
+    snapshot = await persistObservabilitySnapshot(
+      {
+        actor: input.actor,
+        metrics: input.metrics,
+        alerts: input.alerts,
+        incidentReadiness: input.incidentReadiness,
+        reason: input.reason
+      },
+      client
+    );
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+
+  if (input.triggerIncidents) {
+    try {
+      incidentTriggers = await syncObservabilityIncidentTriggers(
+        {
+          actor: input.actor,
+          minimumSeverity: observabilityRuntime.incidentMinimumSeverity,
+          reason: input.reason,
+          alerts: input.alerts,
+          metrics: input.metrics,
+          incidentReadiness: input.incidentReadiness,
+          workerTelemetry: input.workerTelemetry
+        },
+        client
+      );
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (input.dispatchAlerts) {
+    try {
+      dispatch = await dispatchObservabilityAlerts(
+        {
+          actor: input.actor,
+          minimumSeverity: input.minimumSeverity,
+          reason: input.reason,
+          alerts: input.alerts,
+          metrics: input.metrics,
+          incidentReadiness: input.incidentReadiness,
+          trace: input.trace
+        },
+        client
+      );
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  try {
+    await applyObservabilityRetentionPolicy(client);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
+
+  return {
+    snapshot,
+    incidentTriggers,
+    dispatch,
+    escalationErrorMessage: errors.length > 0 ? errors.join(" | ") : null
   };
 }
 
@@ -719,6 +880,15 @@ export function writeObservabilityAutomationFailureReport(input: {
   triggerIncidents: boolean;
   telemetryPolicy?: AtlasObservabilityTelemetryOwnershipPolicy;
   telemetryRecoveryStatus?: AtlasObservabilityTelemetryRecoveryStatus;
+  beforeOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+  afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+  recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  alertCount?: number | null;
+  workerTelemetryStatus?: AtlasWorkerTelemetryRecord["status"] | null;
+  snapshotId?: string | null;
+  activeIncidentCount?: number | null;
+  dispatchId?: string | null;
   generatedAt?: string;
   errorMessage: string;
 }) {
@@ -734,6 +904,15 @@ export function writeObservabilityAutomationFailureReport(input: {
       triggerIncidents: input.triggerIncidents,
       telemetryPolicy: input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy,
       telemetryRecoveryStatus: input.telemetryRecoveryStatus ?? "not_requested",
+      beforeOwnership: input.beforeOwnership,
+      afterOwnership: input.afterOwnership,
+      recoveredKeys: input.recoveredKeys,
+      remainingKeys: input.remainingKeys,
+      alertCount: input.alertCount,
+      workerTelemetryStatus: input.workerTelemetryStatus,
+      snapshotId: input.snapshotId,
+      activeIncidentCount: input.activeIncidentCount,
+      dispatchId: input.dispatchId,
       errorMessage: input.errorMessage
     })
   );
@@ -749,11 +928,172 @@ export function writeObservabilityAutomationFailureReport(input: {
       triggerIncidents: input.triggerIncidents,
       telemetryPolicy: input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy,
       telemetryRecoveryStatus: input.telemetryRecoveryStatus ?? "not_requested",
+      beforeOwnership: input.beforeOwnership,
+      afterOwnership: input.afterOwnership,
+      recoveredKeys: input.recoveredKeys,
+      remainingKeys: input.remainingKeys,
+      alertCount: input.alertCount,
+      workerTelemetryStatus: input.workerTelemetryStatus,
+      snapshotId: input.snapshotId,
+      activeIncidentCount: input.activeIncidentCount,
+      dispatchId: input.dispatchId,
       errorMessage: input.errorMessage
     }),
     reportPath,
     generatedAt
   );
+}
+
+export async function recordObservabilityAutomationFailure(
+  input: {
+    actorUserEmail: string;
+    reason: string;
+    minimumSeverity?: AtlasObservabilityAlertSeverity;
+    dispatchAlerts?: boolean;
+    triggerIncidents?: boolean;
+    trigger?: AtlasObservabilityAutomationTrigger;
+    telemetryPolicy?: AtlasObservabilityTelemetryOwnershipPolicy;
+    telemetryRecoveryStatus?: AtlasObservabilityTelemetryRecoveryStatus;
+    generatedAt?: string;
+    trace?: ReturnType<typeof createOwnedExecutionTraceContext>;
+    errorMessage: string;
+  },
+  client: DatabaseClient = prisma
+): Promise<AtlasRecordedObservabilityAutomationFailure> {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const minimumSeverity =
+    input.minimumSeverity === "critical" || input.minimumSeverity === "warning" || input.minimumSeverity === "info"
+      ? input.minimumSeverity
+      : observabilityRuntime.automationDefaultMinimumSeverity;
+  const dispatchAlerts = Boolean(input.dispatchAlerts);
+  const triggerIncidents = input.triggerIncidents ?? observabilityRuntime.automationTriggerIncidents;
+  const telemetryPolicy = normalizeTelemetryOwnershipPolicy(
+    input.telemetryPolicy ?? observabilityRuntime.automationTelemetryOwnershipPolicy
+  );
+  const telemetryRecoveryStatus = normalizeTelemetryRecoveryStatus(
+    input.telemetryRecoveryStatus ?? (telemetryPolicy === "recover" ? "failed" : "not_requested")
+  );
+
+  const actor = await resolveAutomationActor(input.actorUserEmail, client);
+  const currentStatus = getObservabilityAutomationStatus(actor, {
+    limit: 12,
+    now: generatedAt
+  });
+  const beforeOwnership = currentStatus.telemetryOwnership;
+  const metrics = readPublishedApiRuntimeTelemetry() ?? createFallbackApiRuntimeTelemetryRecord(generatedAt);
+  const workerTelemetry = readPublishedWorkerTelemetry(generatedAt);
+  let overview = createEmptyOperatorOverview();
+  let activeIncidentTriggerCount = 0;
+
+  try {
+    overview = await getOperatorOverview(actor, client);
+  } catch {}
+
+  try {
+    activeIncidentTriggerCount = (
+      await listObservabilityIncidentTriggers(
+        actor,
+        {
+          limit: 50,
+          status: "ACTIVE"
+        },
+        client
+      )
+    ).length;
+  } catch {}
+
+  const failedRunRecord = {
+    id: "pending-telemetry-failure",
+    status: "FAILED" as const,
+    trigger: input.trigger ?? "scheduled",
+    generatedAt,
+    actorUserEmail: actor.user.email,
+    reason: normalizeReason(input.reason),
+    minimumSeverity,
+    dispatchAlerts,
+    triggerIncidents,
+    telemetryPolicy,
+    telemetryRecoveryStatus,
+    recoveredOwnershipCount: 0,
+    remainingOwnershipCount: 0,
+    alertCount: null,
+    activeIncidentCount: null,
+    snapshotId: null,
+    dispatchId: null,
+    workerTelemetryStatus: workerTelemetry.status,
+    reportPath: "pending-telemetry-failure",
+    errorMessage: input.errorMessage
+  } satisfies AtlasObservabilityAutomationRunRecord;
+  const afterOwnership = [
+    buildApiTelemetryOwnershipRecord(new Date(generatedAt)),
+    buildWorkerTelemetryOwnershipRecord(workerTelemetry),
+    buildAutomationCadenceOwnershipRecord(new Date(generatedAt), failedRunRecord)
+  ];
+  const remainingKeys = listDegradedTelemetryOwnershipKeys(afterOwnership);
+  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation([
+    {
+      ...failedRunRecord,
+      remainingOwnershipCount: remainingKeys.length
+    },
+    ...currentStatus.recentRuns
+  ]);
+  const { alerts, incidentReadiness } = buildObservabilityAutomationAlertState({
+    metrics,
+    overview,
+    workerTelemetry,
+    telemetryOwnership: afterOwnership,
+    latestAutomationRun: {
+      ...failedRunRecord,
+      remainingOwnershipCount: remainingKeys.length
+    },
+    telemetryRecoveryEscalation,
+    activeIncidentTriggerCount,
+    now: generatedAt
+  });
+  const artifacts = await executeObservabilityAutomationArtifactsBestEffort(
+    {
+      actor,
+      reason: normalizeReason(input.reason),
+      minimumSeverity,
+      dispatchAlerts,
+      triggerIncidents,
+      trace: input.trace ?? createOwnedExecutionTraceContext("worker"),
+      metrics,
+      workerTelemetry,
+      alerts,
+      incidentReadiness
+    },
+    client
+  );
+  const report = writeObservabilityAutomationFailureReport({
+    trigger: input.trigger ?? "scheduled",
+    actorUserEmail: actor.user.email,
+    reason: failedRunRecord.reason,
+    minimumSeverity,
+    dispatchAlerts,
+    triggerIncidents,
+    telemetryPolicy,
+    telemetryRecoveryStatus,
+    beforeOwnership,
+    afterOwnership,
+    recoveredKeys: [],
+    remainingKeys,
+    alertCount: alerts.length,
+    workerTelemetryStatus: workerTelemetry.status,
+    snapshotId: artifacts.snapshot?.id ?? null,
+    activeIncidentCount: artifacts.incidentTriggers?.activeCount ?? activeIncidentTriggerCount,
+    dispatchId: artifacts.dispatch?.id ?? null,
+    generatedAt,
+    errorMessage: input.errorMessage
+  });
+
+  return {
+    reportPath: report.reportPath,
+    snapshotId: artifacts.snapshot?.id ?? null,
+    dispatchId: artifacts.dispatch?.id ?? null,
+    activeIncidentCount: artifacts.incidentTriggers?.activeCount ?? activeIncidentTriggerCount,
+    escalationErrorMessage: artifacts.escalationErrorMessage
+  };
 }
 
 export async function buildObservabilityAutomationPosture(

@@ -1,5 +1,9 @@
 import { observabilityRuntime } from "@atlas/config";
-import { executeObservabilityAutomationPolicy, writeObservabilityAutomationFailureReport } from "@atlas/database";
+import {
+  executeObservabilityAutomationPolicy,
+  recordObservabilityAutomationFailure,
+  writeObservabilityAutomationFailureReport
+} from "@atlas/database";
 import { log } from "./logger";
 
 type AtlasObservabilityAutomationTrigger = "manual" | "scheduled";
@@ -12,6 +16,7 @@ type AtlasWorkerObservabilityAutomationResult = {
 
 type AtlasWorkerObservabilityAutomationDependencies = {
   executeAutomationPolicy: typeof executeObservabilityAutomationPolicy;
+  recordAutomationFailure: typeof recordObservabilityAutomationFailure;
   writeFailureReport: typeof writeObservabilityAutomationFailureReport;
   logMessage: typeof log;
   setTimeout: typeof globalThis.setTimeout;
@@ -22,6 +27,7 @@ type AtlasWorkerObservabilityAutomationDependencies = {
 
 const defaultDependencies: AtlasWorkerObservabilityAutomationDependencies = {
   executeAutomationPolicy: executeObservabilityAutomationPolicy,
+  recordAutomationFailure: recordObservabilityAutomationFailure,
   writeFailureReport: writeObservabilityAutomationFailureReport,
   logMessage: log,
   setTimeout: globalThis.setTimeout.bind(globalThis),
@@ -76,19 +82,28 @@ export async function runWorkerObservabilityAutomationCycle(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const failureReport = dependencies.writeFailureReport({
-      trigger,
-      actorUserEmail: observabilityRuntime.automationActorUserEmail,
-      reason: observabilityRuntime.automationReason,
+    const failurePayload = {
+      actorUserEmail: observabilityRuntime.automationActorUserEmail ?? "",
+      reason: observabilityRuntime.automationReason ?? "",
       minimumSeverity: observabilityRuntime.automationDefaultMinimumSeverity,
       dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
       triggerIncidents: observabilityRuntime.automationTriggerIncidents,
       telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
       telemetryRecoveryStatus:
         observabilityRuntime.automationTelemetryOwnershipPolicy === "recover" ? "failed" : "not_requested",
+      trigger,
       generatedAt,
       errorMessage
-    });
+    } as const;
+    let failureReport:
+      | Awaited<ReturnType<typeof recordObservabilityAutomationFailure>>
+      | ReturnType<typeof writeObservabilityAutomationFailureReport>;
+
+    try {
+      failureReport = await dependencies.recordAutomationFailure(failurePayload);
+    } catch {
+      failureReport = dependencies.writeFailureReport(failurePayload);
+    }
 
     dependencies.logMessage(
       "worker.observability_automation.failed",
@@ -96,7 +111,12 @@ export async function runWorkerObservabilityAutomationCycle(
         trigger,
         reportPath: failureReport.reportPath,
         telemetryPolicy: observabilityRuntime.automationTelemetryOwnershipPolicy,
-        error: errorMessage
+        error: errorMessage,
+        snapshotId: "snapshotId" in failureReport ? failureReport.snapshotId : null,
+        dispatchId: "dispatchId" in failureReport ? failureReport.dispatchId : null,
+        activeIncidentCount: "activeIncidentCount" in failureReport ? failureReport.activeIncidentCount : 0,
+        escalationError:
+          "escalationErrorMessage" in failureReport ? failureReport.escalationErrorMessage : null
       },
       "error"
     );

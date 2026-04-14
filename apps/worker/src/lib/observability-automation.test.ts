@@ -30,6 +30,7 @@ describe("worker observability automation", () => {
 
     const result = await runWorkerObservabilityAutomationCycle("scheduled", {
       executeAutomationPolicy: executeAutomationPolicy as never,
+      recordAutomationFailure: vi.fn() as never,
       writeFailureReport: writeFailureReport as never,
       logMessage: logMessage as never,
       setTimeout,
@@ -88,6 +89,7 @@ describe("worker observability automation", () => {
 
     const result = await runWorkerObservabilityAutomationCycle("scheduled", {
       executeAutomationPolicy: executeAutomationPolicy as never,
+      recordAutomationFailure: vi.fn() as never,
       writeFailureReport: vi.fn() as never,
       logMessage: logMessage as never,
       setTimeout,
@@ -118,7 +120,68 @@ describe("worker observability automation", () => {
     );
   }, 15000);
 
-  it("writes a durable failure report when the automation cycle fails", async () => {
+  it("records immediate failure escalation when the automation cycle fails", async () => {
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_REASON", "Run scheduled observability automation for the current release slot.");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "critical");
+    vi.stubEnv("OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY", "recover");
+    const executeAutomation = vi.fn(async () => {
+      throw new Error("Published API runtime snapshot is missing.");
+    });
+    const writeFailureReport = vi.fn(() => ({
+      reportPath: "/tmp/observability-automation-failed.json"
+    }));
+    const recordAutomationFailure = vi.fn(async () => ({
+      reportPath: "/tmp/observability-automation-failed.json",
+      snapshotId: "snapshot-failure-1",
+      dispatchId: "dispatch-failure-1",
+      activeIncidentCount: 1,
+      escalationErrorMessage: null
+    }));
+    const logMessage = vi.fn();
+    const { runWorkerObservabilityAutomationCycle } = await import("./observability-automation");
+
+    const result = await runWorkerObservabilityAutomationCycle("scheduled", {
+      executeAutomationPolicy: executeAutomation as never,
+      recordAutomationFailure: recordAutomationFailure as never,
+      writeFailureReport: writeFailureReport as never,
+      logMessage: logMessage as never,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval
+    });
+
+    expect(result).toEqual({
+      status: "FAILED",
+      reportPath: "/tmp/observability-automation-failed.json",
+      errorMessage: "Published API runtime snapshot is missing."
+    });
+    expect(recordAutomationFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: "scheduled",
+        minimumSeverity: "critical",
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "failed",
+        errorMessage: "Published API runtime snapshot is missing."
+      })
+    );
+    expect(writeFailureReport).not.toHaveBeenCalled();
+    expect(logMessage).toHaveBeenCalledWith(
+      "worker.observability_automation.failed",
+      expect.objectContaining({
+        reportPath: "/tmp/observability-automation-failed.json",
+        error: "Published API runtime snapshot is missing.",
+        snapshotId: "snapshot-failure-1",
+        dispatchId: "dispatch-failure-1",
+        activeIncidentCount: 1,
+        escalationError: null
+      }),
+      "error"
+    );
+  }, 15000);
+
+  it("falls back to a bare failure report when failure escalation recording also fails", async () => {
     vi.stubEnv("OBSERVABILITY_AUTOMATION_ACTOR_USER_EMAIL", "operator-admin@atlas.local");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REASON", "Run scheduled observability automation for the current release slot.");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_DEFAULT_MINIMUM_SEVERITY", "critical");
@@ -134,6 +197,9 @@ describe("worker observability automation", () => {
 
     const result = await runWorkerObservabilityAutomationCycle("scheduled", {
       executeAutomationPolicy: executeAutomation as never,
+      recordAutomationFailure: vi.fn(async () => {
+        throw new Error("operator actor lookup failed");
+      }) as never,
       writeFailureReport: writeFailureReport as never,
       logMessage: logMessage as never,
       setTimeout,
@@ -149,20 +215,10 @@ describe("worker observability automation", () => {
     });
     expect(writeFailureReport).toHaveBeenCalledWith(
       expect.objectContaining({
-        trigger: "scheduled",
-        minimumSeverity: "critical",
         telemetryPolicy: "recover",
         telemetryRecoveryStatus: "failed",
         errorMessage: "Published API runtime snapshot is missing."
       })
-    );
-    expect(logMessage).toHaveBeenCalledWith(
-      "worker.observability_automation.failed",
-      expect.objectContaining({
-        reportPath: "/tmp/observability-automation-failed.json",
-        error: "Published API runtime snapshot is missing."
-      }),
-      "error"
     );
   }, 15000);
 
@@ -194,6 +250,7 @@ describe("worker observability automation", () => {
 
     const scheduler = startWorkerObservabilityAutomationScheduler({
       executeAutomationPolicy: executeAutomationPolicy as never,
+      recordAutomationFailure: vi.fn() as never,
       writeFailureReport: vi.fn() as never,
       logMessage: logMessage as never,
       setTimeout: setTimeoutMock as never,
