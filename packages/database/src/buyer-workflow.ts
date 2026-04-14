@@ -21,6 +21,7 @@ import {
 import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 export class AtlasBuyerWorkflowError extends Error {
   constructor(
@@ -242,6 +243,16 @@ function normalizeValidationError(error: unknown): never {
   throw error;
 }
 
+function shouldAuditSupportTenantRead(actor: AtlasActorContext) {
+  return actor.source === "internal-support" && actor.supportAccess !== null && actor.principalOrganization !== null;
+}
+
+function assertBuyerReadActor(actor: AtlasActorContext) {
+  if (actor.workspace !== "BUYER" || actor.organization.kind !== "BUYER") {
+    throw new AtlasBuyerWorkflowError("Buyer read routes require a buyer-scoped actor context.", "forbidden");
+  }
+}
+
 async function createAuditEvent(
   transaction: Prisma.TransactionClient,
   actor: AtlasActorContext,
@@ -317,6 +328,28 @@ export async function listBuyerAgents(organizationId: string, client: PrismaClie
   });
 
   return agents.map(mapAgentRecord);
+}
+
+export async function listBuyerAgentsForActor(
+  actor: AtlasActorContext,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const items = await listBuyerAgents(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_agents_inspected",
+      targetType: "buyer_agent_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        agentIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function createBuyerAgent(actor: AtlasActorContext, rawInput: unknown) {
@@ -483,6 +516,28 @@ export async function listBuyerPolicies(organizationId: string, client: PrismaCl
   return policies.map(mapPolicyRecord);
 }
 
+export async function listBuyerPoliciesForActor(
+  actor: AtlasActorContext,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const items = await listBuyerPolicies(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_policies_inspected",
+      targetType: "buyer_policy_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        policyIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
+}
+
 export async function createBuyerPolicy(actor: AtlasActorContext, rawInput: unknown) {
   try {
     assertBuyerMutationActor(actor);
@@ -611,6 +666,28 @@ export async function listBuyerRequests(organizationId: string, client: PrismaCl
   });
 
   return requests.map(mapRequestRecord);
+}
+
+export async function listBuyerRequestsForActor(
+  actor: AtlasActorContext,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const items = await listBuyerRequests(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_requests_inspected",
+      targetType: "buyer_request_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        requestIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function createBuyerRequest(actor: AtlasActorContext, rawInput: unknown) {
@@ -901,6 +978,28 @@ export async function listBuyerApprovals(organizationId: string, client: PrismaC
   });
 
   return approvals.map(mapApprovalRecord);
+}
+
+export async function listBuyerApprovalsForActor(
+  actor: AtlasActorContext,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const items = await listBuyerApprovals(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_approvals_inspected",
+      targetType: "buyer_approval_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        approvalIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function decideBuyerApproval(actor: AtlasActorContext, approvalId: string, rawInput: unknown) {

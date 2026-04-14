@@ -16,6 +16,7 @@ import {
 import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 export class AtlasSellerWorkflowError extends Error {
   constructor(
@@ -86,6 +87,16 @@ function normalizeValidationError(error: unknown): never {
   }
 
   throw error;
+}
+
+function shouldAuditSupportTenantRead(actor: AtlasActorContext) {
+  return actor.source === "internal-support" && actor.supportAccess !== null && actor.principalOrganization !== null;
+}
+
+function assertSellerReadActor(actor: AtlasActorContext) {
+  if (actor.workspace !== "SELLER" || actor.organization.kind !== "SELLER") {
+    throw new AtlasSellerWorkflowError("Seller read routes require a seller-scoped actor context.", "forbidden");
+  }
 }
 
 function isUniqueConstraintError(error: unknown) {
@@ -407,6 +418,25 @@ export async function getSellerProfile(
   };
 }
 
+export async function getSellerProfileForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertSellerReadActor(actor);
+  const item = await getSellerProfile(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_profile_inspected",
+      targetType: "seller_profile_scope",
+      targetId: actor.organization.id,
+      payload: {
+        serviceCount: item.serviceCount,
+        requestCount: item.requestCount
+      }
+    });
+  }
+
+  return item;
+}
+
 export async function listSellerTeamMembers(
   organizationId: string,
   client: DatabaseClient = prisma
@@ -437,6 +467,25 @@ export async function listSellerTeamMembers(
     userName: membership.user.name,
     role: membership.role
   }));
+}
+
+export async function listSellerTeamMembersForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertSellerReadActor(actor);
+  const items = await listSellerTeamMembers(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_team_inspected",
+      targetType: "seller_team_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        membershipIds: items.slice(0, 10).map((item) => item.membershipId)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function listSellerServices(
@@ -485,6 +534,25 @@ export async function listSellerServices(
       linkedRequestCount: requestCountByServiceKey.get(service.key) ?? 0
     })
   );
+}
+
+export async function listSellerServicesForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertSellerReadActor(actor);
+  const items = await listSellerServices(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_services_inspected",
+      targetType: "seller_service_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        serviceIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function createSellerService(actor: AtlasActorContext, rawInput: unknown): Promise<AtlasSellerServiceRecord> {
@@ -637,6 +705,25 @@ export async function listSellerRequests(
 
   const serviceMap = buildSellerServiceMap(services);
   return requests.map((request) => mapSellerRequestRecord(request, serviceMap));
+}
+
+export async function listSellerRequestsForActor(actor: AtlasActorContext, client: DatabaseClient = prisma) {
+  assertSellerReadActor(actor);
+  const items = await listSellerRequests(actor.organization.id, client);
+
+  if (shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_requests_inspected",
+      targetType: "seller_request_scope",
+      targetId: actor.organization.id,
+      payload: {
+        resultCount: items.length,
+        requestIds: items.slice(0, 10).map((item) => item.id)
+      }
+    });
+  }
+
+  return items;
 }
 
 export async function getSellerRequest(

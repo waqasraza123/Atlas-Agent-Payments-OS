@@ -1,5 +1,5 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { createBuyerPolicy, listBuyerPolicies, updateBuyerPolicy } from "@atlas/database";
+import { createBuyerPolicy, listBuyerPoliciesForActor, updateBuyerPolicy } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
 import { createDomainSummary } from "../shared/domain-summary";
 import { rethrowBuyerWorkflowError } from "../shared/workflow-error";
@@ -12,7 +12,7 @@ export class PoliciesService {
 
   async list(actor: AtlasActorContext) {
     return {
-      items: await listBuyerPolicies(actor.organization.id)
+      items: await listBuyerPoliciesForActor(actor)
     };
   }
 

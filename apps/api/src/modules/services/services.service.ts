@@ -3,7 +3,7 @@ import {
   AtlasSellerWorkflowError,
   createSellerService,
   getSellerService,
-  listSellerServices,
+  listSellerServicesForActor,
   updateSellerService
 } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
@@ -18,7 +18,7 @@ export class ServicesService {
 
   async list(actor: AtlasActorContext) {
     return {
-      items: await listSellerServices(actor.organization.id)
+      items: await listSellerServicesForActor(actor)
     };
   }
 

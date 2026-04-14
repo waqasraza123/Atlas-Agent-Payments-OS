@@ -1,9 +1,9 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import {
   getSellerAnalytics,
-  getSellerProfile,
-  listSellerRequests,
-  listSellerTeamMembers,
+  getSellerProfileForActor,
+  listSellerRequestsForActor,
+  listSellerTeamMembersForActor,
   recordSellerRequestFulfillment
 } from "@atlas/database";
 import { Injectable } from "@nestjs/common";
@@ -18,13 +18,13 @@ export class SellersService {
 
   async profile(actor: AtlasActorContext) {
     return {
-      item: await getSellerProfile(actor.organization.id)
+      item: await getSellerProfileForActor(actor)
     };
   }
 
   async team(actor: AtlasActorContext) {
     return {
-      items: await listSellerTeamMembers(actor.organization.id)
+      items: await listSellerTeamMembersForActor(actor)
     };
   }
 
@@ -36,7 +36,7 @@ export class SellersService {
 
   async requests(actor: AtlasActorContext) {
     return {
-      items: await listSellerRequests(actor.organization.id)
+      items: await listSellerRequestsForActor(actor)
     };
   }
 
