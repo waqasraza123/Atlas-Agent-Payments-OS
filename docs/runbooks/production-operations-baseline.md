@@ -29,6 +29,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - explicit telemetry-ownership policy through `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY=monitor|recover`
 - durable incident-trigger sync plus incident report artifact generation through observability automation
 - durable telemetry-ownership recovery reports and policy-aware automation history through the worker scheduler and `/operator/alerts`
+- explicit operator alerts when telemetry auto-recovery fails or still leaves ownership degraded
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`

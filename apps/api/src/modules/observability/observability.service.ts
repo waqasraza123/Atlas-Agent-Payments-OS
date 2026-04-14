@@ -45,7 +45,8 @@ export class ObservabilityService {
         configurationStatus: startup.configurationStatus,
         releaseStage: startup.releaseStage,
         workerTelemetry,
-        telemetryOwnership: automation.telemetryOwnership
+        telemetryOwnership: automation.telemetryOwnership,
+        latestAutomationRun: automation.recentRuns?.[0] ?? null
       })
     };
   }

@@ -248,11 +248,12 @@ export class HealthService {
           }
         )
       : [];
-    const telemetryOwnership = actor
+    const automationStatus = actor
       ? getObservabilityAutomationStatus(actor, {
           limit: 12
-        }).telemetryOwnership
-      : [];
+        })
+      : null;
+    const telemetryOwnership = automationStatus?.telemetryOwnership ?? [];
     const workerTelemetry = readPublishedWorkerTelemetry();
     const alerts = buildAtlasObservabilityAlerts({
       metrics,
@@ -260,7 +261,8 @@ export class HealthService {
       configurationStatus: metrics.configurationStatus,
       releaseStage: appRuntime.releaseStage,
       workerTelemetry,
-      telemetryOwnership
+      telemetryOwnership,
+      latestAutomationRun: automationStatus?.recentRuns?.[0] ?? null
     });
 
     return buildAtlasIncidentReadinessRecord({

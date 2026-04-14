@@ -270,6 +270,7 @@ type AtlasObservabilityAlertInput = {
   releaseStage: AtlasObservabilityReleaseStage;
   workerTelemetry?: AtlasWorkerTelemetryRecord | null;
   telemetryOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
+  latestAutomationRun?: AtlasObservabilityAutomationRunRecord | null;
   generatedAt?: string;
 };
 
@@ -590,6 +591,49 @@ export function buildAtlasObservabilityAlerts(input: AtlasObservabilityAlertInpu
         updatedAt: generatedAt
       })
     );
+  }
+
+  if (input.latestAutomationRun?.telemetryPolicy === "recover") {
+    if (input.latestAutomationRun.status === "FAILED") {
+      alerts.push(
+        createAlertRecord({
+          id: "telemetry-recovery-failed",
+          title: "Telemetry auto-recovery failed",
+          description:
+            input.latestAutomationRun.errorMessage ??
+            "The latest telemetry ownership recovery run failed before ownership could be restored.",
+          severity: "critical",
+          source: "runtime",
+          metricLabel: "Telemetry auto-recovery",
+          status: "open",
+          runbookPath: "docs/runbooks/production-operations-baseline.md",
+          updatedAt: generatedAt
+        })
+      );
+    } else if (
+      input.latestAutomationRun.telemetryRecoveryStatus === "partial" ||
+      input.latestAutomationRun.telemetryRecoveryStatus === "unchanged"
+    ) {
+      const remainingCount = input.latestAutomationRun.remainingOwnershipCount;
+      const recoveredCount = input.latestAutomationRun.recoveredOwnershipCount;
+
+      alerts.push(
+        createAlertRecord({
+          id: "telemetry-recovery-incomplete",
+          title: "Telemetry auto-recovery left ownership degraded",
+          description:
+            input.latestAutomationRun.telemetryRecoveryStatus === "partial"
+              ? `The latest recovery run restored ${recoveredCount} ownership signal${recoveredCount === 1 ? "" : "s"}, but ${remainingCount} still require operator follow-up.`
+              : `The latest recovery run did not restore any degraded ownership signals, and ${remainingCount} still require operator follow-up.`,
+          severity: input.latestAutomationRun.telemetryRecoveryStatus === "unchanged" ? "critical" : "warning",
+          source: "runtime",
+          metricLabel: "Telemetry auto-recovery",
+          status: input.latestAutomationRun.telemetryRecoveryStatus === "unchanged" ? "open" : "monitoring",
+          runbookPath: "docs/runbooks/production-operations-baseline.md",
+          updatedAt: generatedAt
+        })
+      );
+    }
   }
 
   return alerts.sort((left, right) => {

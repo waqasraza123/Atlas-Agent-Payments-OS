@@ -95,6 +95,28 @@ describe("atlas observability contracts", () => {
           lastRecordedAt: "2026-04-11T23:15:00.000Z"
         }
       ],
+      latestAutomationRun: {
+        id: "run-1",
+        status: "SUCCEEDED",
+        trigger: "scheduled",
+        generatedAt: "2026-04-12T00:09:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Recover degraded telemetry ownership during the current release slot.",
+        minimumSeverity: "warning",
+        dispatchAlerts: false,
+        triggerIncidents: true,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "partial",
+        recoveredOwnershipCount: 1,
+        remainingOwnershipCount: 1,
+        alertCount: 8,
+        activeIncidentCount: 2,
+        snapshotId: "snapshot-1",
+        dispatchId: null,
+        workerTelemetryStatus: "warning",
+        reportPath: "/tmp/run-1.json",
+        errorMessage: null
+      },
       generatedAt: "2026-04-12T00:10:00.000Z"
     });
 
@@ -108,10 +130,67 @@ describe("atlas observability contracts", () => {
         "worker-queue-failures",
         "worker-queues-not-ready",
         "worker-trace-coverage-degraded",
-        "telemetry-ownership-automation-cadence"
+        "telemetry-ownership-automation-cadence",
+        "telemetry-recovery-incomplete"
       ])
     );
     expect(alerts[0]?.severity).toBe("critical");
+  });
+
+  it("escalates failed telemetry auto-recovery runs", () => {
+    const alerts = buildAtlasObservabilityAlerts({
+      metrics: createMetricsSnapshot(),
+      overview: {
+        openCaseCount: 0,
+        criticalCaseCount: 0,
+        actionRequiredCount: 0,
+        unreadNotificationCount: 0,
+        delayedCaseCount: 0,
+        failedCaseCount: 0,
+        recentCases: [],
+        recentNotifications: [],
+        recentAuditEvents: []
+      },
+      configurationStatus: "valid",
+      releaseStage: "private-beta",
+      workerTelemetry: buildAtlasWorkerTelemetryRecord({
+        staleAfterMinutes: 10,
+        snapshotPath: null,
+        snapshot: null
+      }),
+      latestAutomationRun: {
+        id: "run-2",
+        status: "FAILED",
+        trigger: "scheduled",
+        generatedAt: "2026-04-12T00:12:00.000Z",
+        actorUserEmail: "operator-admin@atlas.local",
+        reason: "Recover degraded telemetry ownership during the current release slot.",
+        minimumSeverity: "warning",
+        dispatchAlerts: false,
+        triggerIncidents: true,
+        telemetryPolicy: "recover",
+        telemetryRecoveryStatus: "not_requested",
+        recoveredOwnershipCount: 0,
+        remainingOwnershipCount: 0,
+        alertCount: null,
+        activeIncidentCount: null,
+        snapshotId: null,
+        dispatchId: null,
+        workerTelemetryStatus: null,
+        reportPath: "/tmp/run-2.json",
+        errorMessage: "Published API runtime snapshot is missing."
+      },
+      generatedAt: "2026-04-12T00:13:00.000Z"
+    });
+
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "telemetry-recovery-failed",
+          severity: "critical"
+        })
+      ])
+    );
   });
 
   it("classifies worker telemetry freshness and queue health", () => {
