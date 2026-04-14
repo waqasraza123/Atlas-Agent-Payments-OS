@@ -29,6 +29,7 @@ import {
 } from "./programmable-settlement";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import { createAtlasTenantAccessAuditEvent } from "./tenant-access-audit";
 
 export class AtlasPaymentsWorkflowError extends Error {
   constructor(
@@ -142,6 +143,92 @@ function createReceiptRecordWhere(actor: AtlasActorContext, receiptId: string): 
       }
     ]
   };
+}
+
+function shouldAuditSupportTenantRead(actor: AtlasActorContext) {
+  return actor.source === "internal-support" && actor.supportAccess !== null && actor.principalOrganization !== null;
+}
+
+async function auditPaymentListInspection(
+  actor: AtlasActorContext,
+  records: AtlasPaymentIntentRecord[],
+  client: DatabaseClient
+) {
+  if (!shouldAuditSupportTenantRead(actor)) {
+    return;
+  }
+
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.payment_records_inspected",
+    targetType: "tenant_payment_scope",
+    targetId: actor.organization.id,
+    payload: {
+      recordCount: records.length,
+      paymentIds: records.slice(0, 10).map((record) => record.id)
+    }
+  });
+}
+
+async function auditPaymentDetailInspection(
+  actor: AtlasActorContext,
+  record: AtlasPaymentIntentRecord,
+  client: DatabaseClient
+) {
+  if (!shouldAuditSupportTenantRead(actor)) {
+    return;
+  }
+
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.payment_record_inspected",
+    targetType: "tenant_payment_record",
+    targetId: record.id,
+    payload: {
+      requestId: record.requestId,
+      rail: record.rail,
+      status: record.status
+    }
+  });
+}
+
+async function auditReceiptListInspection(
+  actor: AtlasActorContext,
+  records: AtlasReceiptRecord[],
+  client: DatabaseClient
+) {
+  if (!shouldAuditSupportTenantRead(actor)) {
+    return;
+  }
+
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.receipt_records_inspected",
+    targetType: "tenant_receipt_scope",
+    targetId: actor.organization.id,
+    payload: {
+      recordCount: records.length,
+      receiptIds: records.slice(0, 10).map((record) => record.id)
+    }
+  });
+}
+
+async function auditReceiptDetailInspection(
+  actor: AtlasActorContext,
+  record: AtlasReceiptRecord,
+  client: DatabaseClient
+) {
+  if (!shouldAuditSupportTenantRead(actor)) {
+    return;
+  }
+
+  await createAtlasTenantAccessAuditEvent(client, actor, {
+    eventType: "support_access.receipt_record_inspected",
+    targetType: "tenant_receipt_record",
+    targetId: record.id,
+    payload: {
+      requestId: record.requestId,
+      status: record.status,
+      reconciliationState: record.reconciliationState
+    }
+  });
 }
 
 let atlasStripeClient: Stripe | null | undefined;
@@ -679,7 +766,9 @@ export async function listPaymentIntents(actor: AtlasActorContext, client: Datab
     }
   });
 
-  return payments.map(mapPaymentIntentRecord);
+  const records = payments.map(mapPaymentIntentRecord);
+  await auditPaymentListInspection(actor, records, client);
+  return records;
 }
 
 export async function getPaymentIntent(actor: AtlasActorContext, paymentId: string, client: DatabaseClient = prisma) {
@@ -721,7 +810,9 @@ export async function getPaymentIntent(actor: AtlasActorContext, paymentId: stri
     return null;
   }
 
-  return mapPaymentIntentRecord(payment);
+  const record = mapPaymentIntentRecord(payment);
+  await auditPaymentDetailInspection(actor, record, client);
+  return record;
 }
 
 export async function listReceiptRecords(actor: AtlasActorContext, client: DatabaseClient = prisma) {
@@ -787,7 +878,9 @@ export async function listReceiptRecords(actor: AtlasActorContext, client: Datab
     }
   });
 
-  return receipts.map(mapReceiptRecord);
+  const records = receipts.map(mapReceiptRecord);
+  await auditReceiptListInspection(actor, records, client);
+  return records;
 }
 
 export async function getReceiptRecord(actor: AtlasActorContext, receiptId: string, client: DatabaseClient = prisma) {
@@ -843,7 +936,9 @@ export async function getReceiptRecord(actor: AtlasActorContext, receiptId: stri
     return null;
   }
 
-  return mapReceiptRecord(receipt);
+  const record = mapReceiptRecord(receipt);
+  await auditReceiptDetailInspection(actor, record, client);
+  return record;
 }
 
 async function executePayment(actor: AtlasActorContext, requestId: string, rawInput: unknown, scope: "buyer" | "operator") {
