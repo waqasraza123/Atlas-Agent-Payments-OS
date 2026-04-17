@@ -1,7 +1,9 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import {
   getBuyerApprovalForActor,
+  getBuyerAuditEventForActor,
   getBuyerRequestForActor,
+  getOperatorAuditEvent,
   getPaymentIntent,
   getReceiptRecord,
   getSellerRequestForActor,
@@ -1667,6 +1669,22 @@ async function loadAuditDetailModel(
   surfaceKey: Extract<AtlasWorkspaceSurfaceKey, "activity" | "audit">,
   recordId: string
 ): Promise<WorkspaceDetailModel | null> {
+  if (actor.workspace === "BUYER") {
+    const eventRecord = await getBuyerAuditEventForActor(actor, recordId);
+
+    if (!eventRecord) {
+      return null;
+    }
+  }
+
+  if (actor.workspace === "OPERATOR") {
+    const eventRecord = await getOperatorAuditEvent(actor, recordId);
+
+    if (!eventRecord) {
+      return null;
+    }
+  }
+
   const event = await prisma.auditEvent.findFirst({
     where: createAuditDetailWhere(actor, recordId),
     include: {

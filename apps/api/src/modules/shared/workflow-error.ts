@@ -2,6 +2,7 @@ import {
   AtlasAnalyticsReportingError,
   AtlasBuyerWorkflowError,
   AtlasExternalIdentityAccessWorkflowError,
+  AtlasObservabilityOperationsError,
   AtlasOperationalIntegrationWorkflowError,
   AtlasOperatorWorkflowError,
   AtlasPaymentsWorkflowError,
@@ -94,6 +95,18 @@ export function rethrowOperationalIntegrationWorkflowError(error: unknown): neve
   rethrowAtlasWorkflowError(error);
 }
 
+export function rethrowObservabilityOperationsError(error: unknown): never {
+  if (!(error instanceof AtlasObservabilityOperationsError)) {
+    throw error;
+  }
+
+  if (error.code === "execution_failed") {
+    throw new InternalServerErrorException(error.message);
+  }
+
+  rethrowAtlasWorkflowError(error);
+}
+
 export function rethrowRolloutExecutionWorkflowError(error: unknown): never {
   if (!(error instanceof AtlasRolloutExecutionWorkflowError)) {
     throw error;
@@ -113,6 +126,7 @@ function rethrowAtlasWorkflowError(
     | AtlasOperationalIntegrationWorkflowError
     | AtlasOperatorWorkflowError
     | AtlasExternalIdentityAccessWorkflowError
+    | AtlasObservabilityOperationsError
     | AtlasRolloutAutomationError
     | AtlasRolloutExecutionWorkflowError
 ): never {

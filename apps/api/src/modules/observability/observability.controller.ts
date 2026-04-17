@@ -1,5 +1,5 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 import { CurrentActor, RequireRoles, RequireWorkspace } from "../actor/actor.decorators";
 import { ActorGuard } from "../actor/actor.guard";
 import { ObservabilityService } from "./observability.service";
@@ -19,6 +19,8 @@ export class ObservabilityController {
     this.automation = this.automation.bind(this);
     this.automationRuns = this.automationRuns.bind(this);
     this.incidentTriggers = this.incidentTriggers.bind(this);
+    this.recoverTelemetry = this.recoverTelemetry.bind(this);
+    this.remediationActions = this.remediationActions.bind(this);
   }
 
   @Get("summary")
@@ -78,5 +80,17 @@ export class ObservabilityController {
   @RequireRoles("OWNER", "ADMIN", "OPERATOR")
   incidentTriggers(@CurrentActor() actor: AtlasActorContext) {
     return this.observabilityService.listIncidentTriggers(actor);
+  }
+
+  @Post("telemetry/recovery")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  recoverTelemetry(@CurrentActor() actor: AtlasActorContext, @Body() body: unknown) {
+    return this.observabilityService.recoverTelemetryOwnership(actor, body);
+  }
+
+  @Post("telemetry/remediation-actions")
+  @RequireRoles("OWNER", "ADMIN", "OPERATOR")
+  remediationActions(@CurrentActor() actor: AtlasActorContext, @Body() body: unknown) {
+    return this.observabilityService.recordTelemetryRemediationAction(actor, body);
   }
 }

@@ -9,6 +9,7 @@ import { ActorResolutionService } from "../src/modules/actor/actor.service";
 import {
   AtlasAnalyticsReportingError,
   AtlasBuyerWorkflowError,
+  AtlasObservabilityOperationsError,
   AtlasPaymentsWorkflowError,
   AtlasProgrammableSettlementError
 } from "@atlas/database";
@@ -105,6 +106,17 @@ const databaseMock = vi.hoisted(() => ({
     decisionReason: null,
     createdAt: new Date().toISOString()
   })),
+  getBuyerAuditEventForActor: vi.fn(async () => ({
+    id: "event-1",
+    eventType: "request_created",
+    targetType: "SpendRequest",
+    targetId: "request-1",
+    actorType: "HUMAN",
+    actorLabel: "Buyer Admin",
+    organizationName: "Atlas Demo Buyer",
+    requestTitle: "Approval Request",
+    occurredAt: new Date().toISOString()
+  })),
   decideBuyerApproval: vi.fn(async () => ({
     id: "approval-1",
     requestId: "request-created",
@@ -117,6 +129,17 @@ const databaseMock = vi.hoisted(() => ({
     createdAt: new Date().toISOString()
   })),
   getBuyerApprovalRoleGuard: vi.fn(async () => undefined),
+  getOperatorAuditEvent: vi.fn(async () => ({
+    id: "event-1",
+    eventType: "request_created",
+    targetType: "SpendRequest",
+    targetId: "request-1",
+    actorType: "HUMAN",
+    actorLabel: "Operator Admin",
+    organizationName: "Atlas Demo Buyer",
+    requestTitle: "Approval Request",
+    occurredAt: new Date().toISOString()
+  })),
   getSellerProfile: vi.fn(async () => ({
     organizationId: "org-seller",
     organizationSlug: "atlas-demo-seller",
@@ -1420,6 +1443,61 @@ const databaseMock = vi.hoisted(() => ({
       }
     ]
   })),
+  recoverObservabilityTelemetryOwnership: vi.fn(async () => ({
+    status: "partial",
+    reportPath: "/tmp/observability-remediation.json",
+    beforeOwnership: [
+      {
+        key: "worker-runtime",
+        label: "Worker runtime telemetry",
+        status: "warning",
+        detail: "Worker telemetry needs review.",
+        lastRecordedAt: new Date().toISOString()
+      }
+    ],
+    afterOwnership: [
+      {
+        key: "worker-runtime",
+        label: "Worker runtime telemetry",
+        status: "warning",
+        detail: "Worker telemetry still needs review.",
+        lastRecordedAt: new Date().toISOString()
+      }
+    ],
+    recoveredKeys: [],
+    remainingKeys: ["worker-runtime"],
+    automation: {
+      reportPath: "/tmp/observability-remediation.json",
+      snapshot: null,
+      incidentTriggers: null,
+      dispatch: null,
+      workerTelemetry: {
+        status: "warning",
+        summary: "1 worker job failures are currently recorded.",
+        snapshotPath: "/tmp/worker-runtime.json",
+        recordedAt: new Date().toISOString(),
+        staleAfterMinutes: 10,
+        snapshot: {
+          service: "worker",
+          failedCount: 1
+        }
+      }
+    }
+  })),
+  recordObservabilityTelemetryRemediationAction: vi.fn(async () => ({
+    id: "/tmp/remediation-2.json",
+    action: "TRANSFERRED",
+    generatedAt: new Date().toISOString(),
+    actorUserEmail: "operator-admin@atlas.local",
+    ownerUserEmail: "oncall-operator@atlas.local",
+    reason: "Transfer ownership to the active operator on call.",
+    remediationStatus: "escalated",
+    affectedOwnershipKeys: ["worker-runtime"],
+    latestAutomationReportPath: "/tmp/observability-automation.json",
+    resolvedIncidentTriggerCount: 0,
+    activeIncidentTriggerCount: 1,
+    reportPath: "/tmp/remediation-2.json"
+  })),
   listObservabilityAutomationRuns: vi.fn(async () => [
     {
       id: "/tmp/observability-automation.json",
@@ -1518,8 +1596,10 @@ vi.mock("@atlas/database", async () => {
     listBuyerApprovals: databaseMock.listBuyerApprovals,
     listBuyerApprovalsForActor: databaseMock.listBuyerApprovalsForActor,
     getBuyerApprovalForActor: databaseMock.getBuyerApprovalForActor,
+    getBuyerAuditEventForActor: databaseMock.getBuyerAuditEventForActor,
     decideBuyerApproval: databaseMock.decideBuyerApproval,
     getBuyerApprovalRoleGuard: databaseMock.getBuyerApprovalRoleGuard,
+    getOperatorAuditEvent: databaseMock.getOperatorAuditEvent,
     getSellerProfile: databaseMock.getSellerProfile,
     getSellerProfileForActor: databaseMock.getSellerProfileForActor,
     listSellerTeamMembers: databaseMock.listSellerTeamMembers,
@@ -1550,6 +1630,8 @@ vi.mock("@atlas/database", async () => {
     listObservabilitySnapshots: databaseMock.listObservabilitySnapshots,
     listObservabilityAlertDispatches: databaseMock.listObservabilityAlertDispatches,
     getObservabilityAutomationStatus: databaseMock.getObservabilityAutomationStatus,
+    recoverObservabilityTelemetryOwnership: databaseMock.recoverObservabilityTelemetryOwnership,
+    recordObservabilityTelemetryRemediationAction: databaseMock.recordObservabilityTelemetryRemediationAction,
     listObservabilityAutomationRuns: databaseMock.listObservabilityAutomationRuns,
     listObservabilityIncidentTriggers: databaseMock.listObservabilityIncidentTriggers,
     readPublishedWorkerTelemetry: databaseMock.readPublishedWorkerTelemetry,
@@ -2835,6 +2917,105 @@ describe("atlas api e2e", () => {
     ]);
   });
 
+  it("runs protected telemetry recovery and remediation actions through the observability module", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator-admin@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+
+    const recoveryResponse = await request(app.getHttpServer())
+      .post("/observability/telemetry/recovery")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        reason: "Run guided telemetry remediation from the operator control plane.",
+        minimumSeverity: "critical",
+        dispatchAlerts: true,
+        triggerIncidents: true
+      });
+    const actionResponse = await request(app.getHttpServer())
+      .post("/observability/telemetry/remediation-actions")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        action: "TRANSFERRED",
+        ownerUserEmail: "oncall-operator@atlas.local",
+        reason: "Transfer ownership to the active operator on call."
+      });
+
+    expect(recoveryResponse.status).toBe(201);
+    expect(recoveryResponse.body.item).toMatchObject({
+      status: "partial",
+      remainingKeys: ["worker-runtime"]
+    });
+    expect(databaseMock.recoverObservabilityTelemetryOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserEmail: "operator@atlas.local",
+        reason: "Run guided telemetry remediation from the operator control plane.",
+        minimumSeverity: "critical",
+        dispatchAlerts: true,
+        triggerIncidents: true,
+        trace: expect.objectContaining({
+          sourceService: "api"
+        })
+      })
+    );
+
+    expect(actionResponse.status).toBe(201);
+    expect(actionResponse.body.item).toMatchObject({
+      action: "TRANSFERRED",
+      ownerUserEmail: "oncall-operator@atlas.local"
+    });
+    expect(databaseMock.recordObservabilityTelemetryRemediationAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace: "OPERATOR"
+      }),
+      {
+        action: "TRANSFERRED",
+        reason: "Transfer ownership to the active operator on call.",
+        ownerUserEmail: "oncall-operator@atlas.local"
+      }
+    );
+  });
+
+  it("maps observability remediation ownership conflicts to API errors", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "operator-admin",
+        workspace: "OPERATOR",
+        userEmail: "operator-admin@atlas.local",
+        organizationSlug: "atlas-demo-operator",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("OPERATOR", "ADMIN")
+    });
+    databaseMock.recordObservabilityTelemetryRemediationAction.mockRejectedValueOnce(
+      new AtlasObservabilityOperationsError(
+        "Telemetry remediation is currently owned by oncall-operator@atlas.local. Transfer ownership before another operator can resolve telemetry remediation.",
+        "forbidden"
+      )
+    );
+
+    const response = await request(app.getHttpServer())
+      .post("/observability/telemetry/remediation-actions")
+      .set("x-atlas-local-session", "local-token")
+      .send({
+        action: "RESOLVED",
+        reason: "Close the remediation after healthy ownership is restored."
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toContain("Transfer ownership before another operator can resolve telemetry remediation");
+  });
+
   it("serves operator rollout routes", async () => {
     actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
       status: "ready",
@@ -3026,6 +3207,33 @@ describe("atlas api e2e", () => {
       status: "PENDING"
     });
     expect(databaseMock.getBuyerApprovalForActor).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns buyer audit activity detail through the protected audit module", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/audit/events/event-1")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.item).toMatchObject({
+      id: "event-1",
+      eventType: "request_created",
+      targetType: "SpendRequest"
+    });
+    expect(databaseMock.getBuyerAuditEventForActor).toHaveBeenCalledTimes(1);
   });
 
   it("records approval decisions through the protected buyer module", async () => {

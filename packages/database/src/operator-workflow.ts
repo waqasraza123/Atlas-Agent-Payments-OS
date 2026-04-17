@@ -828,6 +828,25 @@ export async function listOperatorAuditEvents(_actor: AtlasActorContext, rawFilt
   }
 }
 
+export async function getOperatorAuditEvent(_actor: AtlasActorContext, eventId: string, client: DatabaseClient = prisma) {
+  const event = await client.auditEvent.findFirst({
+    where: {
+      id: eventId
+    },
+    include: {
+      organization: true,
+      user: true,
+      request: {
+        include: {
+          organization: true
+        }
+      }
+    }
+  });
+
+  return event ? mapAuditEventRecord(event) : null;
+}
+
 export async function getOperatorOverview(actor: AtlasActorContext, client: DatabaseClient = prisma) {
   await syncOperatorCases(actor, client);
   const [cases, notifications, auditEvents] = await Promise.all([

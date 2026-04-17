@@ -2,6 +2,7 @@ import type { AtlasActorContext } from "@atlas/auth";
 import { describe, expect, it, vi } from "vitest";
 import {
   getBuyerApprovalForActor,
+  getBuyerAuditEventForActor,
   getBuyerRequestForActor,
   listBuyerAgentsForActor,
   listBuyerApprovalsForActor,
@@ -191,6 +192,60 @@ describe("buyer workflow actor-aware reads", () => {
           status: "PENDING",
           requestId: "request-1",
           serviceCategory: "api-access",
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session buyer activity detail inspection", async () => {
+    const actor = createSupportBuyerActor();
+    const client = {
+      auditEvent: {
+        findFirst: vi.fn(async () => ({
+          id: "event-1",
+          eventType: "request_created",
+          targetType: "SpendRequest",
+          targetId: "request-1",
+          actorType: "HUMAN",
+          occurredAt: new Date("2026-04-17T00:00:00.000Z"),
+          requestId: "request-1",
+          organization: {
+            name: "Buyer Org"
+          },
+          user: {
+            name: "Buyer Admin",
+            email: "buyer-admin@atlas.local"
+          },
+          request: {
+            title: "Premium dataset unlock",
+            organization: {
+              name: "Buyer Org"
+            }
+          }
+        })),
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getBuyerAuditEventForActor(actor, "event-1", client as never);
+
+    expect(item).toMatchObject({
+      id: "event-1",
+      eventType: "request_created",
+      targetType: "SpendRequest",
+      targetId: "request-1"
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.buyer_activity_inspected",
+        targetType: "buyer_activity",
+        targetId: "event-1",
+        payload: expect.objectContaining({
+          eventType: "request_created",
+          targetType: "SpendRequest",
+          requestId: "request-1",
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

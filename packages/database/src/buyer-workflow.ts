@@ -10,6 +10,7 @@ import {
   evaluateAtlasBuyerSpendRequest,
   normalizeAtlasBuyerPolicyRules,
   parseAtlasPolicyEvaluationResult,
+  type AtlasOperatorAuditEventRecord,
   type AtlasBuyerAgentCreateInput,
   type AtlasBuyerAgentUpdateInput,
   type AtlasBuyerApprovalDecisionInput,
@@ -218,6 +219,35 @@ function mapApprovalRecord(
     status: approval.status,
     decisionReason: approval.decisionReason,
     createdAt: approval.createdAt.toISOString()
+  };
+}
+
+function mapBuyerAuditEventRecord(event: {
+  id: string;
+  eventType: string;
+  targetType: string;
+  targetId: string;
+  actorType: string;
+  occurredAt: Date;
+  organization: { name: string } | null;
+  user: { name: string | null; email: string } | null;
+  request: { title: string; organization: { name: string } } | null;
+}): AtlasOperatorAuditEventRecord {
+  const actorLabel =
+    event.user?.name ??
+    event.user?.email ??
+    (event.actorType === "SYSTEM" ? "Atlas system" : event.actorType.toLowerCase());
+
+  return {
+    id: event.id,
+    eventType: event.eventType,
+    targetType: event.targetType,
+    targetId: event.targetId,
+    actorType: event.actorType,
+    actorLabel,
+    organizationName: event.organization?.name ?? event.request?.organization.name ?? null,
+    requestTitle: event.request?.title ?? null,
+    occurredAt: event.occurredAt.toISOString()
   };
 }
 
@@ -1116,6 +1146,55 @@ export async function getBuyerApprovalForActor(
   }
 
   return item;
+}
+
+export async function getBuyerAuditEventForActor(
+  actor: AtlasActorContext,
+  eventId: string,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const item = await client.auditEvent.findFirst({
+    where: {
+      id: eventId,
+      OR: [
+        {
+          organizationId: actor.organization.id
+        },
+        {
+          request: {
+            is: {
+              organizationId: actor.organization.id
+            }
+          }
+        }
+      ]
+    },
+    include: {
+      organization: true,
+      user: true,
+      request: {
+        include: {
+          organization: true
+        }
+      }
+    }
+  });
+
+  if (item && shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_activity_inspected",
+      targetType: "buyer_activity",
+      targetId: item.id,
+      payload: {
+        eventType: item.eventType,
+        targetType: item.targetType,
+        requestId: item.requestId
+      }
+    });
+  }
+
+  return item ? mapBuyerAuditEventRecord(item) : null;
 }
 
 export async function decideBuyerApproval(actor: AtlasActorContext, approvalId: string, rawInput: unknown) {
