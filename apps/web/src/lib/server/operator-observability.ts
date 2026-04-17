@@ -16,6 +16,9 @@ import type {
   AtlasObservabilityTelemetryRemediationRecord,
   AtlasObservabilityTelemetryRemediationOwnershipRecord,
   AtlasObservabilityTelemetryOwnershipRecord,
+  AtlasObservabilityTelemetryOwnershipSampleRecord,
+  AtlasObservabilityTelemetryOwnershipTrendRecord,
+  AtlasObservabilityTelemetryOwnershipWindowRecord,
   AtlasRuntimeTraceRecord,
   AtlasWorkerTelemetryRecord
 } from "@atlas/domain";
@@ -184,25 +187,32 @@ export function createOperatorAutomationRunItems(
             ? `Recovered ${item.recoveredOwnershipCount} telemetry ownership signal${item.recoveredOwnershipCount === 1 ? "" : "s"} with ${item.remainingOwnershipCount} still degraded.`
             : item.telemetryRecoveryStatus === "no_action"
               ? "Telemetry ownership was already healthy, so no recovery run was required."
-              : item.reason ??
+            : item.reason ??
                 `${item.alertCount ?? 0} alerts reviewed at ${item.minimumSeverity}.`,
-    detail: `${item.telemetryPolicy} policy · ${item.minimumSeverity} threshold · ${item.reportPath}`,
+    detail: `${item.telemetryPolicy} policy · ${item.activeBreachMinutes == null ? "no active breach at run start" : `${item.activeBreachMinutes} minute breach at run start`} · ${item.endedBreach ? "ended breach" : "did not end breach"} · ${item.reportPath}`,
     statusLabel: formatDateTime(item.generatedAt),
     statusTone: item.status === "FAILED" ? "critical" : "success"
   }));
 }
 
 export function createOperatorTelemetryOwnershipItems(
-  items: AtlasObservabilityTelemetryOwnershipRecord[]
+  items: AtlasObservabilityTelemetryOwnershipRecord[],
+  windows: AtlasObservabilityTelemetryOwnershipWindowRecord[] = [],
+  trends: AtlasObservabilityTelemetryOwnershipTrendRecord[] = []
 ): RecordListPanelItem[] {
-  return items.map((item) => ({
-    id: item.key,
-    title: item.label,
-    description: item.detail,
-    detail: `last recorded ${formatDateTime(item.lastRecordedAt)}`,
-    statusLabel: item.status === "healthy" ? "Healthy" : item.status === "warning" ? "Warning" : "Critical",
-    statusTone: item.status === "healthy" ? "success" : item.status === "warning" ? "warning" : "critical"
-  }));
+  return items.map((item) => {
+    const window = windows.find((entry) => entry.key === item.key);
+    const trend = trends.find((entry) => entry.key === item.key);
+
+    return {
+      id: item.key,
+      title: item.label,
+      description: item.detail,
+      detail: `${window?.currentBreachMinutes == null ? "no active breach" : `${window.currentBreachMinutes} minute active breach`} · last healthy ${formatDateTime(window?.lastHealthyAt ?? null)} · latest sample ${formatDateTime(window?.latestSampleAt ?? item.lastRecordedAt)}${trend && trend.transitions.length > 0 ? ` · trend ${trend.transitions.map((entry) => entry.status).join(" -> ")}` : ""}`,
+      statusLabel: item.status === "healthy" ? "Healthy" : item.status === "warning" ? "Warning" : "Critical",
+      statusTone: item.status === "healthy" ? "success" : item.status === "warning" ? "warning" : "critical"
+    };
+  });
 }
 
 export function createOperatorWorkerQueueItems(workerTelemetry: AtlasWorkerTelemetryRecord | null): RecordListPanelItem[] {
@@ -291,6 +301,13 @@ export function createOperatorAutomationFacts(
           : "Idle"
     },
     {
+      label: "Active breach age",
+      value:
+        automation.telemetryRecoveryEscalation.activeBreachMinutes == null
+          ? "Not active"
+          : `${automation.telemetryRecoveryEscalation.activeBreachMinutes} minutes`
+    },
+    {
       label: "Escalation threshold",
       value: `${automation.telemetryRecoveryEscalation.threshold} runs`
     },
@@ -337,8 +354,25 @@ export function createOperatorAutomationFacts(
     {
       label: "Remediation retention",
       value: `${automation.retention.remediationRetentionDays} days`
+    },
+    {
+      label: "Ownership history retention",
+      value: `${automation.retention.ownershipHistoryRetentionDays} days`
     }
   ];
+}
+
+export function createOperatorOwnershipTimelineItems(
+  items: AtlasObservabilityTelemetryOwnershipSampleRecord[]
+): RecordListPanelItem[] {
+  return items.map((item) => ({
+    id: `${item.key}:${item.recordedAt}`,
+    title: `${item.label} · ${item.status}`,
+    description: item.detail,
+    detail: `${item.source} · ${formatDateTime(item.recordedAt)}${item.traceId ? ` · trace ${item.traceId}` : ""}`,
+    statusLabel: item.status === "healthy" ? "Healthy" : item.status === "warning" ? "Warning" : "Critical",
+    statusTone: item.status === "healthy" ? "success" : item.status === "warning" ? "warning" : "critical"
+  }));
 }
 
 export function createOperatorTelemetryRemediationFacts(

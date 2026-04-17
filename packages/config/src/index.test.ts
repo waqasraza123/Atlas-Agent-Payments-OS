@@ -75,6 +75,11 @@ describe("atlas config", () => {
       "MINIO_SECRET_KEY"
     ]);
     expect(observabilityRuntime.traceHistoryLimit).toBe(20);
+    expect(observabilityRuntime.ownershipHistoryDirectory).toBe("operations-artifacts/observability/ownership-history");
+    expect(observabilityRuntime.ownershipHistoryRetentionDays).toBe(30);
+    expect(observabilityRuntime.apiOwnershipStaleAfterMinutes).toBe(10);
+    expect(observabilityRuntime.workerOwnershipStaleAfterMinutes).toBe(10);
+    expect(observabilityRuntime.automationOwnershipStaleAfterMinutes).toBe(30);
     expect(observabilityRuntime.snapshotRetentionDays).toBe(30);
     expect(observabilityRuntime.dispatchRetentionDays).toBe(30);
     expect(observabilityRuntime.incidentRetentionDays).toBe(30);

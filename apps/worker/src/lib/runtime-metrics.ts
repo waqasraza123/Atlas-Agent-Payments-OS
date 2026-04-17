@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { deploymentRuntime, observabilityRuntime } from "@atlas/config";
+import { appendTelemetryOwnershipSample, createTelemetryOwnershipSample } from "@atlas/database";
 import {
   calculateAtlasTraceCoverageRate,
   type AtlasRuntimeTraceRecord,
@@ -32,11 +33,33 @@ function publishWorkerRuntimeMetricsSnapshot() {
     return;
   }
 
+  const snapshot = getWorkerRuntimeMetricsSnapshot();
   const filePath = resolveRuntimeSnapshotPath("worker.json");
   mkdirSync(dirname(filePath), {
     recursive: true
   });
-  writeFileSync(filePath, `${JSON.stringify(getWorkerRuntimeMetricsSnapshot(), null, 2)}\n`, "utf8");
+  writeFileSync(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  appendTelemetryOwnershipSample(
+    createTelemetryOwnershipSample({
+      key: "worker-runtime",
+      status:
+        snapshot.failedCount > 0
+          ? snapshot.failedCount >= 5 || snapshot.failedCount > snapshot.processedCount
+            ? "critical"
+            : "warning"
+          : snapshot.readyQueueCount < snapshot.queueCount
+            ? "warning"
+            : "healthy",
+      recordedAt: snapshot.recordedAt,
+      source: "worker-runtime-snapshot",
+      detail:
+        snapshot.failedCount > 0
+          ? `${snapshot.failedCount} worker failures are currently recorded.`
+          : snapshot.readyQueueCount < snapshot.queueCount
+            ? `${snapshot.readyQueueCount} of ${snapshot.queueCount} worker queues have reported readiness.`
+            : "Worker runtime snapshot is current and queues have reported readiness."
+    })
+  );
 }
 
 function pushRecentTrace(trace: AtlasRuntimeTraceRecord) {

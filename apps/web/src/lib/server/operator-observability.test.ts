@@ -57,7 +57,9 @@ describe("createOperatorAutomationFacts", () => {
         status: "triggered",
         consecutiveBreachedRuns: 3,
         threshold: 2,
-        detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs."
+        detail: "Telemetry auto-recovery has breached its target for 3 consecutive runs.",
+        activeBreachStartedAt: "2026-04-12T22:56:00.000Z",
+        activeBreachMinutes: 75
       },
       telemetryRemediation: {
         status: "escalated",
@@ -85,12 +87,16 @@ describe("createOperatorAutomationFacts", () => {
         dispatchRetentionDays: 30,
         incidentRetentionDays: 30,
         remediationRetentionDays: 30,
-        automationRetentionDays: 30
+        automationRetentionDays: 30,
+        ownershipHistoryRetentionDays: 30
       },
       lastRunAt: null,
       lastRunStatus: null,
       lastReportPath: null,
       telemetryOwnership: [],
+      ownershipWindows: [],
+      ownershipTrends: [],
+      latestOwnershipSamples: [],
       telemetryRemediationOwnership: {
         status: "acknowledged",
         actorUserEmail: "operator-admin@atlas.local",
@@ -382,7 +388,7 @@ describe("createOperatorAutomationRunItems", () => {
 
     expect(items).toEqual([
       expect.objectContaining({
-        detail: "recover policy · warning threshold · /tmp/run-1.json",
+        detail: "recover policy · no active breach at run start · did not end breach · /tmp/run-1.json",
         description: "Recovered 1 telemetry ownership signal with 1 still degraded."
       })
     ]);

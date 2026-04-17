@@ -31,6 +31,12 @@ import {
 } from "@atlas/domain";
 import { Prisma, type PrismaClient } from "./generated/client/index.js";
 import { prisma } from "./client";
+import {
+  appendTelemetryOwnershipSample,
+  createTelemetryOwnershipSample,
+  deriveTelemetryOwnershipState,
+  listTelemetryOwnershipSamples
+} from "./observability-ownership";
 import { createOwnedExecutionTraceContext } from "./operation-trace";
 import { getOperatorOverview } from "./operator-workflow";
 import {
@@ -78,6 +84,10 @@ type AtlasObservabilityAutomationReportPayload = {
     afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
     recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
     remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+    activeBreachStartedAt?: string | null;
+    activeBreachMinutes?: number | null;
+    endedBreach?: boolean;
+    ownershipSampleCount?: number | null;
   } | null;
   reportPath?: string;
   errorMessage?: string | null;
@@ -202,7 +212,7 @@ function buildApiTelemetryOwnershipRecord(now: Date): AtlasObservabilityTelemetr
   }
 
   const ageMinutes = calculateAgeMinutes(now, telemetry.recordedAt) ?? 0;
-  const staleAfterMinutes = Math.max(1, observabilityRuntime.workerTelemetryStaleAfterMinutes);
+  const staleAfterMinutes = Math.max(1, observabilityRuntime.apiOwnershipStaleAfterMinutes);
 
   return {
     key: "api-runtime",
@@ -320,7 +330,11 @@ function isTelemetryRecoveryBreach(run: Pick<
 }
 
 function buildTelemetryRecoveryEscalation(
-  recentRuns: AtlasObservabilityAutomationRunRecord[]
+  recentRuns: AtlasObservabilityAutomationRunRecord[],
+  activeBreach: {
+    startedAt: string | null;
+    minutes: number | null;
+  } | null = null
 ): AtlasObservabilityTelemetryRecoveryEscalationRecord {
   const threshold = Math.max(1, observabilityRuntime.automationTelemetryEscalationThreshold);
   let consecutiveBreachedRuns = 0;
@@ -337,12 +351,21 @@ function buildTelemetryRecoveryEscalation(
     status: consecutiveBreachedRuns >= threshold ? "triggered" : "idle",
     consecutiveBreachedRuns,
     threshold,
+    ...(activeBreach
+      ? {
+          activeBreachStartedAt: activeBreach.startedAt,
+          activeBreachMinutes: activeBreach.minutes
+        }
+      : {}),
     detail:
       consecutiveBreachedRuns >= threshold
         ? `Telemetry auto-recovery has breached its target for ${consecutiveBreachedRuns} consecutive run${consecutiveBreachedRuns === 1 ? "" : "s"}.`
         : consecutiveBreachedRuns === 0
           ? "Recent telemetry auto-recovery runs are not currently breaching the escalation threshold."
           : `Telemetry auto-recovery has breached its target for ${consecutiveBreachedRuns} consecutive run${consecutiveBreachedRuns === 1 ? "" : "s"}, below the escalation threshold of ${threshold}.`
+  } satisfies AtlasObservabilityTelemetryRecoveryEscalationRecord & {
+    activeBreachStartedAt?: string | null;
+    activeBreachMinutes?: number | null;
   };
 }
 
@@ -367,6 +390,13 @@ function mapAutomationRunRecord(
     telemetryRecoveryStatus: normalizeTelemetryRecoveryStatus(telemetryRecovery?.status),
     recoveredOwnershipCount: Array.isArray(telemetryRecovery?.recoveredKeys) ? telemetryRecovery.recoveredKeys.length : 0,
     remainingOwnershipCount: Array.isArray(telemetryRecovery?.remainingKeys) ? telemetryRecovery.remainingKeys.length : 0,
+    activeBreachStartedAt:
+      typeof telemetryRecovery?.activeBreachStartedAt === "string" ? telemetryRecovery.activeBreachStartedAt : null,
+    activeBreachMinutes:
+      typeof telemetryRecovery?.activeBreachMinutes === "number" ? telemetryRecovery.activeBreachMinutes : null,
+    endedBreach: telemetryRecovery?.endedBreach === true,
+    ownershipSampleCount:
+      typeof telemetryRecovery?.ownershipSampleCount === "number" ? telemetryRecovery.ownershipSampleCount : 0,
     alertCount: typeof payload.alertCount === "number" ? payload.alertCount : null,
     activeIncidentCount:
       typeof payload.incidentTriggers?.activeCount === "number" ? payload.incidentTriggers.activeCount : null,
@@ -394,6 +424,95 @@ function writeObservabilityAutomationReport(payload: AtlasObservabilityAutomatio
   writeFileSync(reportPath, `${JSON.stringify({ ...payload, reportPath }, null, 2)}\n`, "utf8");
 
   return reportPath;
+}
+
+function summarizeActiveTelemetryBreach(
+  windows: AtlasObservabilityAutomationStatusRecord["ownershipWindows"]
+) {
+  const activeWindows = windows.filter((window) => window.currentStatus !== "healthy" && window.breachStartedAt);
+
+  if (activeWindows.length === 0) {
+    return null;
+  }
+
+  const earliestWindow = activeWindows.sort(
+    (left, right) => new Date(left.breachStartedAt ?? left.latestSampleAt ?? 0).getTime() - new Date(right.breachStartedAt ?? right.latestSampleAt ?? 0).getTime()
+  )[0]!;
+
+  return {
+    startedAt: earliestWindow.breachStartedAt,
+    minutes: earliestWindow.currentBreachMinutes
+  };
+}
+
+function getTelemetryOwnershipState(now?: string) {
+  return deriveTelemetryOwnershipState(listTelemetryOwnershipSamples(), {
+    now
+  });
+}
+
+function appendAutomationCadenceOwnershipSample(input: {
+  generatedAt: string;
+  status: AtlasObservabilityTelemetryOwnershipRecord["status"];
+  detail: string;
+}) {
+  appendTelemetryOwnershipSample(
+    createTelemetryOwnershipSample({
+      key: "automation-cadence",
+      status: input.status,
+      recordedAt: input.generatedAt,
+      source: "automation-run",
+      detail: input.detail
+    })
+  );
+}
+
+function createFallbackOwnershipWindow(record: AtlasObservabilityTelemetryOwnershipRecord) {
+  return {
+    key: record.key,
+    label: record.label,
+    currentStatus: record.status,
+    breachStartedAt: record.status === "healthy" ? null : record.lastRecordedAt,
+    lastHealthyAt: record.status === "healthy" ? record.lastRecordedAt : null,
+    lastRecoveredAt: null,
+    currentBreachMinutes: null,
+    latestSampleAt: record.lastRecordedAt,
+    sampleCountInWindow: 0,
+    detail: record.detail
+  } satisfies AtlasObservabilityAutomationStatusRecord["ownershipWindows"][number];
+}
+
+function getRuntimeAwareTelemetryOwnershipState(input: {
+  now?: string;
+  latestRun?: AtlasObservabilityAutomationRunRecord | null;
+}) {
+  const now = new Date(input.now ?? new Date().toISOString());
+  const workerTelemetry = readPublishedWorkerTelemetry(input.now);
+  const derived = getTelemetryOwnershipState(input.now);
+  const fallbackOwnership = [
+    buildApiTelemetryOwnershipRecord(now),
+    buildWorkerTelemetryOwnershipRecord(workerTelemetry),
+    buildAutomationCadenceOwnershipRecord(now, input.latestRun ?? null)
+  ];
+
+  return {
+    telemetryOwnership: derived.telemetryOwnership.map((item) => {
+      const window = derived.ownershipWindows.find((entry) => entry.key === item.key);
+      return window && window.sampleCountInWindow > 0
+        ? item
+        : (fallbackOwnership.find((entry) => entry.key === item.key) ?? item);
+    }),
+    ownershipWindows: derived.ownershipWindows.map((window) => {
+      if (window.sampleCountInWindow > 0) {
+        return window;
+      }
+
+      const fallback = fallbackOwnership.find((entry) => entry.key === window.key);
+      return fallback ? createFallbackOwnershipWindow(fallback) : window;
+    }),
+    ownershipTrends: derived.ownershipTrends,
+    latestOwnershipSamples: derived.latestOwnershipSamples
+  };
 }
 
 function mapTelemetryRemediationActionRecord(
@@ -525,11 +644,7 @@ function buildTelemetryRemediationOwnership(
     };
   }
 
-  if (
-    remediation.status !== "ready" &&
-    latestOwnershipAction &&
-    latestOwnershipAction.affectedOwnershipKeys.some((key) => remediation.affectedOwnershipKeys.includes(key))
-  ) {
+  if (remediation.status !== "ready" && latestOwnershipAction) {
     const currentOwnerEmail = latestOwnershipAction.ownerUserEmail ?? latestOwnershipAction.actorUserEmail;
     const assignedByUserEmail =
       latestOwnershipAction.action === "ASSIGNED" || latestOwnershipAction.action === "TRANSFERRED"
@@ -1406,6 +1521,10 @@ function createObservabilityAutomationReportPayload(input: {
   afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  activeBreachStartedAt?: string | null;
+  activeBreachMinutes?: number | null;
+  endedBreach?: boolean;
+  ownershipSampleCount?: number | null;
   alertCount?: number | null;
   workerTelemetryStatus?: AtlasWorkerTelemetryRecord["status"] | null;
   snapshotId?: string | null;
@@ -1432,7 +1551,11 @@ function createObservabilityAutomationReportPayload(input: {
       beforeOwnership: input.beforeOwnership,
       afterOwnership: input.afterOwnership,
       recoveredKeys: input.recoveredKeys ?? [],
-      remainingKeys: input.remainingKeys ?? []
+      remainingKeys: input.remainingKeys ?? [],
+      activeBreachStartedAt: input.activeBreachStartedAt ?? null,
+      activeBreachMinutes: input.activeBreachMinutes ?? null,
+      endedBreach: input.endedBreach ?? false,
+      ownershipSampleCount: input.ownershipSampleCount ?? 0
     },
     alertCount: input.alertCount ?? input.automation?.alertCount ?? null,
     workerTelemetry:
@@ -1665,7 +1788,7 @@ export function readPublishedWorkerTelemetry(now?: string) {
   return buildAtlasWorkerTelemetryRecord({
     snapshot,
     snapshotPath: snapshot ? snapshotPath : null,
-    staleAfterMinutes: observabilityRuntime.workerTelemetryStaleAfterMinutes,
+    staleAfterMinutes: observabilityRuntime.workerOwnershipStaleAfterMinutes,
     now
   });
 }
@@ -1736,13 +1859,15 @@ export function getObservabilityAutomationStatus(
   const recentTelemetryRemediationActions = listObservabilityTelemetryRemediationActions(actor, options);
   const latestRun = recentRuns[0] ?? null;
   const now = new Date(options.now ?? new Date().toISOString());
-  const workerTelemetry = readPublishedWorkerTelemetry(options.now);
-  const telemetryOwnership = [
-    buildApiTelemetryOwnershipRecord(now),
-    buildWorkerTelemetryOwnershipRecord(workerTelemetry),
-    buildAutomationCadenceOwnershipRecord(now, latestRun)
-  ];
-  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation(recentRuns);
+  const ownershipState = getRuntimeAwareTelemetryOwnershipState({
+    now: options.now,
+    latestRun
+  });
+  const telemetryOwnership = ownershipState.telemetryOwnership;
+  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation(
+    recentRuns,
+    summarizeActiveTelemetryBreach(ownershipState.ownershipWindows)
+  );
   const telemetryRemediation = buildAtlasObservabilityTelemetryRemediation({
     telemetryOwnership,
     latestAutomationRun: latestRun,
@@ -1799,12 +1924,16 @@ export function getObservabilityAutomationStatus(
       dispatchRetentionDays: observabilityRuntime.dispatchRetentionDays,
       incidentRetentionDays: observabilityRuntime.incidentRetentionDays,
       remediationRetentionDays: observabilityRuntime.remediationRetentionDays,
-      automationRetentionDays: observabilityRuntime.automationRetentionDays
+      automationRetentionDays: observabilityRuntime.automationRetentionDays,
+      ownershipHistoryRetentionDays: observabilityRuntime.ownershipHistoryRetentionDays
     },
     lastRunAt: latestRun?.generatedAt ?? null,
     lastRunStatus: latestRun?.status ?? null,
     lastReportPath: latestRun?.reportPath ?? null,
     telemetryOwnership,
+    ownershipWindows: ownershipState.ownershipWindows,
+    ownershipTrends: ownershipState.ownershipTrends,
+    latestOwnershipSamples: ownershipState.latestOwnershipSamples,
     recentTelemetryRemediationActions,
     recentRuns
   } satisfies AtlasObservabilityAutomationStatusRecord;
@@ -1841,6 +1970,10 @@ export function writeObservabilityAutomationFailureReport(input: {
   afterOwnership?: AtlasObservabilityTelemetryOwnershipRecord[];
   recoveredKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
   remainingKeys?: AtlasObservabilityTelemetryOwnershipRecord["key"][];
+  activeBreachStartedAt?: string | null;
+  activeBreachMinutes?: number | null;
+  endedBreach?: boolean;
+  ownershipSampleCount?: number | null;
   alertCount?: number | null;
   workerTelemetryStatus?: AtlasWorkerTelemetryRecord["status"] | null;
   snapshotId?: string | null;
@@ -1865,6 +1998,10 @@ export function writeObservabilityAutomationFailureReport(input: {
       afterOwnership: input.afterOwnership,
       recoveredKeys: input.recoveredKeys,
       remainingKeys: input.remainingKeys,
+      activeBreachStartedAt: input.activeBreachStartedAt,
+      activeBreachMinutes: input.activeBreachMinutes,
+      endedBreach: input.endedBreach,
+      ownershipSampleCount: input.ownershipSampleCount,
       alertCount: input.alertCount,
       workerTelemetryStatus: input.workerTelemetryStatus,
       snapshotId: input.snapshotId,
@@ -1889,6 +2026,10 @@ export function writeObservabilityAutomationFailureReport(input: {
       afterOwnership: input.afterOwnership,
       recoveredKeys: input.recoveredKeys,
       remainingKeys: input.remainingKeys,
+      activeBreachStartedAt: input.activeBreachStartedAt,
+      activeBreachMinutes: input.activeBreachMinutes,
+      endedBreach: input.endedBreach,
+      ownershipSampleCount: input.ownershipSampleCount,
       alertCount: input.alertCount,
       workerTelemetryStatus: input.workerTelemetryStatus,
       snapshotId: input.snapshotId,
@@ -1937,6 +2078,7 @@ export async function recordObservabilityAutomationFailure(
     now: generatedAt
   });
   const beforeOwnership = currentStatus.telemetryOwnership;
+  const beforeActiveBreach = summarizeActiveTelemetryBreach(currentStatus.ownershipWindows);
   const metrics = readPublishedApiRuntimeTelemetry() ?? createFallbackApiRuntimeTelemetryRecord(generatedAt);
   const workerTelemetry = readPublishedWorkerTelemetry(generatedAt);
   let overview = createEmptyOperatorOverview();
@@ -1978,14 +2120,23 @@ export async function recordObservabilityAutomationFailure(
     snapshotId: null,
     dispatchId: null,
     workerTelemetryStatus: workerTelemetry.status,
+    activeBreachStartedAt: beforeActiveBreach?.startedAt ?? null,
+    activeBreachMinutes: beforeActiveBreach?.minutes ?? null,
+    endedBreach: false,
+    ownershipSampleCount: currentStatus.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0),
     reportPath: "pending-telemetry-failure",
     errorMessage: input.errorMessage
   } satisfies AtlasObservabilityAutomationRunRecord;
-  const afterOwnership = [
-    buildApiTelemetryOwnershipRecord(new Date(generatedAt)),
-    buildWorkerTelemetryOwnershipRecord(workerTelemetry),
-    buildAutomationCadenceOwnershipRecord(new Date(generatedAt), failedRunRecord)
-  ];
+  appendAutomationCadenceOwnershipSample({
+    generatedAt,
+    status: "critical",
+    detail: `Automation run failed: ${input.errorMessage}`
+  });
+  const afterOwnershipState = getRuntimeAwareTelemetryOwnershipState({
+    now: generatedAt,
+    latestRun: failedRunRecord
+  });
+  const afterOwnership = afterOwnershipState.telemetryOwnership;
   const remainingKeys = listDegradedTelemetryOwnershipKeys(afterOwnership);
   const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation([
     {
@@ -1993,7 +2144,7 @@ export async function recordObservabilityAutomationFailure(
       remainingOwnershipCount: remainingKeys.length
     },
     ...currentStatus.recentRuns
-  ]);
+  ], summarizeActiveTelemetryBreach(afterOwnershipState.ownershipWindows));
   const { alerts, incidentReadiness } = buildObservabilityAutomationAlertState({
     metrics,
     overview,
@@ -2039,6 +2190,10 @@ export async function recordObservabilityAutomationFailure(
     afterOwnership,
     recoveredKeys: [],
     remainingKeys,
+    activeBreachStartedAt: beforeActiveBreach?.startedAt ?? null,
+    activeBreachMinutes: beforeActiveBreach?.minutes ?? null,
+    endedBreach: false,
+    ownershipSampleCount: afterOwnershipState.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0),
     alertCount: alerts.length,
     workerTelemetryStatus: workerTelemetry.status,
     snapshotId: artifacts.snapshot?.id ?? null,
@@ -2047,6 +2202,15 @@ export async function recordObservabilityAutomationFailure(
     generatedAt,
     errorMessage: input.errorMessage
   });
+  await persistTelemetryRemediationEscalationIfNeeded(
+    actor,
+    getObservabilityAutomationStatus(actor, {
+      limit: 12,
+      now: generatedAt
+    }),
+    generatedAt,
+    client
+  );
   await syncTelemetryRemediationNotificationFromCurrentStatus(
     actor,
     {
@@ -2396,6 +2560,15 @@ export async function executeObservabilityAutomation(
   client: DatabaseClient = prisma
 ) {
   const automation = await performObservabilityAutomation(input, client);
+  appendAutomationCadenceOwnershipSample({
+    generatedAt: automation.generatedAt,
+    status: "healthy",
+    detail: `Automation run completed with ${automation.alertCount} alert${automation.alertCount === 1 ? "" : "s"} reviewed.`
+  });
+  const afterOwnershipState = getRuntimeAwareTelemetryOwnershipState({
+    now: automation.generatedAt
+  });
+  const activeBreach = summarizeActiveTelemetryBreach(afterOwnershipState.ownershipWindows);
   const report = createObservabilityAutomationReportPayload({
     generatedAt: automation.generatedAt,
     trigger: automation.trigger,
@@ -2406,6 +2579,10 @@ export async function executeObservabilityAutomation(
     triggerIncidents: automation.triggerIncidents,
     telemetryPolicy: "monitor",
     telemetryRecoveryStatus: "not_requested",
+    activeBreachStartedAt: activeBreach?.startedAt ?? null,
+    activeBreachMinutes: activeBreach?.minutes ?? null,
+    endedBreach: false,
+    ownershipSampleCount: afterOwnershipState.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0),
     automation
   });
   const reportPath = writeObservabilityAutomationReport(report);
@@ -2461,8 +2638,17 @@ export async function recoverObservabilityTelemetryOwnership(
   }
   const beforeOwnership = currentStatus.telemetryOwnership;
   const degradedBeforeKeys = listDegradedTelemetryOwnershipKeys(beforeOwnership);
+  const beforeActiveBreach = summarizeActiveTelemetryBreach(currentStatus.ownershipWindows);
 
   if (degradedBeforeKeys.length === 0) {
+    appendAutomationCadenceOwnershipSample({
+      generatedAt,
+      status: "healthy",
+      detail: "Automation recovery was skipped because telemetry ownership was already healthy."
+    });
+    const afterState = getRuntimeAwareTelemetryOwnershipState({
+      now: generatedAt
+    });
     const reportPath = writeObservabilityAutomationReport(
       createObservabilityAutomationReportPayload({
         generatedAt,
@@ -2475,7 +2661,11 @@ export async function recoverObservabilityTelemetryOwnership(
         telemetryPolicy: "recover",
         telemetryRecoveryStatus: "no_action",
         beforeOwnership,
-        afterOwnership: beforeOwnership
+        afterOwnership: afterState.telemetryOwnership,
+        activeBreachStartedAt: beforeActiveBreach?.startedAt ?? null,
+        activeBreachMinutes: beforeActiveBreach?.minutes ?? null,
+        endedBreach: false,
+        ownershipSampleCount: afterState.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0)
       })
     );
     await syncTelemetryRemediationNotificationFromCurrentStatus(
@@ -2491,7 +2681,7 @@ export async function recoverObservabilityTelemetryOwnership(
       status: "no_action" as AtlasObservabilityTelemetryRecoveryStatus,
       reportPath,
       beforeOwnership,
-      afterOwnership: beforeOwnership,
+      afterOwnership: afterState.telemetryOwnership,
       recoveredKeys: [] as AtlasObservabilityTelemetryOwnershipRecord["key"][],
       remainingKeys: [] as AtlasObservabilityTelemetryOwnershipRecord["key"][],
       automation: null
@@ -2527,14 +2717,23 @@ export async function recoverObservabilityTelemetryOwnership(
     snapshotId: null,
     dispatchId: null,
     workerTelemetryStatus: posture.workerTelemetry.status,
+    activeBreachStartedAt: beforeActiveBreach?.startedAt ?? null,
+    activeBreachMinutes: beforeActiveBreach?.minutes ?? null,
+    endedBreach: false,
+    ownershipSampleCount: currentStatus.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0),
     reportPath: "pending-telemetry-recovery",
     errorMessage: null
   };
-  const afterOwnership = [
-    buildApiTelemetryOwnershipRecord(new Date(generatedAt)),
-    buildWorkerTelemetryOwnershipRecord(readPublishedWorkerTelemetry(generatedAt)),
-    buildAutomationCadenceOwnershipRecord(new Date(generatedAt), afterRunRecordBase)
-  ];
+  appendAutomationCadenceOwnershipSample({
+    generatedAt,
+    status: "healthy",
+    detail: `Automation recovery ran with worker telemetry status ${posture.workerTelemetry.status}.`
+  });
+  const afterOwnershipState = getRuntimeAwareTelemetryOwnershipState({
+    now: generatedAt,
+    latestRun: afterRunRecordBase
+  });
+  const afterOwnership = afterOwnershipState.telemetryOwnership;
   const degradedAfterKeys = new Set(listDegradedTelemetryOwnershipKeys(afterOwnership));
   const recoveredKeys = degradedBeforeKeys.filter((key) => !degradedAfterKeys.has(key));
   const remainingKeys = [...degradedAfterKeys];
@@ -2548,9 +2747,14 @@ export async function recoverObservabilityTelemetryOwnership(
     ...afterRunRecordBase,
     telemetryRecoveryStatus: status,
     recoveredOwnershipCount: recoveredKeys.length,
-    remainingOwnershipCount: remainingKeys.length
+    remainingOwnershipCount: remainingKeys.length,
+    endedBreach: beforeActiveBreach !== null && summarizeActiveTelemetryBreach(afterOwnershipState.ownershipWindows) === null,
+    ownershipSampleCount: afterOwnershipState.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0)
   } satisfies AtlasObservabilityAutomationRunRecord;
-  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation([afterRunRecord, ...currentStatus.recentRuns]);
+  const telemetryRecoveryEscalation = buildTelemetryRecoveryEscalation(
+    [afterRunRecord, ...currentStatus.recentRuns],
+    summarizeActiveTelemetryBreach(afterOwnershipState.ownershipWindows)
+  );
   const afterTelemetryRemediation = buildAtlasObservabilityTelemetryRemediation({
     telemetryOwnership: afterOwnership,
     latestAutomationRun: afterRunRecord,
@@ -2568,7 +2772,7 @@ export async function recoverObservabilityTelemetryOwnership(
     afterTelemetryRemediationOwnership,
     new Date(generatedAt)
   );
-  const afterState = buildObservabilityAutomationAlertState({
+  const afterAlertState = buildObservabilityAutomationAlertState({
     metrics: posture.metrics,
     overview: posture.overview,
     workerTelemetry: posture.workerTelemetry,
@@ -2598,8 +2802,8 @@ export async function recoverObservabilityTelemetryOwnership(
       trace,
       metrics: posture.metrics,
       workerTelemetry: posture.workerTelemetry,
-      alerts: afterState.alerts,
-      incidentReadiness: afterState.incidentReadiness
+      alerts: afterAlertState.alerts,
+      incidentReadiness: afterAlertState.incidentReadiness
     },
     client
   );
@@ -2611,7 +2815,7 @@ export async function recoverObservabilityTelemetryOwnership(
     minimumSeverity,
     dispatchAlerts,
     triggerIncidents,
-    alertCount: afterState.alerts.length,
+    alertCount: afterAlertState.alerts.length,
     snapshot: artifacts.snapshot,
     incidentTriggers: artifacts.incidentTriggers,
     dispatch: artifacts.dispatch,
@@ -2632,6 +2836,10 @@ export async function recoverObservabilityTelemetryOwnership(
       afterOwnership,
       recoveredKeys,
       remainingKeys,
+      activeBreachStartedAt: beforeActiveBreach?.startedAt ?? null,
+      activeBreachMinutes: beforeActiveBreach?.minutes ?? null,
+      endedBreach: beforeActiveBreach !== null && summarizeActiveTelemetryBreach(afterOwnershipState.ownershipWindows) === null,
+      ownershipSampleCount: afterOwnershipState.ownershipWindows.reduce((total, window) => total + window.sampleCountInWindow, 0),
       automation
     })
   );

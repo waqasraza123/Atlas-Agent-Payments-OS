@@ -39,6 +39,7 @@ export type AtlasObservabilityRetentionSweepResult = {
   deletedIncidentArtifacts: number;
   deletedRemediationArtifacts: number;
   deletedAutomationArtifacts: number;
+  deletedOwnershipHistoryArtifacts: number;
 };
 
 export class AtlasObservabilityOperationsError extends Error {
@@ -456,6 +457,10 @@ export async function applyObservabilityRetentionPolicy(client: DatabaseClient =
     deletedAutomationArtifacts: pruneArtifactDirectory(
       resolveRepoPath(observabilityRuntime.automationReportDirectory),
       automationRetentionCutoff.getTime()
+    ),
+    deletedOwnershipHistoryArtifacts: pruneArtifactDirectory(
+      resolveRepoPath(observabilityRuntime.ownershipHistoryDirectory),
+      createRetentionCutoffDate(observabilityRuntime.ownershipHistoryRetentionDays).getTime()
     )
   } satisfies AtlasObservabilityRetentionSweepResult;
 }

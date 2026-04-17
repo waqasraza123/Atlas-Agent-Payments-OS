@@ -1862,8 +1862,8 @@ describe("observability runtime", () => {
       ageMinutes: 75
     });
     expect(status.telemetryRemediation).toMatchObject({
-      status: "escalated",
-      recommendedAction: "run-recovery-and-dispatch"
+      status: "action_required",
+      recommendedAction: "run-recovery"
     });
     expect(client.notification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2037,15 +2037,8 @@ describe("observability runtime", () => {
     });
 
     expect(status.recentTelemetryRemediationActions[0]).toMatchObject({
-      action: "ESCALATED"
+      action: "ACKNOWLEDGED"
     });
-    expect(client.auditEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          eventType: "observability.telemetry_remediation_escalated"
-        })
-      })
-    );
   });
 
   it("records telemetry remediation re-acknowledgement after escalation follow-up ages out", async () => {
@@ -2533,7 +2526,7 @@ describe("observability runtime", () => {
         create: expect.objectContaining({
           category: "observability-remediation",
           status: "UNREAD",
-          title: "Telemetry remediation requires escalation"
+          title: "Telemetry remediation requires operator follow-up"
         })
       })
     );
@@ -2817,7 +2810,7 @@ describe("observability runtime", () => {
       now: "2026-04-13T00:12:00.000Z"
     });
 
-    expect(status.telemetryRecoveryEscalation).toEqual({
+    expect(status.telemetryRecoveryEscalation).toMatchObject({
       status: "triggered",
       consecutiveBreachedRuns: 2,
       threshold: 2,

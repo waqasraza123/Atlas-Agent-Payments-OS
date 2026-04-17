@@ -53,6 +53,7 @@
     "test:e2e": "pnpm --filter @atlas/api test:e2e && pnpm --filter @atlas/web test:e2e",
     "verify:phase0": "pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
     "verify:env": "pnpm exec tsx ./scripts/validate-env.ts --file .env.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.development.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.staging.example --service api --service web --service worker && pnpm exec tsx ./scripts/validate-env.ts --file .env.production.example --service api --service web --service worker",
+    "verify:tenant-boundaries": "node ./scripts/verify-tenant-boundaries.mjs",
     "verify:rollback": "sh ./scripts/verify-rollback-readiness.sh",
     "verify:restore-drill": "sh ./scripts/verify-restore-drill.sh",
     "verify:release": "sh ./scripts/verify-release.sh",

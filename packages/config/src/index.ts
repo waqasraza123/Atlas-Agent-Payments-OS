@@ -361,7 +361,24 @@ export const observabilityRuntime = {
     "operations-artifacts/observability/runtime"
   ),
   traceHistoryLimit: readNumber(process.env.OBSERVABILITY_TRACE_HISTORY_LIMIT, 20),
-  workerTelemetryStaleAfterMinutes: readNumber(process.env.OBSERVABILITY_WORKER_STALE_AFTER_MINUTES, 10),
+  ownershipHistoryDirectory: readText(
+    process.env.OBSERVABILITY_OWNERSHIP_HISTORY_DIR,
+    "operations-artifacts/observability/ownership-history"
+  ),
+  ownershipHistoryRetentionDays: readNumber(process.env.OBSERVABILITY_OWNERSHIP_HISTORY_RETENTION_DAYS, 30),
+  apiOwnershipStaleAfterMinutes: readNumber(process.env.OBSERVABILITY_API_OWNERSHIP_STALE_AFTER_MINUTES, 10),
+  workerOwnershipStaleAfterMinutes: readNumber(
+    process.env.OBSERVABILITY_WORKER_OWNERSHIP_STALE_AFTER_MINUTES,
+    readNumber(process.env.OBSERVABILITY_WORKER_STALE_AFTER_MINUTES, 10)
+  ),
+  automationOwnershipStaleAfterMinutes: readNumber(
+    process.env.OBSERVABILITY_AUTOMATION_OWNERSHIP_STALE_AFTER_MINUTES,
+    readNumber(process.env.OBSERVABILITY_AUTOMATION_INTERVAL_MINUTES, 15) * 2
+  ),
+  workerTelemetryStaleAfterMinutes: readNumber(
+    process.env.OBSERVABILITY_WORKER_STALE_AFTER_MINUTES,
+    readNumber(process.env.OBSERVABILITY_WORKER_OWNERSHIP_STALE_AFTER_MINUTES, 10)
+  ),
   alertDispatchMode: readCommandAdapterMode(process.env.OBSERVABILITY_ALERT_DISPATCH_MODE, "dry-run"),
   alertDispatchProvider: readAlertDispatchProvider(process.env.OBSERVABILITY_ALERT_DISPATCH_PROVIDER),
   alertDispatchCommand: readOptionalText(process.env.OBSERVABILITY_ALERT_DISPATCH_COMMAND),

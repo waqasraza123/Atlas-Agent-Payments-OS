@@ -111,6 +111,43 @@ export type AtlasObservabilityTelemetryOwnershipRecord = {
   lastRecordedAt: string | null;
 };
 
+export type AtlasObservabilityTelemetryOwnershipSampleRecord = {
+  key: "api-runtime" | "worker-runtime" | "automation-cadence";
+  label: string;
+  status: "healthy" | "warning" | "critical";
+  recordedAt: string;
+  source: "api-runtime-snapshot" | "worker-runtime-snapshot" | "automation-run" | "scheduler-start";
+  deploymentSlot: string | null;
+  releaseStage: AtlasObservabilityReleaseStage;
+  traceId: string | null;
+  detail: string;
+};
+
+export type AtlasObservabilityTelemetryOwnershipWindowRecord = {
+  key: AtlasObservabilityTelemetryOwnershipRecord["key"];
+  label: string;
+  currentStatus: AtlasObservabilityTelemetryOwnershipRecord["status"];
+  breachStartedAt: string | null;
+  lastHealthyAt: string | null;
+  lastRecoveredAt: string | null;
+  currentBreachMinutes: number | null;
+  latestSampleAt: string | null;
+  sampleCountInWindow: number;
+  detail: string;
+};
+
+export type AtlasObservabilityTelemetryOwnershipTrendRecord = {
+  key: AtlasObservabilityTelemetryOwnershipRecord["key"];
+  label: string;
+  currentStatus: AtlasObservabilityTelemetryOwnershipRecord["status"];
+  latestSampleAt: string | null;
+  transitions: Array<{
+    recordedAt: string;
+    status: AtlasObservabilityTelemetryOwnershipRecord["status"];
+    source: AtlasObservabilityTelemetryOwnershipSampleRecord["source"];
+  }>;
+};
+
 export type AtlasObservabilityTelemetryOwnershipPolicy = "monitor" | "recover";
 export type AtlasObservabilityTelemetryRecoveryStatus =
   | "not_requested"
@@ -125,6 +162,8 @@ export type AtlasObservabilityTelemetryRecoveryEscalationRecord = {
   consecutiveBreachedRuns: number;
   threshold: number;
   detail: string;
+  activeBreachStartedAt?: string | null;
+  activeBreachMinutes?: number | null;
 };
 
 export type AtlasObservabilityTelemetryRemediationRecord = {
@@ -295,6 +334,10 @@ export type AtlasObservabilityAutomationRunRecord = {
   snapshotId: string | null;
   dispatchId: string | null;
   workerTelemetryStatus: AtlasWorkerTelemetryRecord["status"] | null;
+  activeBreachStartedAt?: string | null;
+  activeBreachMinutes?: number | null;
+  endedBreach?: boolean;
+  ownershipSampleCount?: number;
   reportPath: string;
   errorMessage: string | null;
 };
@@ -305,6 +348,7 @@ export type AtlasObservabilityRetentionPolicyRecord = {
   incidentRetentionDays: number;
   remediationRetentionDays: number;
   automationRetentionDays: number;
+  ownershipHistoryRetentionDays: number;
 };
 
 export type AtlasObservabilityAutomationStatusRecord = {
@@ -329,6 +373,9 @@ export type AtlasObservabilityAutomationStatusRecord = {
   lastRunStatus: AtlasObservabilityAutomationRunRecord["status"] | null;
   lastReportPath: string | null;
   telemetryOwnership: AtlasObservabilityTelemetryOwnershipRecord[];
+  ownershipWindows: AtlasObservabilityTelemetryOwnershipWindowRecord[];
+  ownershipTrends: AtlasObservabilityTelemetryOwnershipTrendRecord[];
+  latestOwnershipSamples: AtlasObservabilityTelemetryOwnershipSampleRecord[];
   recentTelemetryRemediationActions: AtlasObservabilityTelemetryRemediationActionRecord[];
   recentRuns: AtlasObservabilityAutomationRunRecord[];
 };

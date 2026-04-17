@@ -516,18 +516,21 @@ describe("observability operations", () => {
     const incidentDir = join(sandbox, "incidents");
     const remediationDir = join(sandbox, "remediation");
     const automationDir = join(sandbox, "automation");
+    const ownershipDir = join(sandbox, "ownership");
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_DIR", snapshotDir);
     vi.stubEnv("OBSERVABILITY_ALERT_DISPATCH_REPORT_DIR", dispatchDir);
     vi.stubEnv("OBSERVABILITY_INCIDENT_REPORT_DIR", incidentDir);
     vi.stubEnv("OBSERVABILITY_REMEDIATION_REPORT_DIR", remediationDir);
     vi.stubEnv("OBSERVABILITY_AUTOMATION_REPORT_DIR", automationDir);
+    vi.stubEnv("OBSERVABILITY_OWNERSHIP_HISTORY_DIR", ownershipDir);
     vi.stubEnv("OBSERVABILITY_SNAPSHOT_RETENTION_DAYS", "1");
     vi.stubEnv("OBSERVABILITY_DISPATCH_RETENTION_DAYS", "2");
     vi.stubEnv("OBSERVABILITY_INCIDENT_RETENTION_DAYS", "3");
     vi.stubEnv("OBSERVABILITY_REMEDIATION_RETENTION_DAYS", "4");
     vi.stubEnv("OBSERVABILITY_AUTOMATION_RETENTION_DAYS", "4");
+    vi.stubEnv("OBSERVABILITY_OWNERSHIP_HISTORY_RETENTION_DAYS", "4");
 
-    for (const directory of [snapshotDir, dispatchDir, incidentDir, remediationDir, automationDir]) {
+    for (const directory of [snapshotDir, dispatchDir, incidentDir, remediationDir, automationDir, ownershipDir]) {
       mkdirSync(directory, {
         recursive: true
       });
@@ -538,7 +541,8 @@ describe("observability operations", () => {
     const oldIncident = join(incidentDir, "old.json");
     const oldRemediation = join(remediationDir, "old.json");
     const oldAutomation = join(automationDir, "old.json");
-    for (const filePath of [oldSnapshot, oldDispatch, oldIncident, oldRemediation, oldAutomation]) {
+    const oldOwnership = join(ownershipDir, "old.json");
+    for (const filePath of [oldSnapshot, oldDispatch, oldIncident, oldRemediation, oldAutomation, oldOwnership]) {
       writeFileSync(filePath, "{}\n", "utf8");
       utimesSync(filePath, new Date("2026-04-01T00:00:00.000Z"), new Date("2026-04-01T00:00:00.000Z"));
     }
@@ -568,7 +572,8 @@ describe("observability operations", () => {
       deletedDispatchArtifacts: 1,
       deletedIncidentArtifacts: 1,
       deletedRemediationArtifacts: 1,
-      deletedAutomationArtifacts: 1
+      deletedAutomationArtifacts: 1,
+      deletedOwnershipHistoryArtifacts: 1
     });
     expect(client.observabilitySnapshot.deleteMany).toHaveBeenCalled();
     expect(client.observabilityAlertDispatch.deleteMany).toHaveBeenCalled();

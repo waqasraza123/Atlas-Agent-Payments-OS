@@ -64,6 +64,7 @@ All current session types are HMAC-signed and time-bounded. Local development an
 - support-access sessions carry both the principal operator identity and the target tenant identity
 - support-access sessions are read-only at the API guard layer
 - support-mode writes are also blocked in shared buyer, seller, payment, and programmable-settlement workflow layers
+- support-mode buyer and seller workspace overview and surface reads now also enter through shared workspace-read wrappers so tenant scoping and support inspection evidence live at the database workflow layer instead of only in web-server loaders
 - support-access issuance is allowed in production only when `AUTH_PROVIDER_MODE=identity-bridge` or `AUTH_PROVIDER_MODE=external-oidc`
 - operator governance actions require provider-backed Atlas sessions outside local and development
 - operator governance actions require provider-backed Atlas sessions during `public-beta`, `ga`, and `enterprise-rollout`
@@ -97,9 +98,10 @@ All current session types are HMAC-signed and time-bounded. Local development an
 2. `pnpm --filter @atlas/api test -- --run test/actor.service.test.ts test/app.e2e.test.ts`
 3. `pnpm --filter @atlas/web test -- --run src/app/auth/session/route.test.ts`
 4. `pnpm verify:env`
-5. `pnpm verify:release`
+5. `pnpm verify:tenant-boundaries`
+6. `pnpm verify:release`
 
 ## Next Hardening Step
 
-- add deeper tenant-boundary enforcement beyond the current operator-governance and reporting/export guardrails
+- add deeper tenant-boundary enforcement beyond the current shared workspace, detail-route, and reporting/export guardrails
 - add broader upstream directory lifecycle coverage beyond the current Okta application-assignment and Auth0 organization-membership ownership baseline

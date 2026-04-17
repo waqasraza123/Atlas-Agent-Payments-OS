@@ -27,6 +27,8 @@ This runbook defines the repo-level operational baseline that now exists after t
 - repo-owned observability automation through `pnpm observability:automation`
 - worker-scheduled observability automation through `OBSERVABILITY_AUTOMATION_SCHEDULE_MODE=interval`
 - explicit telemetry-ownership policy through `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY=monitor|recover`
+- append-only telemetry-ownership history for `api-runtime`, `worker-runtime`, and `automation-cadence`
+- timeline-derived ownership windows, breach duration, recovery duration, and recent ownership trend visibility on `/operator/alerts`
 - explicit repeated-breach escalation through `OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD`
 - durable incident-trigger sync plus incident report artifact generation through observability automation
 - durable telemetry-ownership recovery reports and policy-aware automation history through the worker scheduler and `/operator/alerts`
@@ -65,6 +67,7 @@ With the API running:
 1. `pnpm verify:ops`
 2. Confirm `/health`, `/health/live`, `/health/startup`, `/health/ready`, and `/health/metrics` return expected status payloads
 3. Confirm `/platform/queues` returns the registered queue map
+4. Confirm the latest ownership samples for `api-runtime`, `worker-runtime`, and `automation-cadence` are fresh enough for the active runtime mode
 
 ## Required Environment Variables
 
@@ -78,6 +81,10 @@ With the API running:
 - `OBSERVABILITY_AUTOMATION_TRIGGER_INCIDENTS`
 - `OBSERVABILITY_AUTOMATION_TELEMETRY_POLICY`
 - `OBSERVABILITY_AUTOMATION_TELEMETRY_ESCALATION_THRESHOLD`
+- `OBSERVABILITY_OWNERSHIP_HISTORY_RETENTION_DAYS`
+- `OBSERVABILITY_API_OWNERSHIP_STALE_AFTER_MINUTES`
+- `OBSERVABILITY_WORKER_OWNERSHIP_STALE_AFTER_MINUTES`
+- `OBSERVABILITY_AUTOMATION_OWNERSHIP_STALE_AFTER_MINUTES`
 - `OBSERVABILITY_TELEMETRY_REMEDIATION_FOLLOW_UP_MINUTES`
 - `OBSERVABILITY_INCIDENT_REPORT_DIR`
 - `OBSERVABILITY_INCIDENT_MINIMUM_SEVERITY`
@@ -90,6 +97,6 @@ With the API running:
 - readiness still depends on local database, Redis, and object storage availability
 - seed execution is still blocked on this machine by PostgreSQL access denial
 - release verification is stronger than push verification; `pnpm safe-push` still gates on the repo build path, not the full release gate
-- observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, worker-driven automation cadence, scheduler-enforced telemetry-ownership recovery policy, and explicit retention windows, but not continuous time-series ownership or third-party APM tooling
-- observability automation can now run on a worker timer, sync durable incident triggers, and auto-recover degraded telemetry ownership, but continuous time-series ownership and third-party paging lifecycle state are still outside the repo baseline
+- observability now includes runtime metrics, retained snapshots, external dispatch, shared worker telemetry, distributed tracing, worker-driven automation cadence, scheduler-enforced telemetry-ownership recovery policy, explicit retention windows, and continuous ownership history, but not third-party APM tooling
+- observability automation can now run on a worker timer, sync durable incident triggers, auto-recover degraded telemetry ownership, and verify ownership-sample freshness through `pnpm verify:ops`, but third-party paging lifecycle state is still outside the repo baseline
 - backup and restore scripts exist, but scheduled backups and restore drills are still not automated

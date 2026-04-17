@@ -18,6 +18,7 @@ import {
   createOperatorTelemetryRemediationFollowThroughFacts,
   createOperatorTelemetryRemediationOwnershipFacts,
   createOperatorTelemetryOwnershipItems,
+  createOperatorOwnershipTimelineItems,
   createOperatorTraceItems,
   createOperatorWorkerQueueItems,
   loadOperatorObservabilityData
@@ -294,9 +295,21 @@ export default async function OperatorAlertsPage() {
               eyebrow="Telemetry ownership"
               title="Live telemetry freshness"
               description="Atlas now makes API runtime, worker runtime, and automation cadence freshness explicit so operators can see whether live telemetry is still owned."
-              items={createOperatorTelemetryOwnershipItems(automation.telemetryOwnership)}
+              items={createOperatorTelemetryOwnershipItems(
+                automation.telemetryOwnership,
+                automation.ownershipWindows,
+                automation.ownershipTrends
+              )}
               emptyTitle="No telemetry ownership signals"
               emptyDescription="Telemetry ownership signals will appear once observability status is available."
+            />
+            <RecordListPanel
+              eyebrow="Ownership timeline"
+              title="Recent ownership transitions"
+              description="Recent ownership samples make it clear whether Atlas is dealing with a stale latest sample, an active continuous breach, or a fresh recovery."
+              items={createOperatorOwnershipTimelineItems(automation.latestOwnershipSamples)}
+              emptyTitle="No ownership history"
+              emptyDescription="Ownership timeline samples will appear after API, worker, or automation telemetry publishes."
             />
             <WorkflowFormPanel
               eyebrow="Recommended response"

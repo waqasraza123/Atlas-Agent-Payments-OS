@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { deploymentRuntime, observabilityRuntime, validateAtlasRuntimeConfiguration } from "@atlas/config";
+import { appendTelemetryOwnershipSample, createTelemetryOwnershipSample } from "@atlas/database";
 import type {
   AtlasApiRuntimeMetricsSnapshot,
   AtlasApiRuntimeTelemetryRecord,
@@ -74,11 +75,21 @@ function publishApiRuntimeTelemetryRecord() {
     return;
   }
 
+  const telemetry = getApiRuntimeTelemetryRecord();
   const filePath = resolveRuntimeSnapshotPath("api.json");
   mkdirSync(dirname(filePath), {
     recursive: true
   });
-  writeFileSync(filePath, `${JSON.stringify(getApiRuntimeTelemetryRecord(), null, 2)}\n`, "utf8");
+  writeFileSync(filePath, `${JSON.stringify(telemetry, null, 2)}\n`, "utf8");
+  appendTelemetryOwnershipSample(
+    createTelemetryOwnershipSample({
+      key: "api-runtime",
+      status: telemetry.configurationStatus === "valid" ? "healthy" : "warning",
+      recordedAt: telemetry.recordedAt,
+      source: "api-runtime-snapshot",
+      detail: `API runtime snapshot published from ${telemetry.deploymentSlot} with readiness ${telemetry.lastReadinessStatus}.`
+    })
+  );
 }
 
 function pushRecentTrace(trace: AtlasRuntimeTraceRecord) {

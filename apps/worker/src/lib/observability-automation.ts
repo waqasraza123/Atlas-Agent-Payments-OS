@@ -1,5 +1,7 @@
 import { observabilityRuntime } from "@atlas/config";
 import {
+  appendTelemetryOwnershipSample,
+  createTelemetryOwnershipSample,
   executeObservabilityAutomationPolicy,
   recordObservabilityAutomationFailure,
   writeObservabilityAutomationFailureReport
@@ -176,6 +178,14 @@ export function startWorkerObservabilityAutomationScheduler(
     dispatchAlerts: observabilityRuntime.automationDispatchAlerts,
     triggerIncidents: observabilityRuntime.automationTriggerIncidents
   });
+  appendTelemetryOwnershipSample(
+    createTelemetryOwnershipSample({
+      key: "automation-cadence",
+      status: "healthy",
+      source: "scheduler-start",
+      detail: `Automation scheduler started with ${observabilityRuntime.automationScheduleIntervalMinutes}-minute cadence.`
+    })
+  );
 
   return {
     stop() {
