@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getSellerAnalyticsForActor,
   getSellerProfileForActor,
+  getSellerRequestForActor,
   getSellerServiceForActor,
   listSellerRequestsForActor,
   listSellerServicesForActor,
@@ -210,6 +211,68 @@ describe("seller workflow actor-aware reads", () => {
         payload: expect.objectContaining({
           status: "PUBLISHED",
           linkedRequestCount: 3,
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session seller request detail inspection", async () => {
+    const actor = createSupportSellerActor();
+    const client = {
+      service: {
+        findMany: vi.fn(async () => [
+          {
+            id: "service-1",
+            key: "service-key",
+            name: "Service 1"
+          }
+        ])
+      },
+      spendRequest: {
+        findFirst: vi.fn(async () => ({
+          id: "request-1",
+          organizationId: "org-buyer-1",
+          title: "Buyer request",
+          purpose: "Need service access",
+          amountMinor: 3200,
+          currency: "USD",
+          serviceCategory: "api-access",
+          serviceKey: "service-key",
+          status: "APPROVED",
+          requestPayload: {},
+          metadata: null,
+          createdAt: new Date("2026-04-17T00:00:00.000Z"),
+          updatedAt: new Date("2026-04-17T00:05:00.000Z"),
+          organization: {
+            id: "org-buyer-1",
+            name: "Buyer Org"
+          }
+        }))
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getSellerRequestForActor(actor, "request-1", client as never);
+
+    expect(item).toMatchObject({
+      id: "request-1",
+      buyerOrganizationId: "org-buyer-1",
+      matchedServiceId: "service-1",
+      status: "APPROVED"
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.seller_request_inspected",
+        targetType: "seller_request",
+        targetId: "request-1",
+        payload: expect.objectContaining({
+          status: "APPROVED",
+          buyerOrganizationId: "org-buyer-1",
+          matchedServiceId: "service-1",
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

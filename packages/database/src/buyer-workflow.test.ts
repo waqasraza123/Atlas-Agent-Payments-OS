@@ -1,6 +1,7 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { describe, expect, it, vi } from "vitest";
 import {
+  getBuyerRequestForActor,
   listBuyerAgentsForActor,
   listBuyerApprovalsForActor,
   listBuyerPoliciesForActor,
@@ -78,6 +79,70 @@ describe("buyer workflow actor-aware reads", () => {
         payload: expect.objectContaining({
           resultCount: 0,
           requestIds: [],
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session buyer request detail inspection", async () => {
+    const actor = createSupportBuyerActor();
+    const client = {
+      spendRequest: {
+        findFirst: vi.fn(async () => ({
+          id: "request-1",
+          title: "Premium dataset unlock",
+          purpose: "Unlock a premium seller dataset.",
+          amountMinor: 2400,
+          currency: "USD",
+          serviceCategory: "api-access",
+          serviceKey: "dataset-access",
+          status: "APPROVED",
+          createdAt: new Date("2026-04-17T00:00:00.000Z"),
+          evaluationResult: {
+            outcome: "APPROVED",
+            reasons: ["Within policy"]
+          },
+          agent: {
+            id: "agent-1",
+            name: "Buyer Agent"
+          },
+          policy: {
+            id: "policy-1",
+            name: "Default Policy"
+          },
+          sellerOrganization: {
+            id: "org-seller-1",
+            name: "Seller Org"
+          },
+          approval: {
+            status: "APPROVED"
+          }
+        }))
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getBuyerRequestForActor(actor, "request-1", client as never);
+
+    expect(item).toMatchObject({
+      id: "request-1",
+      status: "APPROVED",
+      approvalStatus: "APPROVED",
+      sellerOrganizationId: "org-seller-1"
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.buyer_request_inspected",
+        targetType: "buyer_request",
+        targetId: "request-1",
+        payload: expect.objectContaining({
+          status: "APPROVED",
+          approvalStatus: "APPROVED",
+          sellerOrganizationId: "org-seller-1",
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

@@ -800,6 +800,30 @@ export async function getSellerRequest(
   return mapSellerRequestRecord(request, buildSellerServiceMap(services));
 }
 
+export async function getSellerRequestForActor(
+  actor: AtlasActorContext,
+  requestId: string,
+  client: DatabaseClient = prisma
+) {
+  assertSellerReadActor(actor);
+  const item = await getSellerRequest(actor.organization.id, requestId, client);
+
+  if (item && shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.seller_request_inspected",
+      targetType: "seller_request",
+      targetId: item.id,
+      payload: {
+        status: item.status,
+        buyerOrganizationId: item.buyerOrganizationId,
+        matchedServiceId: item.matchedServiceId
+      }
+    });
+  }
+
+  return item;
+}
+
 export async function getSellerAnalytics(
   organizationId: string,
   client: DatabaseClient = prisma

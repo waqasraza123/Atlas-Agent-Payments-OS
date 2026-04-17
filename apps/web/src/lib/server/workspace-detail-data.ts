@@ -1,5 +1,12 @@
 import type { AtlasActorContext } from "@atlas/auth";
-import { prisma } from "@atlas/database";
+import {
+  getBuyerRequestForActor,
+  getPaymentIntent,
+  getReceiptRecord,
+  getSellerRequestForActor,
+  getSellerServiceForActor,
+  prisma
+} from "@atlas/database";
 import {
   deriveAtlasPaymentReconciliationState,
   extractAtlasProgrammableSettlementEvidence,
@@ -253,8 +260,29 @@ function canAccessReceipt(actor: AtlasActorContext, receipt: { organizationId: s
 async function loadRequestDetailModel(
   actor: AtlasActorContext,
   surfaceKey: Extract<AtlasWorkspaceSurfaceKey, "requests" | "transactions">,
-  recordId: string
+  recordId: string,
+  options: {
+    useSharedWorkflowGate?: boolean;
+  } = {}
 ): Promise<WorkspaceDetailModel | null> {
+  if (options.useSharedWorkflowGate !== false) {
+    if (actor.workspace === "BUYER") {
+      const request = await getBuyerRequestForActor(actor, recordId);
+
+      if (!request) {
+        return null;
+      }
+    }
+
+    if (actor.workspace === "SELLER") {
+      const request = await getSellerRequestForActor(actor, recordId);
+
+      if (!request) {
+        return null;
+      }
+    }
+  }
+
   const request = await prisma.spendRequest.findFirst({
     where: {
       ...createRequestDetailWhere(actor, recordId)
@@ -661,6 +689,12 @@ async function loadServiceDetailModel(actor: AtlasActorContext, recordId: string
     return null;
   }
 
+  const scopedService = await getSellerServiceForActor(actor, recordId);
+
+  if (!scopedService) {
+    return null;
+  }
+
   const service = await prisma.service.findFirst({
     where: {
       id: recordId,
@@ -1038,6 +1072,12 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
       }
     }
   };
+  const scopedPayment = await getPaymentIntent(actor, recordId);
+
+  if (!scopedPayment) {
+    return null;
+  }
+
   const payment = await prisma.payment.findFirst({
     where: createPaymentDetailWhere(actor, recordId),
     include
@@ -1114,7 +1154,14 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
                 ? "READY_TO_EXECUTE"
                 : "AWAITING_PAYMENT_METHOD";
 
-  const requestDetail = await loadRequestDetailModel(actor, actor.workspace === "SELLER" ? "requests" : "transactions", payment.request.id);
+  const requestDetail = await loadRequestDetailModel(
+    actor,
+    actor.workspace === "SELLER" ? "requests" : "transactions",
+    payment.request.id,
+    {
+      useSharedWorkflowGate: false
+    }
+  );
 
   if (!requestDetail) {
     return null;
@@ -1243,6 +1290,12 @@ async function loadPaymentDetailModel(actor: AtlasActorContext, recordId: string
 }
 
 async function loadReceiptDetailModel(actor: AtlasActorContext, recordId: string): Promise<WorkspaceDetailModel | null> {
+  const scopedReceipt = await getReceiptRecord(actor, recordId);
+
+  if (!scopedReceipt) {
+    return null;
+  }
+
   const receipt = await prisma.receipt.findFirst({
     where: createReceiptDetailWhere(actor, recordId),
     include: {
