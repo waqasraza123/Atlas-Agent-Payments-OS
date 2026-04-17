@@ -23,6 +23,12 @@ export class ApprovalsController {
     return this.approvalsService.list(actor);
   }
 
+  @Get(":approvalId")
+  @RequireWorkspaces("BUYER")
+  get(@CurrentActor() actor: AtlasActorContext, @Param("approvalId") approvalId: string) {
+    return this.approvalsService.get(actor, approvalId);
+  }
+
   @Post(":approvalId/decision")
   @RequireWorkspaces("BUYER")
   @RequireRoles("OWNER", "ADMIN", "REVIEWER", "FINANCE")

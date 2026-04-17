@@ -94,6 +94,17 @@ const databaseMock = vi.hoisted(() => ({
   })),
   listBuyerApprovals: vi.fn(async () => []),
   listBuyerApprovalsForActor: vi.fn(async () => []),
+  getBuyerApprovalForActor: vi.fn(async () => ({
+    id: "approval-1",
+    requestId: "request-1",
+    requestTitle: "Approval Request",
+    amountMinor: 2400,
+    currency: "USD",
+    serviceCategory: "api-access",
+    status: "PENDING",
+    decisionReason: null,
+    createdAt: new Date().toISOString()
+  })),
   decideBuyerApproval: vi.fn(async () => ({
     id: "approval-1",
     requestId: "request-created",
@@ -1506,6 +1517,7 @@ vi.mock("@atlas/database", async () => {
     createBuyerRequest: databaseMock.createBuyerRequest,
     listBuyerApprovals: databaseMock.listBuyerApprovals,
     listBuyerApprovalsForActor: databaseMock.listBuyerApprovalsForActor,
+    getBuyerApprovalForActor: databaseMock.getBuyerApprovalForActor,
     decideBuyerApproval: databaseMock.decideBuyerApproval,
     getBuyerApprovalRoleGuard: databaseMock.getBuyerApprovalRoleGuard,
     getSellerProfile: databaseMock.getSellerProfile,
@@ -2987,6 +2999,33 @@ describe("atlas api e2e", () => {
       approvalStatus: "PENDING"
     });
     expect(databaseMock.createBuyerRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns buyer approval detail through the protected buyer module", async () => {
+    actorResolutionServiceMock.resolveFromHeader.mockResolvedValue({
+      status: "ready",
+      selection: {
+        profileKey: "buyer-admin",
+        workspace: "BUYER",
+        userEmail: "buyer-admin@atlas.local",
+        organizationSlug: "atlas-demo-buyer",
+        role: "ADMIN",
+        agentId: null
+      },
+      actor: createActor("BUYER", "ADMIN")
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/approvals/approval-1")
+      .set("x-atlas-local-session", "local-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.item).toMatchObject({
+      id: "approval-1",
+      requestId: "request-1",
+      status: "PENDING"
+    });
+    expect(databaseMock.getBuyerApprovalForActor).toHaveBeenCalledTimes(1);
   });
 
   it("records approval decisions through the protected buyer module", async () => {

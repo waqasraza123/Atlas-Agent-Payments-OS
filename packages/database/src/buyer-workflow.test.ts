@@ -1,6 +1,7 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import { describe, expect, it, vi } from "vitest";
 import {
+  getBuyerApprovalForActor,
   getBuyerRequestForActor,
   listBuyerAgentsForActor,
   listBuyerApprovalsForActor,
@@ -143,6 +144,53 @@ describe("buyer workflow actor-aware reads", () => {
           status: "APPROVED",
           approvalStatus: "APPROVED",
           sellerOrganizationId: "org-seller-1",
+          principalOrganizationId: "org-operator-1",
+          supportAccessGrantId: "grant-1"
+        })
+      })
+    });
+  });
+
+  it("audits support-session buyer approval detail inspection", async () => {
+    const actor = createSupportBuyerActor();
+    const client = {
+      approval: {
+        findFirst: vi.fn(async () => ({
+          id: "approval-1",
+          status: "PENDING",
+          decisionReason: null,
+          createdAt: new Date("2026-04-17T00:00:00.000Z"),
+          request: {
+            id: "request-1",
+            title: "Premium dataset unlock",
+            amountMinor: 2400,
+            currency: "USD",
+            serviceCategory: "api-access"
+          }
+        }))
+      },
+      auditEvent: {
+        create: vi.fn(async () => undefined)
+      }
+    } as const;
+
+    const item = await getBuyerApprovalForActor(actor, "approval-1", client as never);
+
+    expect(item).toMatchObject({
+      id: "approval-1",
+      requestId: "request-1",
+      status: "PENDING",
+      serviceCategory: "api-access"
+    });
+    expect(client.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "support_access.buyer_approval_inspected",
+        targetType: "buyer_approval",
+        targetId: "approval-1",
+        payload: expect.objectContaining({
+          status: "PENDING",
+          requestId: "request-1",
+          serviceCategory: "api-access",
           principalOrganizationId: "org-operator-1",
           supportAccessGrantId: "grant-1"
         })

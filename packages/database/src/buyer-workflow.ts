@@ -1066,6 +1066,58 @@ export async function listBuyerApprovalsForActor(
   return items;
 }
 
+export async function getBuyerApproval(
+  organizationId: string,
+  approvalId: string,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  const approval = await client.approval.findFirst({
+    where: {
+      id: approvalId,
+      request: {
+        organizationId
+      }
+    },
+    include: {
+      request: {
+        select: {
+          id: true,
+          title: true,
+          amountMinor: true,
+          currency: true,
+          serviceCategory: true
+        }
+      }
+    }
+  });
+
+  return approval ? mapApprovalRecord(approval) : null;
+}
+
+export async function getBuyerApprovalForActor(
+  actor: AtlasActorContext,
+  approvalId: string,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) {
+  assertBuyerReadActor(actor);
+  const item = await getBuyerApproval(actor.organization.id, approvalId, client);
+
+  if (item && shouldAuditSupportTenantRead(actor)) {
+    await createAtlasTenantAccessAuditEvent(client, actor, {
+      eventType: "support_access.buyer_approval_inspected",
+      targetType: "buyer_approval",
+      targetId: item.id,
+      payload: {
+        status: item.status,
+        requestId: item.requestId,
+        serviceCategory: item.serviceCategory
+      }
+    });
+  }
+
+  return item;
+}
+
 export async function decideBuyerApproval(actor: AtlasActorContext, approvalId: string, rawInput: unknown) {
   try {
     assertBuyerMutationActor(actor);

@@ -1,5 +1,6 @@
 import type { AtlasActorContext } from "@atlas/auth";
 import {
+  getBuyerApprovalForActor,
   getBuyerRequestForActor,
   getPaymentIntent,
   getReceiptRecord,
@@ -918,6 +919,14 @@ async function loadServiceDetailModel(actor: AtlasActorContext, recordId: string
 }
 
 async function loadApprovalDetailModel(actor: AtlasActorContext, recordId: string): Promise<WorkspaceDetailModel | null> {
+  if (actor.workspace === "BUYER") {
+    const approvalRecord = await getBuyerApprovalForActor(actor, recordId);
+
+    if (!approvalRecord) {
+      return null;
+    }
+  }
+
   const include = {
     approver: true,
     request: {
