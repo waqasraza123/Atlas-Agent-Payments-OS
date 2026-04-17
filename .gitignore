@@ -13,3 +13,4 @@ packages/database/src/generated
 backups/
 release-manifests/
 restore-drills/
+operations-artifacts/

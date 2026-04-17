@@ -506,6 +506,25 @@ function buildTelemetryRemediationOwnership(
     };
   }
 
+  if (remediation.status === "ready" && latestOwnershipAction) {
+    const currentOwnerEmail = latestOwnershipAction.ownerUserEmail ?? latestOwnershipAction.actorUserEmail;
+    const assignedByUserEmail =
+      latestOwnershipAction.action === "ASSIGNED" || latestOwnershipAction.action === "TRANSFERRED"
+        ? latestOwnershipAction.actorUserEmail
+        : null;
+
+    return {
+      status: "acknowledged",
+      actorUserEmail: currentOwnerEmail,
+      assignedByUserEmail,
+      handoffAction: latestOwnershipAction.action,
+      reason: latestOwnershipAction.reason,
+      updatedAt: latestOwnershipAction.generatedAt,
+      reportPath: latestOwnershipAction.reportPath,
+      detail: `Telemetry ownership is healthy, but remediation is still owned by ${currentOwnerEmail} until an operator records explicit closure.`
+    };
+  }
+
   if (
     remediation.status !== "ready" &&
     latestOwnershipAction &&
@@ -2123,6 +2142,12 @@ export async function recordObservabilityTelemetryRemediationAction(
   }
 
   if (input.action === "REACKNOWLEDGED") {
+    assertTelemetryRemediationOwnerActionAllowed(
+      actor,
+      status.telemetryRemediationOwnership,
+      "re-acknowledge telemetry remediation"
+    );
+
     if (status.telemetryRemediation.recommendedAction === "none") {
       throw new AtlasObservabilityOperationsError(
         "Telemetry ownership is currently healthy, so there is no remediation posture to re-acknowledge.",
@@ -2146,6 +2171,8 @@ export async function recordObservabilityTelemetryRemediationAction(
   }
 
   if (input.action === "RESOLVED") {
+    assertTelemetryRemediationOwnerActionAllowed(actor, status.telemetryRemediationOwnership, "resolve telemetry remediation");
+
     if (status.telemetryRemediation.recommendedAction !== "none") {
       throw new AtlasObservabilityOperationsError(
         "Telemetry remediation cannot be resolved while ownership signals are still degraded.",
@@ -2217,6 +2244,23 @@ export async function recordObservabilityTelemetryRemediationAction(
   await createTelemetryRemediationAuditEvent(actor, action, client);
 
   return action;
+}
+
+function assertTelemetryRemediationOwnerActionAllowed(
+  actor: AtlasActorContext,
+  ownership: AtlasObservabilityAutomationStatusRecord["telemetryRemediationOwnership"],
+  actionLabel: string
+) {
+  if (
+    ownership.status === "acknowledged" &&
+    ownership.actorUserEmail &&
+    ownership.actorUserEmail !== actor.user.email
+  ) {
+    throw new AtlasObservabilityOperationsError(
+      `Telemetry remediation is currently owned by ${ownership.actorUserEmail}. Transfer ownership before another operator can ${actionLabel}.`,
+      "forbidden"
+    );
+  }
 }
 
 export async function buildObservabilityAutomationPosture(
@@ -2408,6 +2452,13 @@ export async function recoverObservabilityTelemetryOwnership(
     limit: 12,
     now: input.now
   });
+  if ((input.trigger ?? "manual") !== "scheduled") {
+    assertTelemetryRemediationOwnerActionAllowed(
+      actor,
+      currentStatus.telemetryRemediationOwnership,
+      "run telemetry remediation recovery"
+    );
+  }
   const beforeOwnership = currentStatus.telemetryOwnership;
   const degradedBeforeKeys = listDegradedTelemetryOwnershipKeys(beforeOwnership);
 

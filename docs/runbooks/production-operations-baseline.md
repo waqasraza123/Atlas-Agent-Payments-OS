@@ -44,6 +44,7 @@ This runbook defines the repo-level operational baseline that now exists after t
 - `/operator/alerts` now also supports explicit telemetry-remediation owner assignment and transfer to validated operator memberships so escalated handoffs keep a durable current owner instead of relying only on acknowledgements
 - Atlas now also tracks whether the currently assigned telemetry-remediation owner has acted since handoff, and raises owner follow-through alerts when assigned or transferred ownership ages without operator action
 - reassignment now also records whether the previously assigned telemetry-remediation owner met or missed the expected follow-through before handoff, and Atlas surfaces unmet accountability through remediation history, notification metadata, and operator observability alerts
+- manual telemetry remediation recovery, re-acknowledgement, and closure now require the currently named owner or an explicit transfer first, while scheduled recovery policy continues to run under the owned automation actor
 - explicit observability retention windows plus automated retention sweeps for retained snapshots, dispatch reports, incident reports, and automation reports
 - GitHub Actions release gate in `.github/workflows/release-gate.yml`
 - web security headers baseline through `next.config.ts`
